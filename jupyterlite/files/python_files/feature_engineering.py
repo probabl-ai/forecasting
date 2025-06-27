@@ -1,6 +1,9 @@
 # %% [markdown]
+# # Feature engineering for electricity load forecasting
 #
-# Install extra dependencies for this notebook if needed (when running
+# ## Environment setup
+#
+# We need to install some extra dependencies for this notebook if needed (when running
 # jupyterlite). We need the development version of skrub to be able to use the
 # skrub expressions.
 # %%
@@ -17,6 +20,18 @@ import polars as pl
 import skrub
 from pathlib import Path
 
+# %% [markdown]
+# ## Time range
+#
+# Let's define a hourly time range from March 23, 2021 to May 31, 2025 that
+# will be used to join the electricity load data and the weather data. The time
+# range is in UTC timezone to avoid any ambiguity when joining with the weather
+# data that is also in UTC.
+#
+# We wrap the polars dataframe in a skrub variable to benefit from the
+# built-in TableReport display in the notebook. Using the skrub expression
+# system will also be useful later.
+
 # %%
 time = skrub.var(
     "time",
@@ -32,50 +47,16 @@ time = skrub.var(
 time
 
 # %% [markdown]
-# TODO: add instructions to download data manually
+#
+# To avoid network issues when running this notebook, the necessary data
+# files have already been downloaded and saved in the `datasets` folder.
+# See the README.md file for instructions to download the data manually
+# if you want to re-run this notebook with more recent data.
 
 # %%
 data_source_folder = Path("../datasets")
 for data_file in sorted(data_source_folder.iterdir()):
     print(data_file)
-
-# %%
-electricity_raw = skrub.var(
-    "electricity_raw",
-    pl.concat(
-        [
-            pl.from_pandas(pd.read_csv(data_file, na_values=["N/A"]))
-            for data_file in sorted(data_source_folder.iterdir())
-            if data_file.name.startswith("Total Load - Day Ahead")
-            and data_file.name.endswith(".csv")
-        ],
-        how="vertical",
-    ),
-)
-electricity_raw
-
-# %%
-electricity = (
-    electricity_raw.with_columns(
-        [
-            pl.col("Time (UTC)")
-            .str.split(by=" - ")
-            .list.first()
-            .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
-            .alias("time"),
-        ]
-    )
-    .drop(["Time (UTC)", "Day-ahead Total Load Forecast [MW] - BZN|FR"])
-    .rename({"Actual Total Load [MW] - BZN|FR": "load_mw"})
-    .select(["time", "load_mw"])
-)
-electricity
-
-# %% [markdown]
-# Check that the number of rows matches our expectations based on the number of hours that separate the first and the last dates:
-
-# %%
-time.join(electricity, on="time", how="left")
 
 # %% [markdown]
 #
@@ -133,7 +114,19 @@ for city_name, city_weather_raw in all_city_weather_raw.items():
 
 all_city_weather
 
-
+# %% [markdown]
+# ## Calendar and holidays features
+#
+# We leverage the `holidays` package to enrich the time range with some
+# calendar features such as public holidays and school holidays in France. We
+# also add some features that are useful for time series forecasting such as
+# the day of the week, the day of the year, and the hour of the day.
+#
+# Note that the `holidays` package requires us to extract the date for the
+# French timezone.
+#
+# Similarly for the calendar features: all the time features are extracted
+# from the time in the French timezone.
 # %%
 import holidays
 
@@ -152,4 +145,45 @@ calendar = time.with_columns(
 )
 calendar
 
+# %% [markdown]
+# ## Electricity load data
+#
+# Finally we load the electricity load data. This data will both be used as a
+# target variable but also to craft some lagged and window-aggregated features.
 # %%
+electricity_raw = skrub.var(
+    "electricity_raw",
+    pl.concat(
+        [
+            pl.from_pandas(pd.read_csv(data_file, na_values=["N/A"]))
+            for data_file in sorted(data_source_folder.iterdir())
+            if data_file.name.startswith("Total Load - Day Ahead")
+            and data_file.name.endswith(".csv")
+        ],
+        how="vertical",
+    ),
+)
+electricity_raw
+
+# %%
+electricity = (
+    electricity_raw.with_columns(
+        [
+            pl.col("Time (UTC)")
+            .str.split(by=" - ")
+            .list.first()
+            .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
+            .alias("time"),
+        ]
+    )
+    .drop(["Time (UTC)", "Day-ahead Total Load Forecast [MW] - BZN|FR"])
+    .rename({"Actual Total Load [MW] - BZN|FR": "load_mw"})
+    .select(["time", "load_mw"])
+)
+electricity
+
+# %% [markdown]
+# Check that the number of rows matches our expectations based on the number of hours that separate the first and the last dates:
+
+# %%
+time.join(electricity, on="time", how="left")
