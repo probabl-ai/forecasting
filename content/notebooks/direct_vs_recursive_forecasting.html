@@ -1,0 +1,1039 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>&lt;no title&gt; &#8212; Forecasting with machine learning</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+
+  
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=eba8b062" />
+    <link rel="stylesheet" type="text/css" href="../../_static/togglebutton.css?v=13237357" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/mystnb.4510f1fc1dee50b3e5859aac5469c37c29e427902b24a333a5f9fcb2f0b3ac41.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-thebe.css?v=4fa983c6" />
+    <link rel="stylesheet" type="text/css" href="../../_static/sphinx-design.min.css?v=95c83b7e" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+    <script src="../../_static/documentation_options.js?v=9eb32ce0"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../_static/togglebutton.js?v=4a39c7ea"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script async="async" src="../../_static/sphinx-thebe.js?v=c100c467"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>const THEBE_JS_URL = "https://unpkg.com/thebe@0.8.2/lib/index.js"; const thebe_selector = ".thebe,.cell"; const thebe_selector_input = "pre"; const thebe_selector_output = ".output, .cell_output"</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'content/notebooks/direct_vs_recursive_forecasting';</script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
+
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search this book..."
+         aria-label="Search this book..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../intro.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../_static/logo.svg" class="logo__image only-light" alt="Forecasting with machine learning - Home"/>
+    <script>document.write(`<img src="../../_static/logo.svg" class="logo__image only-dark" alt="Forecasting with machine learning - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        
+        <ul class="nav bd-sidenav bd-sidenav__home-link">
+            <li class="toctree-l1">
+                <a class="reference internal" href="../../intro.html">
+                    Forecasting with machine learning
+                </a>
+            </li>
+        </ul>
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Forecasting</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="test.html">Forecasting</a></li>
+</ul>
+
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+
+<div class="sbt-scroll-pixel-helper"></div>
+
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</button></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+
+
+
+<div class="dropdown dropdown-source-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Source repositories">
+    <i class="fab fa-github"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="https://github.com/probabl-ai/forecasting" target="_blank"
+   class="btn btn-sm btn-source-repository-button dropdown-item"
+   title="Source repository"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+<span class="btn__text-container">Repository</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li><a href="https://github.com/probabl-ai/forecasting/issues/new?title=Issue%20on%20page%20%2Fcontent/notebooks/direct_vs_recursive_forecasting.html&body=Your%20issue%20content%20here." target="_blank"
+   class="btn btn-sm btn-source-issues-button dropdown-item"
+   title="Open an issue"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-lightbulb"></i>
+  </span>
+<span class="btn__text-container">Open issue</span>
+</a>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+
+
+<div class="dropdown dropdown-download-buttons">
+  <button class="btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Download this page">
+    <i class="fas fa-download"></i>
+  </button>
+  <ul class="dropdown-menu">
+      
+      
+      
+      <li><a href="../../_sources/content/notebooks/direct_vs_recursive_forecasting.ipynb" target="_blank"
+   class="btn btn-sm btn-download-source-button dropdown-item"
+   title="Download source file"
+   data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file"></i>
+  </span>
+<span class="btn__text-container">.ipynb</span>
+</a>
+</li>
+      
+      
+      
+      
+      <li>
+<button onclick="window.print()"
+  class="btn btn-sm btn-download-pdf-button dropdown-item"
+  title="Print to PDF"
+  data-bs-placement="left" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-file-pdf"></i>
+  </span>
+<span class="btn__text-container">.pdf</span>
+</button>
+</li>
+      
+  </ul>
+</div>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="fa-solid fa-list"></span>
+</button>
+</div></div>
+      
+    </div>
+  
+</div>
+</div>
+              
+              
+
+<div id="jb-print-docs-body" class="onlyprint">
+    <h1><no title></h1>
+    <!-- Table of contents -->
+    <div id="print-main-content">
+        <div id="jb-print-toc">
+            
+            <div>
+                <h2> Contents </h2>
+            </div>
+            <nav aria-label="Page">
+                <ul class="simple visible nav section-nav flex-column">
+</ul>
+
+            </nav>
+        </div>
+    </div>
+</div>
+
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+
+<span class="n">SEGMENT_LENGTH</span> <span class="o">=</span> <span class="mi">30</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_synthetic_1</span><span class="p">(</span>
+    <span class="n">segment_length</span><span class="o">=</span><span class="n">SEGMENT_LENGTH</span><span class="p">,</span>
+    <span class="n">n_segments</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">low_noise_level</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span>
+    <span class="n">high_noise_level</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate synthetic time series data with two types of segments</span>
+
+<span class="sd">    - segment type &quot;a&quot; has a prefix centered around 0 and a suffix centered</span>
+<span class="sd">      around 1.</span>
+<span class="sd">    - segment type &quot;b&quot; has a prefix centered around 0 with high variance and a</span>
+<span class="sd">      suffix centered around -1.</span>
+
+<span class="sd">    The variance of the prefix is therefore predictive of the suffix.</span>
+
+<span class="sd">    The suffix values predictive of the next segment prefix&#39;s mean (always 0).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">total_length</span> <span class="o">=</span> <span class="n">segment_length</span> <span class="o">*</span> <span class="n">n_segments</span>
+    <span class="n">segment_types</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">([</span><span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">],</span> <span class="n">n_segments</span><span class="p">)</span>
+    <span class="n">prefix_length</span> <span class="o">=</span> <span class="n">segment_length</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">suffix_length</span> <span class="o">=</span> <span class="n">segment_length</span> <span class="o">-</span> <span class="n">prefix_length</span>
+
+    <span class="n">segments</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">segment_type</span> <span class="ow">in</span> <span class="n">segment_types</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">segment_type</span> <span class="o">==</span> <span class="s2">&quot;a&quot;</span><span class="p">:</span>
+            <span class="c1"># Prefix is centered around 0 with low variance</span>
+            <span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">low_noise_level</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">prefix_length</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="c1"># Suffix is centered around 1 with low variance</span>
+            <span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">low_noise_level</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">suffix_length</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">segment_type</span> <span class="o">==</span> <span class="s2">&quot;b&quot;</span><span class="p">:</span>
+            <span class="c1"># Prefix is also centered around 0 but with high variance</span>
+            <span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">high_noise_level</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">prefix_length</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="c1"># Suffix is centered around -1 with low variance</span>
+            <span class="n">segments</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">loc</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="n">low_noise_level</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">suffix_length</span><span class="p">)</span>
+            <span class="p">)</span>
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;time&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">total_length</span><span class="p">),</span>
+            <span class="s2">&quot;y&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">segments</span><span class="p">),</span>
+            <span class="s2">&quot;series_id&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">total_length</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">),</span>
+        <span class="p">}</span>
+    <span class="p">)</span>
+
+
+<span class="n">data</span> <span class="o">=</span> <span class="n">generate_synthetic_1</span><span class="p">(</span><span class="n">n_segments</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">cutoff</span> <span class="o">=</span> <span class="o">-</span><span class="n">SEGMENT_LENGTH</span> <span class="o">*</span> <span class="mi">10</span>  <span class="c1"># 10 segments for testing</span>
+<span class="n">data_train</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="n">cutoff</span><span class="p">]</span>
+<span class="n">data_test</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">cutoff</span><span class="p">:]</span>
+<span class="n">_</span> <span class="o">=</span> <span class="n">data_train</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Synthetic data 1&quot;</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../../_images/5aeff98b751338cca69b34cf23de8587be988d476d8155937e6e29b60ea7df8f.png" src="../../_images/5aeff98b751338cca69b34cf23de8587be988d476d8155937e6e29b60ea7df8f.png" />
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">_</span> <span class="o">=</span> <span class="n">data_train</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span> <span class="n">SEGMENT_LENGTH</span> <span class="o">*</span> <span class="mi">10</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+    <span class="n">x</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span>
+    <span class="n">y</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Synthetic data 1 - First points of training set&quot;</span><span class="p">,</span>
+    <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="n">_</span> <span class="o">=</span> <span class="n">data_test</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span> <span class="n">SEGMENT_LENGTH</span> <span class="o">*</span> <span class="mi">10</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+    <span class="n">x</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span>
+    <span class="n">y</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+    <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Synthetic data 1 - First points of testing set&quot;</span><span class="p">,</span>
+    <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../../_images/f30f34715ae36bdf6e3b860619fde74a7984634096b87c1ccdfa2568fb726e33.png" src="../../_images/f30f34715ae36bdf6e3b860619fde74a7984634096b87c1ccdfa2568fb726e33.png" />
+<img alt="../../_images/d147f185ad810121757de5d762e88c5ab566d90f8cb32934ace4cbcc28611d5a.png" src="../../_images/d147f185ad810121757de5d762e88c5ab566d90f8cb32934ace4cbcc28611d5a.png" />
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">mlforecast</span><span class="w"> </span><span class="kn">import</span> <span class="n">MLForecast</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_pipeline</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.preprocessing</span><span class="w"> </span><span class="kn">import</span> <span class="n">SplineTransformer</span><span class="p">,</span> <span class="n">PolynomialFeatures</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.kernel_approximation</span><span class="w"> </span><span class="kn">import</span> <span class="n">Nystroem</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mlforecast.lag_transforms</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">Combine</span><span class="p">,</span>
+    <span class="n">RollingMax</span><span class="p">,</span>
+    <span class="n">RollingMin</span><span class="p">,</span>
+    <span class="n">RollingMean</span><span class="p">,</span>
+    <span class="n">RollingStd</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">mlforecast.target_transforms</span><span class="w"> </span><span class="kn">import</span> <span class="n">Differences</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.linear_model</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ridge</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">RandomForestRegressor</span><span class="p">,</span> <span class="n">HistGradientBoostingRegressor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.feature_selection</span><span class="w"> </span><span class="kn">import</span> <span class="n">SelectKBest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.tree</span><span class="w"> </span><span class="kn">import</span> <span class="n">DecisionTreeRegressor</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+
+<span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">RuntimeWarning</span><span class="p">,</span> <span class="n">module</span><span class="o">=</span><span class="s2">&quot;sklearn&quot;</span><span class="p">)</span>
+
+
+<span class="n">mlf</span> <span class="o">=</span> <span class="n">MLForecast</span><span class="p">(</span>
+    <span class="n">models</span><span class="o">=</span><span class="p">[</span>
+        <span class="c1"># Ridge(alpha=1e-6),</span>
+        <span class="c1"># make_pipeline(SplineTransformer(), Ridge(alpha=1e-6)),</span>
+        <span class="c1"># make_pipeline(</span>
+        <span class="c1">#     SplineTransformer(sparse_output=True, n_knots=10),</span>
+        <span class="c1">#     PolynomialFeatures(degree=2, include_bias=False, interaction_only=True),</span>
+        <span class="c1">#     # Nystroem(kernel=&quot;poly&quot;, n_components=200, degree=2, random_state=0),</span>
+        <span class="c1">#     SelectKBest(k=100),</span>
+        <span class="c1">#     Ridge(alpha=1e-6),</span>
+        <span class="c1"># ),</span>
+        <span class="c1"># RandomForestRegressor(</span>
+        <span class="c1">#     n_estimators=100,</span>
+        <span class="c1">#     max_features=0.8,</span>
+        <span class="c1">#     max_depth=8,</span>
+        <span class="c1">#     min_samples_leaf=300,</span>
+        <span class="c1">#     n_jobs=4,</span>
+        <span class="c1"># ),</span>
+        <span class="c1"># DecisionTreeRegressor(max_depth=8, min_samples_leaf=300),</span>
+        <span class="n">HistGradientBoostingRegressor</span><span class="p">(),</span>
+    <span class="p">],</span>
+    <span class="n">freq</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">lags</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">SEGMENT_LENGTH</span> <span class="o">+</span> <span class="mi">1</span><span class="p">),</span>
+    <span class="n">lag_transforms</span><span class="o">=</span><span class="p">{</span>
+        <span class="mi">1</span><span class="p">:</span> <span class="p">[</span>
+            <span class="n">RollingMean</span><span class="p">(</span><span class="n">SEGMENT_LENGTH</span> <span class="o">//</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="n">RollingStd</span><span class="p">(</span><span class="n">SEGMENT_LENGTH</span> <span class="o">//</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="p">],</span>
+        <span class="n">SEGMENT_LENGTH</span>
+        <span class="o">//</span> <span class="mi">2</span><span class="p">:</span> <span class="p">[</span>
+            <span class="n">RollingMax</span><span class="p">(</span><span class="n">SEGMENT_LENGTH</span> <span class="o">//</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="n">RollingMin</span><span class="p">(</span><span class="n">SEGMENT_LENGTH</span> <span class="o">//</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="p">],</span>
+    <span class="p">},</span>
+    <span class="c1"># target_transforms=[Differences([1])],</span>
+    <span class="n">num_threads</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">schema</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="n">time_col</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span>
+    <span class="n">id_col</span><span class="o">=</span><span class="s2">&quot;series_id&quot;</span><span class="p">,</span>
+    <span class="n">target_col</span><span class="o">=</span><span class="s2">&quot;y&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">mlf</span><span class="o">.</span><span class="n">preprocess</span><span class="p">(</span><span class="n">data_train</span><span class="p">,</span> <span class="o">**</span><span class="n">schema</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output text_html"><div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>time</th>
+      <th>y</th>
+      <th>series_id</th>
+      <th>lag1</th>
+      <th>lag2</th>
+      <th>lag3</th>
+      <th>lag4</th>
+      <th>lag5</th>
+      <th>lag6</th>
+      <th>lag7</th>
+      <th>...</th>
+      <th>lag25</th>
+      <th>lag26</th>
+      <th>lag27</th>
+      <th>lag28</th>
+      <th>lag29</th>
+      <th>lag30</th>
+      <th>rolling_mean_lag1_window_size15</th>
+      <th>rolling_std_lag1_window_size15</th>
+      <th>rolling_max_lag15_window_size15</th>
+      <th>rolling_min_lag15_window_size15</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>30</th>
+      <td>30</td>
+      <td>0.229240</td>
+      <td>0</td>
+      <td>1.015399</td>
+      <td>0.984054</td>
+      <td>1.005690</td>
+      <td>1.009448</td>
+      <td>0.989327</td>
+      <td>1.007420</td>
+      <td>1.002516</td>
+      <td>...</td>
+      <td>0.000281</td>
+      <td>0.002324</td>
+      <td>-0.021358</td>
+      <td>0.005610</td>
+      <td>-0.003792</td>
+      <td>0.001729</td>
+      <td>0.999949</td>
+      <td>0.010648</td>
+      <td>1.002597</td>
+      <td>-0.021358</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>31</td>
+      <td>-0.076858</td>
+      <td>0</td>
+      <td>0.229240</td>
+      <td>1.015399</td>
+      <td>0.984054</td>
+      <td>1.005690</td>
+      <td>1.009448</td>
+      <td>0.989327</td>
+      <td>1.007420</td>
+      <td>...</td>
+      <td>-0.013703</td>
+      <td>0.000281</td>
+      <td>0.002324</td>
+      <td>-0.021358</td>
+      <td>0.005610</td>
+      <td>-0.003792</td>
+      <td>0.948392</td>
+      <td>0.199231</td>
+      <td>1.002597</td>
+      <td>-0.021358</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td>32</td>
+      <td>0.005565</td>
+      <td>0</td>
+      <td>-0.076858</td>
+      <td>0.229240</td>
+      <td>1.015399</td>
+      <td>0.984054</td>
+      <td>1.005690</td>
+      <td>1.009448</td>
+      <td>0.989327</td>
+      <td>...</td>
+      <td>0.021756</td>
+      <td>-0.013703</td>
+      <td>0.000281</td>
+      <td>0.002324</td>
+      <td>-0.021358</td>
+      <td>0.005610</td>
+      <td>0.877473</td>
+      <td>0.330574</td>
+      <td>1.002597</td>
+      <td>-0.021358</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td>33</td>
+      <td>0.139742</td>
+      <td>0</td>
+      <td>0.005565</td>
+      <td>-0.076858</td>
+      <td>0.229240</td>
+      <td>1.015399</td>
+      <td>0.984054</td>
+      <td>1.005690</td>
+      <td>1.009448</td>
+      <td>...</td>
+      <td>-0.013874</td>
+      <td>0.021756</td>
+      <td>-0.013703</td>
+      <td>0.000281</td>
+      <td>0.002324</td>
+      <td>-0.021358</td>
+      <td>0.811585</td>
+      <td>0.397444</td>
+      <td>1.016731</td>
+      <td>-0.013874</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td>34</td>
+      <td>-0.148124</td>
+      <td>0</td>
+      <td>0.139742</td>
+      <td>0.005565</td>
+      <td>-0.076858</td>
+      <td>0.229240</td>
+      <td>1.015399</td>
+      <td>0.984054</td>
+      <td>1.005690</td>
+      <td>...</td>
+      <td>-0.010775</td>
+      <td>-0.013874</td>
+      <td>0.021756</td>
+      <td>-0.013703</td>
+      <td>0.000281</td>
+      <td>0.002324</td>
+      <td>0.753119</td>
+      <td>0.428409</td>
+      <td>1.016731</td>
+      <td>-0.013874</td>
+    </tr>
+    <tr>
+      <th>...</th>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+      <td>...</td>
+    </tr>
+    <tr>
+      <th>29695</th>
+      <td>29695</td>
+      <td>-0.992458</td>
+      <td>0</td>
+      <td>-1.007506</td>
+      <td>-1.022026</td>
+      <td>-0.997978</td>
+      <td>-0.987840</td>
+      <td>-1.007104</td>
+      <td>-0.991782</td>
+      <td>-0.992320</td>
+      <td>...</td>
+      <td>-0.021484</td>
+      <td>-0.999256</td>
+      <td>-0.997739</td>
+      <td>-0.998251</td>
+      <td>-0.993025</td>
+      <td>-1.027132</td>
+      <td>-0.667520</td>
+      <td>0.491195</td>
+      <td>0.136864</td>
+      <td>-0.999256</td>
+    </tr>
+    <tr>
+      <th>29696</th>
+      <td>29696</td>
+      <td>-0.992652</td>
+      <td>0</td>
+      <td>-0.992458</td>
+      <td>-1.007506</td>
+      <td>-1.022026</td>
+      <td>-0.997978</td>
+      <td>-0.987840</td>
+      <td>-1.007104</td>
+      <td>-0.991782</td>
+      <td>...</td>
+      <td>-0.108987</td>
+      <td>-0.021484</td>
+      <td>-0.999256</td>
+      <td>-0.997739</td>
+      <td>-0.998251</td>
+      <td>-0.993025</td>
+      <td>-0.723321</td>
+      <td>0.476180</td>
+      <td>0.136864</td>
+      <td>-0.999256</td>
+    </tr>
+    <tr>
+      <th>29697</th>
+      <td>29697</td>
+      <td>-0.998359</td>
+      <td>0</td>
+      <td>-0.992652</td>
+      <td>-0.992458</td>
+      <td>-1.007506</td>
+      <td>-1.022026</td>
+      <td>-0.997978</td>
+      <td>-0.987840</td>
+      <td>-1.007104</td>
+      <td>...</td>
+      <td>0.136864</td>
+      <td>-0.108987</td>
+      <td>-0.021484</td>
+      <td>-0.999256</td>
+      <td>-0.997739</td>
+      <td>-0.998251</td>
+      <td>-0.792378</td>
+      <td>0.429943</td>
+      <td>0.136864</td>
+      <td>-0.999256</td>
+    </tr>
+    <tr>
+      <th>29698</th>
+      <td>29698</td>
+      <td>-1.006092</td>
+      <td>0</td>
+      <td>-0.998359</td>
+      <td>-0.992652</td>
+      <td>-0.992458</td>
+      <td>-1.007506</td>
+      <td>-1.022026</td>
+      <td>-0.997978</td>
+      <td>-0.987840</td>
+      <td>...</td>
+      <td>-0.132552</td>
+      <td>0.136864</td>
+      <td>-0.108987</td>
+      <td>-0.021484</td>
+      <td>-0.999256</td>
+      <td>-0.997739</td>
+      <td>-0.864049</td>
+      <td>0.358369</td>
+      <td>0.154546</td>
+      <td>-0.999256</td>
+    </tr>
+    <tr>
+      <th>29699</th>
+      <td>29699</td>
+      <td>-1.002482</td>
+      <td>0</td>
+      <td>-1.006092</td>
+      <td>-0.998359</td>
+      <td>-0.992652</td>
+      <td>-0.992458</td>
+      <td>-1.007506</td>
+      <td>-1.022026</td>
+      <td>-0.997978</td>
+      <td>...</td>
+      <td>-0.143894</td>
+      <td>-0.132552</td>
+      <td>0.136864</td>
+      <td>-0.108987</td>
+      <td>-0.021484</td>
+      <td>-0.999256</td>
+      <td>-0.941425</td>
+      <td>0.222137</td>
+      <td>0.154546</td>
+      <td>-0.285990</td>
+    </tr>
+  </tbody>
+</table>
+<p>29670 rows × 37 columns</p>
+</div></div></div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">PREDICTION_HORIZON</span> <span class="o">=</span> <span class="n">SEGMENT_LENGTH</span> <span class="o">*</span> <span class="mi">2</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># mlf.fit(data_train, max_horizon=PREDICTION_HORIZON, **schema) # direct forecasting</span>
+<span class="n">mlf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">data_train</span><span class="p">,</span> <span class="o">**</span><span class="n">schema</span><span class="p">)</span>  <span class="c1"># recursive forecasting</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>MLForecast(models=[HistGradientBoostingRegressor], freq=1, lag_features=[&#39;lag1&#39;, &#39;lag2&#39;, &#39;lag3&#39;, &#39;lag4&#39;, &#39;lag5&#39;, &#39;lag6&#39;, &#39;lag7&#39;, &#39;lag8&#39;, &#39;lag9&#39;, &#39;lag10&#39;, &#39;lag11&#39;, &#39;lag12&#39;, &#39;lag13&#39;, &#39;lag14&#39;, &#39;lag15&#39;, &#39;lag16&#39;, &#39;lag17&#39;, &#39;lag18&#39;, &#39;lag19&#39;, &#39;lag20&#39;, &#39;lag21&#39;, &#39;lag22&#39;, &#39;lag23&#39;, &#39;lag24&#39;, &#39;lag25&#39;, &#39;lag26&#39;, &#39;lag27&#39;, &#39;lag28&#39;, &#39;lag29&#39;, &#39;lag30&#39;, &#39;rolling_mean_lag1_window_size15&#39;, &#39;rolling_std_lag1_window_size15&#39;, &#39;rolling_max_lag15_window_size15&#39;, &#39;rolling_min_lag15_window_size15&#39;], date_features=[], num_threads=4)
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">test_offset</span> <span class="o">=</span> <span class="mi">0</span>
+
+<span class="n">all_predictions</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">UPDATE_CHUNK_SIZE</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="k">while</span> <span class="n">test_offset</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_test</span><span class="p">):</span>
+
+    <span class="n">new_predictions</span> <span class="o">=</span> <span class="n">mlf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">PREDICTION_HORIZON</span><span class="p">)</span>
+    <span class="n">all_predictions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_predictions</span><span class="p">)</span>
+
+    <span class="c1"># Update the forecaster with the new observations</span>
+    <span class="n">mlf</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">data_test</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">test_offset</span> <span class="p">:</span> <span class="n">test_offset</span> <span class="o">+</span> <span class="n">UPDATE_CHUNK_SIZE</span><span class="p">])</span>
+    <span class="n">test_offset</span> <span class="o">+=</span> <span class="n">UPDATE_CHUNK_SIZE</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">nrows</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="n">fig</span><span class="p">,</span> <span class="n">axes</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">nrows</span><span class="o">=</span><span class="n">nrows</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">5</span> <span class="o">*</span> <span class="n">nrows</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">row_idx</span><span class="p">,</span> <span class="n">predictions</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">all_predictions</span><span class="p">):</span>
+    <span class="n">merged_data</span> <span class="o">=</span> <span class="n">data_test</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">merged_data</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">predictions</span><span class="p">,</span> <span class="n">on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="s2">&quot;series_id&quot;</span><span class="p">],</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;left&quot;</span><span class="p">)</span>
+
+    <span class="n">merged_data</span><span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="s2">&quot;series_id&quot;</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span> <span class="n">SEGMENT_LENGTH</span> <span class="o">*</span> <span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span>
+        <span class="n">x</span><span class="o">=</span><span class="s2">&quot;time&quot;</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">axes</span><span class="p">[</span><span class="n">row_idx</span><span class="p">]</span>
+    <span class="p">)</span>
+    <span class="n">axes</span><span class="p">[</span><span class="n">row_idx</span><span class="p">]</span><span class="o">.</span><span class="n">set_ylim</span><span class="p">(</span><span class="o">-</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">1.2</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">row_idx</span> <span class="o">&gt;=</span> <span class="n">nrows</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">break</span>
+</pre></div>
+</div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../../_images/9ad560510367b126748c0e15b878ad56279f78e105efab7ca94dd1418c43311a.png" src="../../_images/9ad560510367b126748c0e15b878ad56279f78e105efab7ca94dd1418c43311a.png" />
+</div>
+</div>
+
+    <script type="text/x-thebe-config">
+    {
+        requestKernel: true,
+        binderOptions: {
+            repo: "binder-examples/jupyter-stacks-datascience",
+            ref: "master",
+        },
+        codeMirrorConfig: {
+            theme: "abcdef",
+            mode: "python"
+        },
+        kernelOptions: {
+            name: "python3",
+            path: "./content/notebooks"
+        },
+        predefinedOutput: true
+    }
+    </script>
+    <script>kernelName = 'python3'</script>
+
+                </article>
+              
+
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+  <div class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> Contents
+  </div>
+  <nav class="bd-toc-nav page-toc">
+    <ul class="simple visible nav section-nav flex-column">
+</ul>
+
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
+  
+  <div class="footer-item">
+    
+<p class="component-author">
+By Guillaume Lemaitre & Olivier Grisel
+</p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+
+  <p class="copyright">
+    
+      © Copyright 2023.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
+</html>
