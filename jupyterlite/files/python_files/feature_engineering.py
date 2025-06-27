@@ -151,14 +151,21 @@ calendar
 # Finally we load the electricity load data. This data will both be used as a
 # target variable but also to craft some lagged and window-aggregated features.
 # %%
+load_data_files = [
+    data_file
+    for data_file in sorted(data_source_folder.iterdir())
+    if data_file.name.startswith("Total Load - Day Ahead")
+    and data_file.name.endswith(".csv")
+]
+# %%
 electricity_raw = skrub.var(
     "electricity_raw",
     pl.concat(
         [
-            pl.from_pandas(pd.read_csv(data_file, na_values=["N/A"]))
-            for data_file in sorted(data_source_folder.iterdir())
-            if data_file.name.startswith("Total Load - Day Ahead")
-            and data_file.name.endswith(".csv")
+            pl.from_pandas(pd.read_csv(data_file, na_values=["N/A", "-"])).drop(
+                ["Day-ahead Total Load Forecast [MW] - BZN|FR"]
+            )
+            for data_file in load_data_files
         ],
         how="vertical",
     ),
@@ -176,7 +183,7 @@ electricity = (
             .alias("time"),
         ]
     )
-    .drop(["Time (UTC)", "Day-ahead Total Load Forecast [MW] - BZN|FR"])
+    .drop(["Time (UTC)"])
     .rename({"Actual Total Load [MW] - BZN|FR": "load_mw"})
     .select(["time", "load_mw"])
 )
