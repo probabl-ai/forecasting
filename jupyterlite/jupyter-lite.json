@@ -15,8 +15,18 @@
       },
       {
         "extension": "./extension",
+        "load": "static/remoteEntry.35b6c65bd99dab37b910.js",
+        "name": "@jupyter-widgets/jupyterlab-manager"
+      },
+      {
+        "extension": "./extension",
         "load": "static/remoteEntry.3745c44cbbd62cec9a73.js",
         "name": "@jupyterlite/pyodide-kernel-extension"
+      },
+      {
+        "extension": "./extension",
+        "load": "static/remoteEntry.8f24bbbba71046cd68d8.js",
+        "name": "jupyter-leaflet"
       },
       {
         "extension": "./extension",

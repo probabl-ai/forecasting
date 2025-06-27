@@ -14,5 +14,5 @@ https://transparency.entsoe.eu/load-domain/r2/totalLoadR2/show?name=&defaultValu
 
 ## Weather data:
 
-From https://open-meteo.com/en/docs/historical-forecast-api. The data is
-fetched from the `fetch_weather_data.py` script.
+From https://open-meteo.com/en/docs/historical-forecast-api. The data was
+fetched with the help of the `fetch_weather_data.py` script.
