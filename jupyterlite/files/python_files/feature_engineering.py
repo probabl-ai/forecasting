@@ -4,10 +4,12 @@
 # jupyterlite). We need the development version of skrub to be able to use the
 # skrub expressions.
 # %%
+# %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
 # %pip install -q holidays https://pypi.anaconda.org/ogrisel/simple/skrub/0.6.dev0/skrub-0.6.dev0-py3-none-any.whl
-
 # %%
 import polars as pl
+import pandas as pd
+from pyarrow.parquet import read_table
 import skrub
 from pathlib import Path
 
@@ -38,7 +40,7 @@ electricity_raw = skrub.var(
     "electricity_raw",
     pl.concat(
         [
-            pl.read_csv(data_file, null_values=["N/A"])
+            pl.from_pandas(pd.read_csv(data_file, na_values=["N/A"]))
             for data_file in sorted(data_source_folder.iterdir())
             if data_file.name.startswith("Total Load - Day Ahead")
             and data_file.name.endswith(".csv")
@@ -96,7 +98,7 @@ all_city_weather_raw = {}
 for city_name in city_names:
     all_city_weather_raw[city_name] = skrub.var(
         f"{city_name}_weather_raw",
-        pl.read_parquet(f"../datasets/weather_{city_name}.parquet"),
+        pl.from_arrow(read_table(f"../datasets/weather_{city_name}.parquet")),
     ).with_columns(
         [
             pl.col("time").dt.cast_time_unit(
@@ -114,7 +116,6 @@ all_city_weather_raw["brest"].drop_nulls(subset=["temperature_2m"])
 
 # %%
 time.join(all_city_weather_raw["brest"], on="time", how="left")
-
 
 
 # %%
