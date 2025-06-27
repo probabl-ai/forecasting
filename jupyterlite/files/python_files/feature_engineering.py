@@ -100,7 +100,7 @@ all_city_weather_raw["brest"].drop_nulls(subset=["temperature_2m"])
 
 
 # %%
-time.join(all_city_weather_raw["brest"], on="time", how="left")
+time.join(all_city_weather_raw["brest"], on="time", how="inner")
 
 
 # %%
@@ -109,7 +109,7 @@ for city_name, city_weather_raw in all_city_weather_raw.items():
     all_city_weather = all_city_weather.join(
         city_weather_raw.rename(lambda x: x if x == "time" else x + city_name),
         on="time",
-        how="left",
+        how="inner",
     )
 
 all_city_weather
@@ -183,6 +183,7 @@ electricity = (
     )
     .drop(["Time (UTC)"])
     .rename({"Actual Total Load [MW] - BZN|FR": "load_mw"})
+    .filter(pl.col("time").dt.minute().eq(0))
     .select(["time", "load_mw"])
 )
 electricity
@@ -191,6 +192,6 @@ electricity
 # Check that the number of rows matches our expectations based on the number of hours that separate the first and the last dates:
 
 # %%
-time.join(electricity, on="time", how="left")
+time.join(electricity, on="time", how="inner")
 
 # %%
