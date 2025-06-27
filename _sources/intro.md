@@ -6,7 +6,7 @@ This tutorial introduces how to use machine learning to forecast time series dat
 
 ### Slides
 
-### Notebooks [![Launch JupyterLite](/images/jupyterlite_badge.svg 'Our JupyterLite website')](https://probabl-ai.github.io/forecasting/jupyterlite/tree)
+### Notebooks [![Launch JupyterLite](/images/jupyterlite_badge.svg 'Our JupyterLite website')](https://probabl-ai.github.io/forecasting/jupyterlite/lab)
 
 ```{tableofcontents}
 ```
