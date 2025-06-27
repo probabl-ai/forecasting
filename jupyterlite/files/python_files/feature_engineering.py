@@ -118,26 +118,24 @@ all_city_weather
 # ## Calendar and holidays features
 #
 # We leverage the `holidays` package to enrich the time range with some
-# calendar features such as public holidays and school holidays in France. We
-# also add some features that are useful for time series forecasting such as
-# the day of the week, the day of the year, and the hour of the day.
+# calendar features such as public holidays in France. We also add some
+# features that are useful for time series forecasting such as the day of the
+# week, the day of the year, and the hour of the day.
 #
 # Note that the `holidays` package requires us to extract the date for the
 # French timezone.
 #
-# Similarly for the calendar features: all the time features are extracted
-# from the time in the French timezone.
+# Similarly for the calendar features: all the time features are extracted from
+# the time in the French timezone.
 # %%
 import holidays
 
 holidays_fr = holidays.France(years=range(2019, 2026))
 
-
 fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
 calendar = time.with_columns(
     [
         fr_time.dt.date().is_in(holidays_fr.keys()).alias("is_holiday_fr"),
-        # TODO: add school holidays flags for the 3 main zones in France
         fr_time.dt.weekday().alias("day_of_week_fr"),
         fr_time.dt.ordinal_day().alias("day_of_year_fr"),
         fr_time.dt.hour().alias("hour_of_day_fr"),
@@ -194,3 +192,5 @@ electricity
 
 # %%
 time.join(electricity, on="time", how="left")
+
+# %%
