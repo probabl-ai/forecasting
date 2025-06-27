@@ -12,13 +12,15 @@
 # %%
 # The following 3 imports are only needed to workaround some limitations
 # when using polars in a pyodide/jupyterlite notebook.
-import tzdata
+import tzdata  # noqa: F401
 import pandas as pd
 from pyarrow.parquet import read_table
 
 import polars as pl
 import skrub
 from pathlib import Path
+import holidays
+
 
 # %% [markdown]
 # ## Time range
@@ -128,8 +130,6 @@ all_city_weather
 # Similarly for the calendar features: all the time features are extracted from
 # the time in the French timezone.
 # %%
-import holidays
-
 holidays_fr = holidays.France(years=range(2019, 2026))
 
 fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
