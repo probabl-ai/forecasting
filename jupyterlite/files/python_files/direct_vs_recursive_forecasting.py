@@ -1,3 +1,36 @@
+# # %% [markdown]
+# # Direct vs Recursive Forecasting
+#
+# The purpose of this notebook is to compare the performance of direct
+# forecasting and recursive forecasting using the `MLForecast` library. Direct
+# forecasting means that we train a family of model to predict the target value
+# at various horizons in the future, e.g. 1 hour, 2 hours, ..., 24 hours ahead.
+# Recursive forecasting means that we train a single model to predict the
+# target value at the next time step, and then use the model recursively to
+# predict the next time step using the previous predictions as input features.
+# Implementing recursive forecasting is a bit cumbersome to do manually, hence
+# we use the `MLForecast` library to handle this for us.
+#
+# The objective is to show that recursive forecasting can be more efficient in
+# terms of memory usage and training time. However, it can also lead to a loss
+# of accuracy because recursive calls are fed with previous predictions that do
+# not necessarily match the training distribution of the model, and can
+# therefore lead to degenerate predictions, in particular when the variance of
+# the lagged values is informative.
+#
+# We highlight this issue with a synthetic dataset that has two types of
+# segments:
+#
+# - Segment type "a" has a prefix centered around 0 with low variance and a
+#   suffix centered around 1.
+# - Segment type "b" has a prefix centered around 0 with high variance and a
+#   suffix centered around -1.
+#
+# Segment of type "a" and "b" are independently sampled, meaning that is not
+# possible to forecast beyond the length of the segments. However, it should be
+# quite easy to predict the end of a segment given the prefix of the segment
+# with lagged feature engineering.
+
 # %%
 import numpy as np
 import matplotlib.pyplot as plt

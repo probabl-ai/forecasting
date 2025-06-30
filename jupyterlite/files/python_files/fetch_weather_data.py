@@ -1,4 +1,16 @@
+# # %% [markdown]
+# # Historical weather data download from open-meteo.com
+# 
+# This notebook downloads historical weather data for 10 medium to large urban
+# areas in France from the Open Meteo Historical Forecast API. The data is
+# saved in a Parquet file in the `datasets` folder.
+#
+# Since calling the API is slow and can reach rate limits quite easily with
+# free accounts, we use a cache to avoid downloading the same data multiple
+# times.
+
 # %%
+# # Extra dependencies when running this notebook in JupyterLite/Pyodide.
 # %pip install -q openmeteo-requests retry-requests requests-cache ipyleaflet
 
 # %%
