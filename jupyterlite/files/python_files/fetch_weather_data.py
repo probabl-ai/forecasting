@@ -1,4 +1,4 @@
-# # %% [markdown]
+# %% [markdown]
 # # Historical weather data download from open-meteo.com
 # 
 # This notebook downloads historical weather data for 10 medium to large urban

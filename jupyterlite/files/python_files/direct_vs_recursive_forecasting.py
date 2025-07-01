@@ -1,4 +1,4 @@
-# # %% [markdown]
+# %% [markdown]
 # # Direct vs Recursive Forecasting
 #
 # The purpose of this notebook is to compare the performance of direct
