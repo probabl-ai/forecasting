@@ -5,11 +5,12 @@
 # forecasting and recursive forecasting using the `MLForecast` library. Direct
 # forecasting means that we train a family of model to predict the target value
 # at various horizons in the future, e.g. 1 hour, 2 hours, ..., 24 hours ahead.
-# Recursive forecasting means that we train a single model to predict the
-# target value at the next time step, and then use the model recursively to
-# predict the next time step using the previous predictions as input features.
-# Implementing recursive forecasting is a bit cumbersome to do manually, hence
-# we use the `MLForecast` library to handle this for us.
+# Recursive forecasting (also known as auto-regressive forecasting) means that
+# we train a single model to predict the target value at the next time step,
+# and then use the model recursively to predict the next time step using the
+# previous predictions as input features. Implementing recursive forecasting is
+# a bit cumbersome to do manually, hence we use the `MLForecast` library to
+# handle this for us.
 #
 # The objective is to show that recursive forecasting can be more efficient in
 # terms of memory usage and training time. However, it can also lead to a loss
