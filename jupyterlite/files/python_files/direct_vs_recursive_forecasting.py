@@ -93,7 +93,7 @@ def generate_synthetic_1(
     )
 
 
-data = generate_synthetic_1(n_segments=1000, seed=1)
+data = generate_synthetic_1(n_segments=500, seed=1)
 cutoff = -SEGMENT_LENGTH * 10  # 10 segments for testing
 data_train = data.iloc[:cutoff]
 data_test = data.iloc[cutoff:]
@@ -132,8 +132,10 @@ from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegresso
 from sklearn.feature_selection import SelectKBest
 from sklearn.tree import DecisionTreeRegressor
 import warnings
+import threadpoolctl
 
-
+# Workaround a performance problem with HistGradientBoostingRegressor on small datasets.
+threadpoolctl.threadpool_limits(limits=1, user_api="openmp")
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
 
 
@@ -186,10 +188,13 @@ mlf.preprocess(data_train, **schema)
 # %%
 PREDICTION_HORIZON = SEGMENT_LENGTH * 2
 # %%
+# %%time
 # mlf.fit(data_train, max_horizon=PREDICTION_HORIZON, **schema) # direct forecasting
 mlf.fit(data_train, **schema)  # recursive forecasting
 
+
 # %%
+# %%time
 test_offset = 0
 
 all_predictions = []

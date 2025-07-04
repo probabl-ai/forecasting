@@ -472,7 +472,7 @@ with lagged feature engineering.</p>
     <span class="p">)</span>
 
 
-<span class="n">data</span> <span class="o">=</span> <span class="n">generate_synthetic_1</span><span class="p">(</span><span class="n">n_segments</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">generate_synthetic_1</span><span class="p">(</span><span class="n">n_segments</span><span class="o">=</span><span class="mi">500</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 <span class="n">cutoff</span> <span class="o">=</span> <span class="o">-</span><span class="n">SEGMENT_LENGTH</span> <span class="o">*</span> <span class="mi">10</span>  <span class="c1"># 10 segments for testing</span>
 <span class="n">data_train</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:</span><span class="n">cutoff</span><span class="p">]</span>
 <span class="n">data_test</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">cutoff</span><span class="p">:]</span>
@@ -481,7 +481,7 @@ with lagged feature engineering.</p>
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../_images/5aeff98b751338cca69b34cf23de8587be988d476d8155937e6e29b60ea7df8f.png" src="../../_images/5aeff98b751338cca69b34cf23de8587be988d476d8155937e6e29b60ea7df8f.png" />
+<img alt="../../_images/ce4cf5204f7284bbcaa21027acb9ae4cf1109e7b78198533520bfdc4d20e26a8.png" src="../../_images/ce4cf5204f7284bbcaa21027acb9ae4cf1109e7b78198533520bfdc4d20e26a8.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -503,8 +503,8 @@ with lagged feature engineering.</p>
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../_images/f30f34715ae36bdf6e3b860619fde74a7984634096b87c1ccdfa2568fb726e33.png" src="../../_images/f30f34715ae36bdf6e3b860619fde74a7984634096b87c1ccdfa2568fb726e33.png" />
-<img alt="../../_images/d147f185ad810121757de5d762e88c5ab566d90f8cb32934ace4cbcc28611d5a.png" src="../../_images/d147f185ad810121757de5d762e88c5ab566d90f8cb32934ace4cbcc28611d5a.png" />
+<img alt="../../_images/47c8acd36b2a3643247b1f6b693bc60e76003248ea3a148bf0bcce4555297812.png" src="../../_images/47c8acd36b2a3643247b1f6b693bc60e76003248ea3a148bf0bcce4555297812.png" />
+<img alt="../../_images/41f87a9fbaf6df907c76c6a45f15aaf1a47a77afd2fdc8e297404253fa059a33.png" src="../../_images/41f87a9fbaf6df907c76c6a45f15aaf1a47a77afd2fdc8e297404253fa059a33.png" />
 </div>
 </div>
 <div class="cell docutils container">
@@ -526,8 +526,10 @@ with lagged feature engineering.</p>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.feature_selection</span><span class="w"> </span><span class="kn">import</span> <span class="n">SelectKBest</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.tree</span><span class="w"> </span><span class="kn">import</span> <span class="n">DecisionTreeRegressor</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">threadpoolctl</span>
 
-
+<span class="c1"># Workaround a performance problem with HistGradientBoostingRegressor on small datasets.</span>
+<span class="n">threadpoolctl</span><span class="o">.</span><span class="n">threadpool_limits</span><span class="p">(</span><span class="n">limits</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">user_api</span><span class="o">=</span><span class="s2">&quot;openmp&quot;</span><span class="p">)</span>
 <span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s2">&quot;ignore&quot;</span><span class="p">,</span> <span class="n">category</span><span class="o">=</span><span class="ne">RuntimeWarning</span><span class="p">,</span> <span class="n">module</span><span class="o">=</span><span class="s2">&quot;sklearn&quot;</span><span class="p">)</span>
 
 
@@ -629,122 +631,122 @@ with lagged feature engineering.</p>
     <tr>
       <th>30</th>
       <td>30</td>
-      <td>0.229240</td>
+      <td>0.086113</td>
       <td>0</td>
-      <td>1.015399</td>
-      <td>0.984054</td>
-      <td>1.005690</td>
-      <td>1.009448</td>
-      <td>0.989327</td>
-      <td>1.007420</td>
-      <td>1.002516</td>
+      <td>0.992702</td>
+      <td>0.993013</td>
+      <td>1.031000</td>
+      <td>0.975424</td>
+      <td>1.003332</td>
+      <td>0.993741</td>
+      <td>0.990852</td>
       <td>...</td>
-      <td>0.000281</td>
-      <td>0.002324</td>
-      <td>-0.021358</td>
-      <td>0.005610</td>
-      <td>-0.003792</td>
-      <td>0.001729</td>
-      <td>0.999949</td>
-      <td>0.010648</td>
-      <td>1.002597</td>
-      <td>-0.021358</td>
+      <td>-0.000597</td>
+      <td>-0.003396</td>
+      <td>0.003249</td>
+      <td>-0.003548</td>
+      <td>0.006188</td>
+      <td>-0.015397</td>
+      <td>0.996924</td>
+      <td>0.013039</td>
+      <td>1.006198</td>
+      <td>-0.008697</td>
     </tr>
     <tr>
       <th>31</th>
       <td>31</td>
-      <td>-0.076858</td>
+      <td>-0.003983</td>
       <td>0</td>
-      <td>0.229240</td>
-      <td>1.015399</td>
-      <td>0.984054</td>
-      <td>1.005690</td>
-      <td>1.009448</td>
-      <td>0.989327</td>
-      <td>1.007420</td>
+      <td>0.086113</td>
+      <td>0.992702</td>
+      <td>0.993013</td>
+      <td>1.031000</td>
+      <td>0.975424</td>
+      <td>1.003332</td>
+      <td>0.993741</td>
       <td>...</td>
-      <td>-0.013703</td>
-      <td>0.000281</td>
-      <td>0.002324</td>
-      <td>-0.021358</td>
-      <td>0.005610</td>
-      <td>-0.003792</td>
-      <td>0.948392</td>
-      <td>0.199231</td>
-      <td>1.002597</td>
-      <td>-0.021358</td>
+      <td>0.002458</td>
+      <td>-0.000597</td>
+      <td>-0.003396</td>
+      <td>0.003249</td>
+      <td>-0.003548</td>
+      <td>0.006188</td>
+      <td>0.935585</td>
+      <td>0.235347</td>
+      <td>1.006198</td>
+      <td>-0.008697</td>
     </tr>
     <tr>
       <th>32</th>
       <td>32</td>
-      <td>0.005565</td>
+      <td>-0.177943</td>
       <td>0</td>
-      <td>-0.076858</td>
-      <td>0.229240</td>
-      <td>1.015399</td>
-      <td>0.984054</td>
-      <td>1.005690</td>
-      <td>1.009448</td>
-      <td>0.989327</td>
+      <td>-0.003983</td>
+      <td>0.086113</td>
+      <td>0.992702</td>
+      <td>0.993013</td>
+      <td>1.031000</td>
+      <td>0.975424</td>
+      <td>1.003332</td>
       <td>...</td>
-      <td>0.021756</td>
-      <td>-0.013703</td>
-      <td>0.000281</td>
-      <td>0.002324</td>
-      <td>-0.021358</td>
-      <td>0.005610</td>
-      <td>0.877473</td>
-      <td>0.330574</td>
-      <td>1.002597</td>
-      <td>-0.021358</td>
+      <td>-0.007467</td>
+      <td>0.002458</td>
+      <td>-0.000597</td>
+      <td>-0.003396</td>
+      <td>0.003249</td>
+      <td>-0.003548</td>
+      <td>0.869826</td>
+      <td>0.337127</td>
+      <td>1.006198</td>
+      <td>-0.008697</td>
     </tr>
     <tr>
       <th>33</th>
       <td>33</td>
-      <td>0.139742</td>
+      <td>0.062693</td>
       <td>0</td>
-      <td>0.005565</td>
-      <td>-0.076858</td>
-      <td>0.229240</td>
-      <td>1.015399</td>
-      <td>0.984054</td>
-      <td>1.005690</td>
-      <td>1.009448</td>
+      <td>-0.177943</td>
+      <td>-0.003983</td>
+      <td>0.086113</td>
+      <td>0.992702</td>
+      <td>0.993013</td>
+      <td>1.031000</td>
+      <td>0.975424</td>
       <td>...</td>
-      <td>-0.013874</td>
-      <td>0.021756</td>
-      <td>-0.013703</td>
-      <td>0.000281</td>
-      <td>0.002324</td>
-      <td>-0.021358</td>
-      <td>0.811585</td>
-      <td>0.397444</td>
-      <td>1.016731</td>
-      <td>-0.013874</td>
+      <td>0.006787</td>
+      <td>-0.007467</td>
+      <td>0.002458</td>
+      <td>-0.000597</td>
+      <td>-0.003396</td>
+      <td>0.003249</td>
+      <td>0.791984</td>
+      <td>0.429595</td>
+      <td>1.006198</td>
+      <td>-0.008697</td>
     </tr>
     <tr>
       <th>34</th>
       <td>34</td>
-      <td>-0.148124</td>
+      <td>0.085538</td>
       <td>0</td>
-      <td>0.139742</td>
-      <td>0.005565</td>
-      <td>-0.076858</td>
-      <td>0.229240</td>
-      <td>1.015399</td>
-      <td>0.984054</td>
-      <td>1.005690</td>
+      <td>0.062693</td>
+      <td>-0.177943</td>
+      <td>-0.003983</td>
+      <td>0.086113</td>
+      <td>0.992702</td>
+      <td>0.993013</td>
+      <td>1.031000</td>
       <td>...</td>
-      <td>-0.010775</td>
-      <td>-0.013874</td>
-      <td>0.021756</td>
-      <td>-0.013703</td>
-      <td>0.000281</td>
-      <td>0.002324</td>
-      <td>0.753119</td>
-      <td>0.428409</td>
-      <td>1.016731</td>
-      <td>-0.013874</td>
+      <td>-0.004699</td>
+      <td>0.006787</td>
+      <td>-0.007467</td>
+      <td>0.002458</td>
+      <td>-0.000597</td>
+      <td>-0.003396</td>
+      <td>0.729470</td>
+      <td>0.463953</td>
+      <td>1.006198</td>
+      <td>-0.008697</td>
     </tr>
     <tr>
       <th>...</th>
@@ -771,128 +773,128 @@ with lagged feature engineering.</p>
       <td>...</td>
     </tr>
     <tr>
-      <th>29695</th>
-      <td>29695</td>
-      <td>-0.992458</td>
+      <th>14695</th>
+      <td>14695</td>
+      <td>1.010180</td>
       <td>0</td>
-      <td>-1.007506</td>
-      <td>-1.022026</td>
-      <td>-0.997978</td>
-      <td>-0.987840</td>
-      <td>-1.007104</td>
-      <td>-0.991782</td>
-      <td>-0.992320</td>
+      <td>1.000320</td>
+      <td>1.014936</td>
+      <td>1.003430</td>
+      <td>0.991600</td>
+      <td>0.998221</td>
+      <td>0.992632</td>
+      <td>0.989077</td>
       <td>...</td>
-      <td>-0.021484</td>
-      <td>-0.999256</td>
-      <td>-0.997739</td>
-      <td>-0.998251</td>
-      <td>-0.993025</td>
-      <td>-1.027132</td>
-      <td>-0.667520</td>
-      <td>0.491195</td>
-      <td>0.136864</td>
-      <td>-0.999256</td>
+      <td>0.008091</td>
+      <td>0.999022</td>
+      <td>0.989610</td>
+      <td>1.017450</td>
+      <td>0.986895</td>
+      <td>1.000529</td>
+      <td>0.664467</td>
+      <td>0.489913</td>
+      <td>1.017450</td>
+      <td>-0.017102</td>
     </tr>
     <tr>
-      <th>29696</th>
-      <td>29696</td>
-      <td>-0.992652</td>
+      <th>14696</th>
+      <td>14696</td>
+      <td>1.019595</td>
       <td>0</td>
-      <td>-0.992458</td>
-      <td>-1.007506</td>
-      <td>-1.022026</td>
-      <td>-0.997978</td>
-      <td>-0.987840</td>
-      <td>-1.007104</td>
-      <td>-0.991782</td>
+      <td>1.010180</td>
+      <td>1.000320</td>
+      <td>1.014936</td>
+      <td>1.003430</td>
+      <td>0.991600</td>
+      <td>0.998221</td>
+      <td>0.992632</td>
       <td>...</td>
-      <td>-0.108987</td>
-      <td>-0.021484</td>
-      <td>-0.999256</td>
-      <td>-0.997739</td>
-      <td>-0.998251</td>
-      <td>-0.993025</td>
-      <td>-0.723321</td>
-      <td>0.476180</td>
-      <td>0.136864</td>
-      <td>-0.999256</td>
+      <td>0.010742</td>
+      <td>0.008091</td>
+      <td>0.999022</td>
+      <td>0.989610</td>
+      <td>1.017450</td>
+      <td>0.986895</td>
+      <td>0.731740</td>
+      <td>0.460728</td>
+      <td>1.017450</td>
+      <td>-0.017102</td>
     </tr>
     <tr>
-      <th>29697</th>
-      <td>29697</td>
-      <td>-0.998359</td>
+      <th>14697</th>
+      <td>14697</td>
+      <td>1.014361</td>
       <td>0</td>
-      <td>-0.992652</td>
-      <td>-0.992458</td>
-      <td>-1.007506</td>
-      <td>-1.022026</td>
-      <td>-0.997978</td>
-      <td>-0.987840</td>
-      <td>-1.007104</td>
+      <td>1.019595</td>
+      <td>1.010180</td>
+      <td>1.000320</td>
+      <td>1.014936</td>
+      <td>1.003430</td>
+      <td>0.991600</td>
+      <td>0.998221</td>
       <td>...</td>
-      <td>0.136864</td>
-      <td>-0.108987</td>
-      <td>-0.021484</td>
-      <td>-0.999256</td>
-      <td>-0.997739</td>
-      <td>-0.998251</td>
-      <td>-0.792378</td>
-      <td>0.429943</td>
-      <td>0.136864</td>
-      <td>-0.999256</td>
+      <td>0.012473</td>
+      <td>0.010742</td>
+      <td>0.008091</td>
+      <td>0.999022</td>
+      <td>0.989610</td>
+      <td>1.017450</td>
+      <td>0.800022</td>
+      <td>0.417685</td>
+      <td>0.999022</td>
+      <td>-0.017102</td>
     </tr>
     <tr>
-      <th>29698</th>
-      <td>29698</td>
-      <td>-1.006092</td>
+      <th>14698</th>
+      <td>14698</td>
+      <td>0.987593</td>
       <td>0</td>
-      <td>-0.998359</td>
-      <td>-0.992652</td>
-      <td>-0.992458</td>
-      <td>-1.007506</td>
-      <td>-1.022026</td>
-      <td>-0.997978</td>
-      <td>-0.987840</td>
+      <td>1.014361</td>
+      <td>1.019595</td>
+      <td>1.010180</td>
+      <td>1.000320</td>
+      <td>1.014936</td>
+      <td>1.003430</td>
+      <td>0.991600</td>
       <td>...</td>
-      <td>-0.132552</td>
-      <td>0.136864</td>
-      <td>-0.108987</td>
-      <td>-0.021484</td>
-      <td>-0.999256</td>
-      <td>-0.997739</td>
-      <td>-0.864049</td>
-      <td>0.358369</td>
-      <td>0.154546</td>
-      <td>-0.999256</td>
+      <td>-0.006401</td>
+      <td>0.012473</td>
+      <td>0.010742</td>
+      <td>0.008091</td>
+      <td>0.999022</td>
+      <td>0.989610</td>
+      <td>0.867881</td>
+      <td>0.355933</td>
+      <td>0.999022</td>
+      <td>-0.017102</td>
     </tr>
     <tr>
-      <th>29699</th>
-      <td>29699</td>
-      <td>-1.002482</td>
+      <th>14699</th>
+      <td>14699</td>
+      <td>1.002173</td>
       <td>0</td>
-      <td>-1.006092</td>
-      <td>-0.998359</td>
-      <td>-0.992652</td>
-      <td>-0.992458</td>
-      <td>-1.007506</td>
-      <td>-1.022026</td>
-      <td>-0.997978</td>
+      <td>0.987593</td>
+      <td>1.014361</td>
+      <td>1.019595</td>
+      <td>1.010180</td>
+      <td>1.000320</td>
+      <td>1.014936</td>
+      <td>1.003430</td>
       <td>...</td>
-      <td>-0.143894</td>
-      <td>-0.132552</td>
-      <td>0.136864</td>
-      <td>-0.108987</td>
-      <td>-0.021484</td>
-      <td>-0.999256</td>
-      <td>-0.941425</td>
-      <td>0.222137</td>
-      <td>0.154546</td>
-      <td>-0.285990</td>
+      <td>-0.001378</td>
+      <td>-0.006401</td>
+      <td>0.012473</td>
+      <td>0.010742</td>
+      <td>0.008091</td>
+      <td>0.999022</td>
+      <td>0.934417</td>
+      <td>0.260507</td>
+      <td>0.012473</td>
+      <td>-0.017102</td>
     </tr>
   </tbody>
 </table>
-<p>29670 rows × 37 columns</p>
+<p>14670 rows × 37 columns</p>
 </div></div></div>
 </div>
 <div class="cell docutils container">
@@ -904,12 +906,17 @@ with lagged feature engineering.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># mlf.fit(data_train, max_horizon=PREDICTION_HORIZON, **schema) # direct forecasting</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%time</span>
+<span class="c1"># mlf.fit(data_train, max_horizon=PREDICTION_HORIZON, **schema) # direct forecasting</span>
 <span class="n">mlf</span><span class="o">.</span><span class="n">fit</span><span class="p">(</span><span class="n">data_train</span><span class="p">,</span> <span class="o">**</span><span class="n">schema</span><span class="p">)</span>  <span class="c1"># recursive forecasting</span>
 </pre></div>
 </div>
 </div>
 <div class="cell_output docutils container">
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>CPU times: user 358 ms, sys: 11.7 ms, total: 370 ms
+Wall time: 371 ms
+</pre></div>
+</div>
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>MLForecast(models=[HistGradientBoostingRegressor], freq=1, lag_features=[&#39;lag1&#39;, &#39;lag2&#39;, &#39;lag3&#39;, &#39;lag4&#39;, &#39;lag5&#39;, &#39;lag6&#39;, &#39;lag7&#39;, &#39;lag8&#39;, &#39;lag9&#39;, &#39;lag10&#39;, &#39;lag11&#39;, &#39;lag12&#39;, &#39;lag13&#39;, &#39;lag14&#39;, &#39;lag15&#39;, &#39;lag16&#39;, &#39;lag17&#39;, &#39;lag18&#39;, &#39;lag19&#39;, &#39;lag20&#39;, &#39;lag21&#39;, &#39;lag22&#39;, &#39;lag23&#39;, &#39;lag24&#39;, &#39;lag25&#39;, &#39;lag26&#39;, &#39;lag27&#39;, &#39;lag28&#39;, &#39;lag29&#39;, &#39;lag30&#39;, &#39;rolling_mean_lag1_window_size15&#39;, &#39;rolling_std_lag1_window_size15&#39;, &#39;rolling_max_lag15_window_size15&#39;, &#39;rolling_min_lag15_window_size15&#39;], date_features=[], num_threads=4)
 </pre></div>
 </div>
@@ -917,7 +924,8 @@ with lagged feature engineering.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">test_offset</span> <span class="o">=</span> <span class="mi">0</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="o">%%time</span>
+<span class="n">test_offset</span> <span class="o">=</span> <span class="mi">0</span>
 
 <span class="n">all_predictions</span> <span class="o">=</span> <span class="p">[]</span>
 <span class="n">UPDATE_CHUNK_SIZE</span> <span class="o">=</span> <span class="mi">5</span>
@@ -933,97 +941,8 @@ with lagged feature engineering.</p>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output traceback highlight-ipythontb notranslate"><div class="highlight"><pre><span></span><span class="gt">---------------------------------------------------------------------------</span>
-<span class="ne">KeyboardInterrupt</span><span class="g g-Whitespace">                         </span>Traceback (most recent call last)
-<span class="n">Cell</span> <span class="n">In</span><span class="p">[</span><span class="mi">7</span><span class="p">],</span> <span class="n">line</span> <span class="mi">7</span>
-<span class="g g-Whitespace">      </span><span class="mi">4</span> <span class="n">UPDATE_CHUNK_SIZE</span> <span class="o">=</span> <span class="mi">5</span>
-<span class="g g-Whitespace">      </span><span class="mi">5</span> <span class="k">while</span> <span class="n">test_offset</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">data_test</span><span class="p">):</span>
-<span class="ne">----&gt; </span><span class="mi">7</span>     <span class="n">new_predictions</span> <span class="o">=</span> <span class="n">mlf</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">PREDICTION_HORIZON</span><span class="p">)</span>
-<span class="g g-Whitespace">      </span><span class="mi">8</span>     <span class="n">all_predictions</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">new_predictions</span><span class="p">)</span>
-<span class="g g-Whitespace">     </span><span class="mi">10</span>     <span class="c1"># Update the forecaster with the new observations</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/forecast.py:738,</span> in <span class="ni">MLForecast.predict</span><span class="nt">(self, h, before_predict_callback, after_predict_callback, new_df, level, X_df, ids)</span>
-<span class="g g-Whitespace">    </span><span class="mi">735</span> <span class="k">else</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">736</span>     <span class="n">ts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ts</span>
-<span class="ne">--&gt; </span><span class="mi">738</span> <span class="n">forecasts</span> <span class="o">=</span> <span class="n">ts</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span>
-<span class="g g-Whitespace">    </span><span class="mi">739</span>     <span class="n">models</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">models_</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">740</span>     <span class="n">horizon</span><span class="o">=</span><span class="n">h</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">741</span>     <span class="n">before_predict_callback</span><span class="o">=</span><span class="n">before_predict_callback</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">742</span>     <span class="n">after_predict_callback</span><span class="o">=</span><span class="n">after_predict_callback</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">743</span>     <span class="n">X_df</span><span class="o">=</span><span class="n">X_df</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">744</span>     <span class="n">ids</span><span class="o">=</span><span class="n">ids</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">745</span> <span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">746</span> <span class="k">if</span> <span class="n">level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">747</span>     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cs_df</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/core.py:825,</span> in <span class="ni">TimeSeries.predict</span><span class="nt">(self, models, horizon, before_predict_callback, after_predict_callback, X_df, ids)</span>
-<span class="g g-Whitespace">    </span><span class="mi">823</span>     <span class="n">X_df</span> <span class="o">=</span> <span class="n">ufp</span><span class="o">.</span><span class="n">drop_columns</span><span class="p">(</span><span class="n">X_df</span><span class="p">,</span> <span class="n">drop_cols</span><span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">824</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;max_horizon&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<span class="ne">--&gt; </span><span class="mi">825</span>     <span class="n">preds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predict_recursive</span><span class="p">(</span>
-<span class="g g-Whitespace">    </span><span class="mi">826</span>         <span class="n">models</span><span class="o">=</span><span class="n">models</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">827</span>         <span class="n">horizon</span><span class="o">=</span><span class="n">horizon</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">828</span>         <span class="n">before_predict_callback</span><span class="o">=</span><span class="n">before_predict_callback</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">829</span>         <span class="n">after_predict_callback</span><span class="o">=</span><span class="n">after_predict_callback</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">830</span>         <span class="n">X_df</span><span class="o">=</span><span class="n">X_df</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">831</span>     <span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">832</span> <span class="k">else</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">833</span>     <span class="n">preds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predict_multi</span><span class="p">(</span>
-<span class="g g-Whitespace">    </span><span class="mi">834</span>         <span class="n">models</span><span class="o">=</span><span class="n">models</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">835</span>         <span class="n">horizon</span><span class="o">=</span><span class="n">horizon</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">836</span>         <span class="n">before_predict_callback</span><span class="o">=</span><span class="n">before_predict_callback</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">837</span>         <span class="n">X_df</span><span class="o">=</span><span class="n">X_df</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">838</span>     <span class="p">)</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/core.py:667,</span> in <span class="ni">TimeSeries._predict_recursive</span><span class="nt">(self, models, horizon, before_predict_callback, after_predict_callback, X_df)</span>
-<span class="g g-Whitespace">    </span><span class="mi">665</span> <span class="bp">self</span><span class="o">.</span><span class="n">_predict_setup</span><span class="p">()</span>
-<span class="g g-Whitespace">    </span><span class="mi">666</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">horizon</span><span class="p">):</span>
-<span class="ne">--&gt; </span><span class="mi">667</span>     <span class="n">new_x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_features_for_next_step</span><span class="p">(</span><span class="n">X_df</span><span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">668</span>     <span class="k">if</span> <span class="n">before_predict_callback</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">669</span>         <span class="n">new_x</span> <span class="o">=</span> <span class="n">before_predict_callback</span><span class="p">(</span><span class="n">new_x</span><span class="p">)</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/core.py:610,</span> in <span class="ni">TimeSeries._get_features_for_next_step</span><span class="nt">(self, X_df)</span>
-<span class="g g-Whitespace">    </span><span class="mi">609</span> <span class="k">def</span><span class="w"> </span><span class="nf">_get_features_for_next_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X_df</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="ne">--&gt; </span><span class="mi">610</span>     <span class="n">new_x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_update_features</span><span class="p">()</span>
-<span class="g g-Whitespace">    </span><span class="mi">611</span>     <span class="k">if</span> <span class="n">X_df</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">612</span>         <span class="n">n_series</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">uids</span><span class="p">)</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/core.py:567,</span> in <span class="ni">TimeSeries._update_features</span><span class="nt">(self)</span>
-<span class="g g-Whitespace">    </span><span class="mi">562</span> <span class="bp">self</span><span class="o">.</span><span class="n">curr_dates</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">pd</span><span class="o">.</span><span class="n">Index</span><span class="p">,</span> <span class="n">pl_Series</span><span class="p">]</span> <span class="o">=</span> <span class="n">ufp</span><span class="o">.</span><span class="n">offset_times</span><span class="p">(</span>
-<span class="g g-Whitespace">    </span><span class="mi">563</span>     <span class="bp">self</span><span class="o">.</span><span class="n">curr_dates</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">freq</span><span class="p">,</span> <span class="mi">1</span>
-<span class="g g-Whitespace">    </span><span class="mi">564</span> <span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">565</span> <span class="bp">self</span><span class="o">.</span><span class="n">test_dates</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_dates</span><span class="p">)</span>
-<span class="ne">--&gt; </span><span class="mi">567</span> <span class="n">features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_transforms</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">transforms</span><span class="p">,</span> <span class="n">updates_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">569</span> <span class="k">for</span> <span class="n">feature</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">date_features</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">570</span>     <span class="n">feat_name</span><span class="p">,</span> <span class="n">feat_vals</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_date_feature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">curr_dates</span><span class="p">,</span> <span class="n">feature</span><span class="p">)</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/core.py:348,</span> in <span class="ni">TimeSeries._compute_transforms</span><span class="nt">(self, transforms, updates_only)</span>
-<span class="g g-Whitespace">    </span><span class="mi">344</span>     <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ga</span><span class="o">.</span><span class="n">apply_transforms</span><span class="p">(</span>
-<span class="g g-Whitespace">    </span><span class="mi">345</span>         <span class="n">transforms</span><span class="o">=</span><span class="n">transforms</span><span class="p">,</span> <span class="n">updates_only</span><span class="o">=</span><span class="n">updates_only</span>
-<span class="g g-Whitespace">    </span><span class="mi">346</span>     <span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">347</span> <span class="k">else</span><span class="p">:</span>
-<span class="ne">--&gt; </span><span class="mi">348</span>     <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ga</span><span class="o">.</span><span class="n">apply_multithreaded_transforms</span><span class="p">(</span>
-<span class="g g-Whitespace">    </span><span class="mi">349</span>         <span class="n">transforms</span><span class="o">=</span><span class="n">transforms</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">350</span>         <span class="n">num_threads</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_threads</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">351</span>         <span class="n">updates_only</span><span class="o">=</span><span class="n">updates_only</span><span class="p">,</span>
-<span class="g g-Whitespace">    </span><span class="mi">352</span>     <span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">353</span> <span class="k">return</span> <span class="n">out</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/grouped_array.py:138,</span> in <span class="ni">GroupedArray.apply_multithreaded_transforms</span><span class="nt">(self, transforms, num_threads, updates_only)</span>
-<span class="g g-Whitespace">    </span><span class="mi">136</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">tfm</span> <span class="ow">in</span> <span class="n">core_tfms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-<span class="g g-Whitespace">    </span><span class="mi">137</span>     <span class="k">if</span> <span class="n">updates_only</span><span class="p">:</span>
-<span class="ne">--&gt; </span><span class="mi">138</span>         <span class="n">results</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">tfm</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">core_ga</span><span class="p">)</span>
-<span class="g g-Whitespace">    </span><span class="mi">139</span>     <span class="k">else</span><span class="p">:</span>
-<span class="g g-Whitespace">    </span><span class="mi">140</span>         <span class="n">results</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">tfm</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">core_ga</span><span class="p">)</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/mlforecast/lag_transforms.py:56,</span> in <span class="ni">_BaseLagTransform.update</span><span class="nt">(self, ga)</span>
-<span class="g g-Whitespace">     </span><span class="mi">55</span> <span class="k">def</span><span class="w"> </span><span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ga</span><span class="p">:</span> <span class="n">CoreGroupedArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<span class="ne">---&gt; </span><span class="mi">56</span>     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_core_tfm</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">ga</span><span class="p">)</span>
-
-<span class="nn">File ~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/coreforecast/lag_transforms.py:89,</span> in <span class="ni">Lag.update</span><span class="nt">(self, ga)</span>
-<span class="g g-Whitespace">     </span><span class="mi">88</span> <span class="k">def</span><span class="w"> </span><span class="nf">update</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ga</span><span class="p">:</span> <span class="s2">&quot;GroupedArray&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<span class="ne">---&gt; </span><span class="mi">89</span>     <span class="k">return</span> <span class="n">ga</span><span class="o">.</span><span class="n">_index_from_end</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">lag</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-
-<span class="ne">KeyboardInterrupt</span>: 
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>CPU times: user 11.6 s, sys: 16.9 s, total: 28.6 s
+Wall time: 29.2 s
 </pre></div>
 </div>
 </div>
@@ -1045,6 +964,9 @@ with lagged feature engineering.</p>
         <span class="k">break</span>
 </pre></div>
 </div>
+</div>
+<div class="cell_output docutils container">
+<img alt="../../_images/51332af908a257a394cba6d74a77a4e91c39badaa7fe9049bd171f25fb48a7ff.png" src="../../_images/51332af908a257a394cba6d74a77a4e91c39badaa7fe9049bd171f25fb48a7ff.png" />
 </div>
 </div>
 </section>
