@@ -263,7 +263,7 @@ import altair
 
 
 altair.Chart(
-    time.join(electricity_lagged, on="time", how="inner").tail(100).skb.eval()
+    electricity_lagged.tail(100).skb.eval()
 ).transform_fold(
     [
         "load_mw",
@@ -284,4 +284,38 @@ altair.Chart(
     x="time:T", y="load_mw:Q", color="key:N"
 ).interactive()
 
+# %%
+from skrub import TableReport
+
+TableReport(electricity_lagged.skb.eval())
+# %%
+electricity_lagged.filter(pl.col("load_mw_iqr_7d") > 15_000)[
+    "time"
+].dt.date().unique().sort().to_list().skb.eval()
+
+# %%
+all_city_weather.filter(
+        (pl.col("time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
+        & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
+).skb.eval().plot.line(
+    x="time:T",
+    y="temperature_2m_paris:Q",
+)
+
+# %%
+altair.Chart(
+    electricity_lagged.filter(
+        (pl.col("time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
+        & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
+    ).skb.eval()
+).transform_fold(
+    [
+        "load_mw",
+        "load_mw_iqr_7d",
+    ],
+).mark_line(
+    tooltip=True
+).encode(
+    x="time:T", y="value:Q", color="key:N"
+).interactive()
 # %%
