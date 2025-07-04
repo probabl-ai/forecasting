@@ -8,7 +8,7 @@
 # skrub expressions.
 # %%
 # %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
-# %pip install -q holidays https://pypi.anaconda.org/ogrisel/simple/skrub/0.6.dev0/skrub-0.6.dev0-py3-none-any.whl
+# %pip install -q altair holidays https://pypi.anaconda.org/ogrisel/simple/skrub/0.6.dev0/skrub-0.6.dev0-py3-none-any.whl
 # %%
 # The following 3 imports are only needed to workaround some limitations
 # when using polars in a pyodide/jupyterlite notebook.
