@@ -2,14 +2,14 @@
   "jupyter-config-data": {
     "appName": "JupyterLite",
     "appUrl": "./lab",
-    "appVersion": "0.6.2",
+    "appVersion": "0.6.3",
     "baseUrl": "./",
     "defaultKernelName": "python",
     "faviconUrl": "./lab/favicon.ico",
     "federated_extensions": [
       {
         "extension": "./extension",
-        "load": "static/remoteEntry.36118095f13aad5de3ed.js",
+        "load": "static/remoteEntry.da0f2149411be83933cb.js",
         "name": "@jupyter-notebook/lab-extension",
         "style": "./style"
       },

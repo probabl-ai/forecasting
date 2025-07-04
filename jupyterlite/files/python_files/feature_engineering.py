@@ -35,12 +35,14 @@ import holidays
 # system will also be useful later.
 
 # %%
+time_range_start = pl.datetime(2021, 3, 23, hour=0, time_zone="UTC")
+time_range_end = pl.datetime(2025, 5, 31, hour=23, time_zone="UTC")
 time = skrub.var(
     "time",
     pl.DataFrame().with_columns(
         pl.datetime_range(
-            pl.datetime(2021, 3, 23, hour=0),
-            pl.datetime(2025, 5, 31, hour=23),
+            start=time_range_start,
+            end=time_range_end,
             time_zone="UTC",
             interval="1h",
         ).alias("time"),
@@ -109,7 +111,7 @@ time.join(all_city_weather_raw["brest"], on="time", how="inner")
 all_city_weather = time
 for city_name, city_weather_raw in all_city_weather_raw.items():
     all_city_weather = all_city_weather.join(
-        city_weather_raw.rename(lambda x: x if x == "time" else x + city_name),
+        city_weather_raw.rename(lambda x: x if x == "time" else x + "_" + city_name),
         on="time",
         how="inner",
     )
@@ -130,7 +132,7 @@ all_city_weather
 # Similarly for the calendar features: all the time features are extracted from
 # the time in the French timezone.
 # %%
-holidays_fr = holidays.France(years=range(2019, 2026))
+holidays_fr = holidays.country_holidays("FR", years=range(2019, 2026))
 
 fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
 calendar = time.with_columns(
@@ -184,14 +186,104 @@ electricity = (
     .drop(["Time (UTC)"])
     .rename({"Actual Total Load [MW] - BZN|FR": "load_mw"})
     .filter(pl.col("time").dt.minute().eq(0))
+    .filter(pl.col("time") >= time_range_start)
+    .filter(pl.col("time") <= time_range_end)
     .select(["time", "load_mw"])
 )
 electricity
 
-# %% [markdown]
-# Check that the number of rows matches our expectations based on the number of hours that separate the first and the last dates:
+# %%
+electricity.filter(pl.col("load_mw").is_null())
 
 # %%
-time.join(electricity, on="time", how="inner")
+
+electricity.filter(
+    (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
+    & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
+).skb.eval().plot.line(x="time:T", y="load_mw:Q")
+
+# %%
+electricity = electricity.with_columns([pl.col("load_mw").interpolate()])
+electricity.filter(
+    (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
+    & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
+).skb.eval().plot.line(x="time:T", y="load_mw:Q")
+
+# %% [markdown]
+#
+# Check that the number of rows matches our expectations based on
+# the number of hours that separate the first and the last dates. We can do
+# that by joining with the time range dataframe and checking that the number of
+# rows stays the same.
+
+# %%
+assert (
+    time.join(electricity, on="time", how="inner").shape[0] == time.shape[0]
+).skb.eval()
+
+# %%
+# ## Lagged features
+#
+# We can now create some lagged features from the electricity load data. We
+
+# We will create 3 hourly lagged features, 1 daily lagged feature, and 1 weekly
+# lagged feature. We will also create a rolling median and inter-quartile
+# feature over the last 24 hours and over the last 7 days.
+
+
+# %%
+def iqr(col, *, window_size: int):
+    """Inter-quartile range (IQR) of a column."""
+    return col.rolling_quantile(0.75, window_size=window_size) - col.rolling_quantile(
+        0.25, window_size=window_size
+    )
+
+
+electricity_lagged = electricity.with_columns(
+    [pl.col("load_mw").shift(i).alias(f"load_mw_lag_{i}h") for i in range(1, 4)]
+    + [
+        pl.col("load_mw").shift(24).alias("load_mw_lag_1d"),
+        pl.col("load_mw").shift(24 * 7).alias("load_mw_lag_1w"),
+        pl.col("load_mw")
+        .rolling_median(window_size=24)
+        .alias("load_mw_rolling_median_24h"),
+        pl.col("load_mw")
+        .rolling_median(window_size=24 * 7)
+        .alias("load_mw_rolling_median_7d"),
+        iqr(pl.col("load_mw"), window_size=24).alias("load_mw_iqr_24h"),
+        iqr(pl.col("load_mw"), window_size=24 * 7).alias("load_mw_iqr_7d"),
+    ],
+)
+time.join(electricity_lagged, on="time", how="inner")
+
+
+# %%
+electricity_lagged[168:].filter(pl.col("load_mw_rolling_median_7d").is_null())
+# %% [markdown]
+# %%
+import altair
+
+
+altair.Chart(
+    time.join(electricity_lagged, on="time", how="inner").tail(100).skb.eval()
+).transform_fold(
+    [
+        "load_mw",
+        "load_mw_lag_1h",
+        "load_mw_lag_2h",
+        "load_mw_lag_3h",
+        "load_mw_lag_1d",
+        "load_mw_lag_1w",
+        "load_mw_rolling_median_24h",
+        "load_mw_rolling_median_7d",
+        "load_mw_iqr_24h",
+        "load_mw_iqr_7d",
+    ],
+    as_=["key", "load_mw"],
+).mark_line(
+    tooltip=True
+).encode(
+    x="time:T", y="load_mw:Q", color="key:N"
+).interactive()
 
 # %%
