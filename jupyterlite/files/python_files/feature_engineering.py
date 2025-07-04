@@ -257,8 +257,6 @@ electricity_lagged = electricity.with_columns(
 time.join(electricity_lagged, on="time", how="inner")
 
 
-# %%
-electricity_lagged[168:].filter(pl.col("load_mw_rolling_median_7d").is_null())
 # %% [markdown]
 # %%
 import altair

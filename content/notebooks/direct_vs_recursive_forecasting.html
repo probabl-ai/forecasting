@@ -60,6 +60,7 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'content/notebooks/direct_vs_recursive_forecasting';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
+    <link rel="prev" title="Feature engineering for electricity load forecasting" href="feature_engineering.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -122,8 +123,6 @@
       
       
       
-        
-      
       <div class="bd-sidebar-primary bd-sidebar">
         
 
@@ -180,9 +179,10 @@
             </li>
         </ul>
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Forecasting with Machine Learning</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="fetch_weather_data.html">Historical weather data download from open-meteo.com</a></li>
 <li class="toctree-l1"><a class="reference internal" href="feature_engineering.html">Feature engineering for electricity load forecasting</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Direct vs Recursive Forecasting</a></li>
 </ul>
 
     </div>
@@ -913,8 +913,8 @@ with lagged feature engineering.</p>
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>CPU times: user 331 ms, sys: 8.83 ms, total: 339 ms
-Wall time: 341 ms
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>CPU times: user 344 ms, sys: 6.8 ms, total: 350 ms
+Wall time: 353 ms
 </pre></div>
 </div>
 <div class="output text_plain highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>MLForecast(models=[HistGradientBoostingRegressor], freq=1, lag_features=[&#39;lag1&#39;, &#39;lag2&#39;, &#39;lag3&#39;, &#39;lag4&#39;, &#39;lag5&#39;, &#39;lag6&#39;, &#39;lag7&#39;, &#39;lag8&#39;, &#39;lag9&#39;, &#39;lag10&#39;, &#39;lag11&#39;, &#39;lag12&#39;, &#39;lag13&#39;, &#39;lag14&#39;, &#39;lag15&#39;, &#39;lag16&#39;, &#39;lag17&#39;, &#39;lag18&#39;, &#39;lag19&#39;, &#39;lag20&#39;, &#39;lag21&#39;, &#39;lag22&#39;, &#39;lag23&#39;, &#39;lag24&#39;, &#39;lag25&#39;, &#39;lag26&#39;, &#39;lag27&#39;, &#39;lag28&#39;, &#39;lag29&#39;, &#39;lag30&#39;, &#39;rolling_mean_lag1_window_size15&#39;, &#39;rolling_std_lag1_window_size15&#39;, &#39;rolling_max_lag15_window_size15&#39;, &#39;rolling_min_lag15_window_size15&#39;], date_features=[], num_threads=4)
@@ -941,8 +941,8 @@ Wall time: 341 ms
 </div>
 </div>
 <div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>CPU times: user 10.4 s, sys: 16.6 s, total: 27 s
-Wall time: 27.3 s
+<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>CPU times: user 10.1 s, sys: 16.4 s, total: 26.6 s
+Wall time: 27.1 s
 </pre></div>
 </div>
 </div>
@@ -966,7 +966,7 @@ Wall time: 27.3 s
 </div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../../_images/63657c5490068143f566fb40a9ee7fab5eb152cc0b91f125aaa9fb08085f3503.png" src="../../_images/63657c5490068143f566fb40a9ee7fab5eb152cc0b91f125aaa9fb08085f3503.png" />
+<img alt="../../_images/20af5d671009a43243e79cdf472cdc967317ebfa982d0544225eb2a3b784f6ef.png" src="../../_images/20af5d671009a43243e79cdf472cdc967317ebfa982d0544225eb2a3b784f6ef.png" />
 </div>
 </div>
 </section>
@@ -1001,6 +1001,15 @@ Wall time: 27.3 s
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="feature_engineering.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Feature engineering for electricity load forecasting</p>
+      </div>
+    </a>
 </div>
                 </footer>
               
