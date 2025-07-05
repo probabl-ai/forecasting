@@ -532,3 +532,52 @@ for outer_cv_idx in range(len(nested_cv_results)):
 
 
 # %%
+predictions = features.skb.apply(
+    skrub.SelectCols(
+        cols=skrub.choose_from(
+            [
+                skrub.selectors.all(),
+                skrub.selectors.filter_names(
+                    lambda name: name.startswith("load_mw_"),
+                ),
+                skrub.selectors.filter_names(
+                    lambda name: name.startswith("load_mw_") or name.startswith("temperature_"),
+                ),
+                skrub.selectors.filter_names(
+                    lambda name: name.startswith("load_mw_") or name.startswith("precipitation_"),
+                ),
+                skrub.selectors.filter_names(
+                    lambda name: name.startswith("load_mw_") or name.startswith("wind_speed_"),
+                ),
+                skrub.selectors.filter_names(
+                    lambda name: name.startswith("load_mw_") or name.startswith("cloud_cover_"),
+                ),
+                # calendar features
+                skrub.selectors.filter_names(
+                    lambda name: name.startswith("load_mw_") or name.endswith("_fr"),
+                ),
+            ]
+        )
+    )
+).skb.apply(
+    HistGradientBoostingRegressor(
+        random_state=0,
+        learning_rate=skrub.choose_float(
+            0.01, 0.9, default=0.1, log=True, name="learning_rate"
+        ),
+    ),
+    y=target,
+)
+
+# %%
+randomized_search = predictions.skb.get_randomized_search(
+    cv=ts_cv_3,
+    scoring="r2",
+    n_iter=30,
+    fitted=True,
+    verbose=1,
+    n_jobs=-1,
+)
+randomized_search.results_
+
+# %%
