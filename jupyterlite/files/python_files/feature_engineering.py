@@ -521,7 +521,12 @@ nested_cv_results
 
 # %%
 for outer_cv_idx in range(len(nested_cv_results)):
-    print(nested_cv_results.loc[outer_cv_idx, "pipeline"].results_.loc[0].round(3).to_dict())
+    print(
+        nested_cv_results.loc[outer_cv_idx, "pipeline"]
+        .results_.loc[0]
+        .round(3)
+        .to_dict()
+    )
 
 # %%
 # from joblib import Parallel, delayed
@@ -541,16 +546,20 @@ predictions = features.skb.apply(
                     lambda name: name.startswith("load_mw_"),
                 ),
                 skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_") or name.startswith("temperature_"),
+                    lambda name: name.startswith("load_mw_")
+                    or name.startswith("temperature_"),
                 ),
                 skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_") or name.startswith("precipitation_"),
+                    lambda name: name.startswith("load_mw_")
+                    or name.startswith("precipitation_"),
                 ),
                 skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_") or name.startswith("wind_speed_"),
+                    lambda name: name.startswith("load_mw_")
+                    or name.startswith("wind_speed_"),
                 ),
                 skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_") or name.startswith("cloud_cover_"),
+                    lambda name: name.startswith("load_mw_")
+                    or name.startswith("cloud_cover_"),
                 ),
                 # calendar features
                 skrub.selectors.filter_names(
@@ -580,4 +589,20 @@ randomized_search = predictions.skb.get_randomized_search(
 )
 randomized_search.results_
 
+# %%
+# %%
+nested_cv_results = skrub.cross_validate(
+    environment=predictions.skb.get_data(),
+    pipeline=randomized_search,
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": mape_scorer,
+    },
+    n_jobs=-1,
+    return_pipeline=True,
+).round(3)
+
+# %%
+nested_cv_results
 # %%
