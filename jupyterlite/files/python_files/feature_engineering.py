@@ -167,6 +167,7 @@ calendar = time.with_columns(
 calendar
 
 # %% [markdown]
+#
 # ## Electricity load data
 #
 # Finally we load the electricity load data. This data will both be used as a
@@ -242,11 +243,12 @@ assert (
     time.join(electricity, on="time", how="inner").shape[0] == time.shape[0]
 ).skb.eval()
 
-# %%
+# %% [markdown]
+#
 # ## Lagged features
 #
-# We can now create some lagged features from the electricity load data. We
-
+# We can now create some lagged features from the electricity load data.
+#
 # We will create 3 hourly lagged features, 1 daily lagged feature, and 1 weekly
 # lagged feature. We will also create a rolling median and inter-quartile
 # feature over the last 24 hours and over the last 7 days.
@@ -275,10 +277,8 @@ electricity_lagged = electricity.with_columns(
         iqr(pl.col("load_mw"), window_size=24 * 7).alias("load_mw_iqr_7d"),
     ],
 )
-time.join(electricity_lagged, on="time", how="inner")
+electricity_lagged
 
-
-# %% [markdown]
 # %%
 import altair
 
@@ -307,24 +307,30 @@ altair.Chart(
 
 # %% [markdown]
 # ## Investigating outliers in the lagged features
+#
+# Let's use the `skrub.TableReport` tool to look at the plots of the marginal
+# distribution of the lagged features.
 
 # %%
 from skrub import TableReport
 
 TableReport(electricity_lagged.skb.eval())
+
+# %% [markdown]
+#
+# Let's extract the dates where the inter-quartile range of the load is
+# greater than 15,000 MW.
+
 # %%
 electricity_lagged.filter(pl.col("load_mw_iqr_7d") > 15_000)[
     "time"
 ].dt.date().unique().sort().to_list().skb.eval()
 
-# %%
-all_city_weather.filter(
-        (pl.col("time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
-        & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
-).skb.eval().plot.line(
-    x="time:T",
-    y="temperature_2m_paris:Q",
-)
+# %% [markdown]
+#
+# We observe 3 date ranges with high inter-quartile range. Let's plot the
+# electricity load and the lagged features for the first data range along with
+# the weather data for Paris.
 
 # %%
 altair.Chart(
@@ -342,4 +348,39 @@ altair.Chart(
 ).encode(
     x="time:T", y="value:Q", color="key:N"
 ).interactive()
+
 # %%
+altair.Chart(
+    all_city_weather.filter(
+        (pl.col("time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
+        & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
+    ).skb.eval()
+).transform_fold(
+    [
+        f"temperature_2m_{city_name}" for city_name in city_names
+    ],
+).mark_line(
+    tooltip=True
+).encode(
+    x="time:T", y="value:Q", color="key:N"
+).interactive()
+
+# %% [markdown]
+#
+# Based on the plots above, we can see that the electricity load was high just
+# before the Christmas holidays due to low temperatures. Then the load suddenly
+# dropped because temperatures went higher right at the start of the
+# end-of-year holidays.
+#
+# So those outliers do not seem to be caused to a data quality issue but rather
+# due to a real change in the electricity load demand. We could conduct similar
+# analysis for the other date ranges with high inter-quartile range but we will
+# skip that for now.
+#
+# If we had observed significant data quality issues over extended periods of
+# time could have been addressed by removing the corresponding rows from the
+# dataset. However, this would make the lagged and windowing feature
+# engineering challenging to reimplement correctly. A better approach would be
+# to keep a contiguous dataset assign 0 weights to the affected rows when
+# fitting or evaluating the trained models via the use of the `sample_weight`
+# parameter.
