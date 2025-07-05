@@ -41,6 +41,10 @@ import polars as pl
 import skrub
 from pathlib import Path
 import holidays
+import warnings
+
+# Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
+warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 
 # %% [markdown]
@@ -107,7 +111,7 @@ city_names = [
 all_city_weather_raw = {}
 for city_name in city_names:
     # all_city_weather_raw[city_name] = skrub.var(
-        # f"{city_name}_weather_raw",
+    # f"{city_name}_weather_raw",
     all_city_weather_raw[city_name] = (
         pl.from_arrow(read_table(f"../datasets/weather_{city_name}.parquet"))
     ).with_columns(
@@ -398,6 +402,7 @@ prediction_time = time = skrub.var(
 )
 prediction_time
 
+# %%
 features = (
     (
         prediction_time.join(
@@ -412,8 +417,10 @@ features = (
 features
 
 # %%
-horizon = 1
+horizon = 12
 target_column_name = f"load_mw_horizon_{horizon}h"
+predicted_target_column_name = f"predicted_{target_column_name}"
+
 target_df = prediction_time.join(
     electricity.with_columns(
         [pl.col("load_mw").shift(-horizon).alias(target_column_name)]
@@ -425,19 +432,20 @@ target = target_df[target_column_name].skb.mark_as_y()
 
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
-import threadpoolctl
 
 
-with threadpoolctl.threadpool_limits(limits=1):
-    predictions = features.skb.apply(
-        HistGradientBoostingRegressor(
-            random_state=0,
-            learning_rate=skrub.choose_float(
-                0.01, 0.9, default=0.1, log=True, name="learning_rate"
-            ),
+predictions = features.skb.apply(
+    HistGradientBoostingRegressor(
+        random_state=0,
+        learning_rate=skrub.choose_float(
+            0.01, 0.9, default=0.1, log=True, name="learning_rate"
         ),
-        y=target,
-    )
+        max_leaf_nodes=skrub.choose_int(
+            3, 300, default=30, log=True, name="max_leaf_nodes"
+        ),
+    ),
+    y=target,
+)
 predictions
 
 # %%
@@ -445,12 +453,14 @@ altair.Chart(
     pl.concat(
         [
             target_df.skb.eval(),
-            predictions.rename({"load_mw_horizon_1h": "predicted_load_mw_horizon_1h"}).skb.eval(),
+            predictions.rename(
+                {target_column_name: predicted_target_column_name}
+            ).skb.eval(),
         ],
         how="horizontal",
-    ).tail(1000)
+    ).tail(24 * 7)
 ).transform_fold(
-    [target_column_name, "predicted_load_mw_horizon_1h"],
+    [target_column_name, predicted_target_column_name],
 ).mark_line(
     tooltip=True
 ).encode(
@@ -460,17 +470,65 @@ altair.Chart(
 
 # %%
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_scorer
 
-ts_cv = TimeSeriesSplit(n_splits=5, max_train_size=None, gap=0)
+mape_scorer = make_scorer(mean_absolute_percentage_error)
+
+ts_cv_5 = TimeSeriesSplit(n_splits=5, max_train_size=10_000, gap=24)
+
 predictions.skb.cross_validate(
-    cv=ts_cv,
-    scoring=[
-        "neg_mean_absolute_error",
-        "neg_mean_squared_error",
-        "r2",
-        "neg_mean_absolute_percentage_error",
-    ],
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": mape_scorer,
+    },
+    return_train_score=True,
+    verbose=1,
+    n_jobs=-1,
+).round(3)
+
+# %%
+ts_cv_3 = TimeSeriesSplit(n_splits=3, max_train_size=10_000, gap=24)
+randomized_search = predictions.skb.get_randomized_search(
+    cv=ts_cv_3,
+    scoring="r2",
+    n_iter=30,
+    fitted=True,
     verbose=1,
     n_jobs=-1,
 )
+randomized_search.results_
+
+# %%
+randomized_search.plot_results()
+
+
+# %%
+nested_cv_results = skrub.cross_validate(
+    environment=predictions.skb.get_data(),
+    pipeline=randomized_search,
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": mape_scorer,
+    },
+    n_jobs=-1,
+    return_pipeline=True,
+).round(3)
+
+# %%
+nested_cv_results
+
+# %%
+for outer_cv_idx in range(len(nested_cv_results)):
+    print(nested_cv_results.loc[outer_cv_idx, "pipeline"].results_.loc[0].round(3).to_dict())
+
+# %%
+# from joblib import Parallel, delayed
+
+# cv_predictions = []
+# for ts_cv_train_idx, ts_cv_test_idx in ts_cv_5.split(prediction_time.skb.eval()):
+#     features[ts_cv_train_idx].fit
+
+
 # %%

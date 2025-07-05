@@ -34,6 +34,11 @@
         "name": "jupyterlab-jupytext"
       },
       {
+        "load": "static/remoteEntry.5153b2c003c011c482e3.js",
+        "mimeExtension": "./mimeExtension",
+        "name": "jupyterlab-plotly"
+      },
+      {
         "extension": "./extension",
         "load": "static/remoteEntry.5cbb9d2323598fbda535.js",
         "name": "jupyterlab_pygments",
