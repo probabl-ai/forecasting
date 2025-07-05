@@ -1,6 +1,27 @@
 # %% [markdown]
 # # Feature engineering for electricity load forecasting
 #
+# The purpose of this notebook is to demonstrate how to use `skrub` and `polars`
+# to perform feature engineering for electricity load forecasting.
+#
+# We will build a set of features from different sources:
+#
+# - Historical weather data for 10 medium to large urban areas in France;
+# - Holidays and calendar features for France;
+# - Historical electricity load data for the whole of France.
+#
+# All these data sources cover a time range from March 23, 2021 to May 31, 2025.
+#
+# Since our maximum forecasting horizon is 24 hours, we consider that the
+# future weather data is known at a chosen prediction time. Similarly, the
+# holidays and calendar features are known at prediction time for any point in
+# the future.
+#
+# Therefore, features derived from the weather and calendar data can be used to
+# engineer "future covariates". Since the load data is our prediction target,
+# we will can also use it to engineer "past covariates" such as lagged features
+# and rolling aggregations.
+#
 # ## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when running
@@ -283,6 +304,9 @@ altair.Chart(
 ).encode(
     x="time:T", y="load_mw:Q", color="key:N"
 ).interactive()
+
+# %% [markdown]
+# ## Investigating outliers in the lagged features
 
 # %%
 from skrub import TableReport
