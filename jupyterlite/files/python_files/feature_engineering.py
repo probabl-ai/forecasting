@@ -417,18 +417,27 @@ features = (
 features
 
 # %%
-horizon = 12
-target_column_name = f"load_mw_horizon_{horizon}h"
-predicted_target_column_name = f"predicted_{target_column_name}"
+horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
+target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
-target_df = prediction_time.join(
+targets = prediction_time.join(
     electricity.with_columns(
-        [pl.col("load_mw").shift(-horizon).alias(target_column_name)]
+        [
+            pl.col("load_mw")
+            .shift(-h)
+            .alias(target_column_name_pattern.format(horizon=h))
+            for h in horizons
+        ]
     ),
     left_on="prediction_time",
     right_on="time",
 )
-target = target_df[target_column_name].skb.mark_as_y()
+
+# %%
+horizon_of_interest = 12
+target_column_name = target_column_name_pattern.format(horizon=horizon_of_interest)
+predicted_target_column_name = "predicted_" + target_column_name
+target = targets[target_column_name].skb.mark_as_y()
 
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
@@ -452,7 +461,7 @@ predictions
 altair.Chart(
     pl.concat(
         [
-            target_df.skb.eval(),
+            targets.skb.eval(),
             predictions.rename(
                 {target_column_name: predicted_target_column_name}
             ).skb.eval(),
@@ -504,29 +513,27 @@ randomized_search.plot_results()
 
 
 # %%
-nested_cv_results = skrub.cross_validate(
-    environment=predictions.skb.get_data(),
-    pipeline=randomized_search,
-    cv=ts_cv_5,
-    scoring={
-        "r2": get_scorer("r2"),
-        "mape": mape_scorer,
-    },
-    n_jobs=-1,
-    return_pipeline=True,
-).round(3)
+# nested_cv_results = skrub.cross_validate(
+#     environment=predictions.skb.get_data(),
+#     pipeline=randomized_search,
+#     cv=ts_cv_5,
+#     scoring={
+#         "r2": get_scorer("r2"),
+#         "mape": mape_scorer,
+#     },
+#     n_jobs=-1,
+#     return_pipeline=True,
+# ).round(3)
+# nested_cv_results
 
 # %%
-nested_cv_results
-
-# %%
-for outer_cv_idx in range(len(nested_cv_results)):
-    print(
-        nested_cv_results.loc[outer_cv_idx, "pipeline"]
-        .results_.loc[0]
-        .round(3)
-        .to_dict()
-    )
+# for outer_cv_idx in range(len(nested_cv_results)):
+#     print(
+#         nested_cv_results.loc[outer_cv_idx, "pipeline"]
+#         .results_.loc[0]
+#         .round(3)
+#         .to_dict()
+#     )
 
 # %%
 # from joblib import Parallel, delayed
@@ -565,7 +572,8 @@ predictions = features.skb.apply(
                 skrub.selectors.filter_names(
                     lambda name: name.startswith("load_mw_") or name.endswith("_fr"),
                 ),
-            ]
+            ],
+            name="feature_subset",
         )
     )
 ).skb.apply(
@@ -591,18 +599,16 @@ randomized_search.results_
 
 # %%
 # %%
-nested_cv_results = skrub.cross_validate(
-    environment=predictions.skb.get_data(),
-    pipeline=randomized_search,
-    cv=ts_cv_5,
-    scoring={
-        "r2": get_scorer("r2"),
-        "mape": mape_scorer,
-    },
-    n_jobs=-1,
-    return_pipeline=True,
-).round(3)
+# nested_cv_results = skrub.cross_validate(
+#     environment=predictions.skb.get_data(),
+#     pipeline=randomized_search,
+#     cv=ts_cv_5,
+#     scoring={
+#         "r2": get_scorer("r2"),
+#         "mape": mape_scorer,
+#     },
+#     n_jobs=-1,
+#     return_pipeline=True,
+# ).round(3)
+# nested_cv_results
 
-# %%
-nested_cv_results
-# %%
