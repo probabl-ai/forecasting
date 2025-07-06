@@ -417,7 +417,7 @@ features = (
 features
 
 # %%
-horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
+horizons = range(1, 3)  # Forecasting horizons from 1 to 24 hours
 target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
 targets = prediction_time.join(
@@ -434,7 +434,7 @@ targets = prediction_time.join(
 )
 
 # %%
-horizon_of_interest = 12
+horizon_of_interest = 2
 target_column_name = target_column_name_pattern.format(horizon=horizon_of_interest)
 predicted_target_column_name = "predicted_" + target_column_name
 target = targets[target_column_name].skb.mark_as_y()
@@ -612,3 +612,51 @@ randomized_search.results_
 # ).round(3)
 # nested_cv_results
 
+# %%
+targets = targets.skb.drop(cols=["load_mw"]).skb.mark_as_y()
+
+# %%
+from sklearn.multioutput import MultiOutputRegressor
+
+model = MultiOutputRegressor(
+    estimator=HistGradientBoostingRegressor(
+        random_state=0,
+        learning_rate=skrub.choose_float(
+            0.01, 0.9, default=0.1, log=True, name="learning_rate"
+        ),
+    ),
+)
+
+# %%
+predictions = features.skb.apply(model, y=targets)
+
+# %%
+from sklearn.metrics import r2_score
+
+
+def multioutput_scorer(regressor, X, y, score_func, score_name):
+    y_pred = regressor.predict(X)
+    return {
+        f"{score_name}_horizon_{h}h": score
+        for h, score in enumerate(
+            score_func(y, y_pred, multioutput="raw_values"), start=1
+        )
+    }
+
+
+def scoring(regressor, X, y):
+    return {
+        **multioutput_scorer(regressor, X, y, mean_absolute_percentage_error, "mape"),
+        **multioutput_scorer(regressor, X, y, r2_score, "r2"),
+    }
+
+
+predictions.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    return_train_score=True,
+    verbose=1,
+    n_jobs=-1,
+).round(3)
+
+# %%
