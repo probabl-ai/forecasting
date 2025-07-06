@@ -613,9 +613,6 @@ randomized_search.results_
 # nested_cv_results
 
 # %%
-targets = targets.skb.drop(cols=["load_mw"]).skb.mark_as_y()
-
-# %%
 from sklearn.multioutput import MultiOutputRegressor
 
 model = MultiOutputRegressor(
@@ -628,7 +625,9 @@ model = MultiOutputRegressor(
 )
 
 # %%
-predictions = features.skb.apply(model, y=targets)
+predictions = features.skb.apply(
+    model, y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y()
+).skb.set_name("model")
 
 # %%
 from sklearn.metrics import r2_score
@@ -658,5 +657,41 @@ predictions.skb.cross_validate(
     verbose=1,
     n_jobs=-1,
 ).round(3)
+
+# %%
+learner = predictions.skb.get_pipeline(fitted=True)
+
+# %%
+sklearn_learner = learner.find_fitted_estimator("model")
+sklearn_learner.estimators_
+
+# %%
+target_column_names = [target_column_name_pattern.format(horizon=h) for h in horizons]
+predicted_target_column_names = [
+    f"predicted_{target_column_name}" for target_column_name in target_column_names
+]
+
+altair.Chart(
+    pl.concat(
+        [
+            targets.skb.eval(),
+            predictions.rename(
+                {
+                    target_name: predicted_name
+                    for target_name, predicted_name in zip(
+                        target_column_names, predicted_target_column_names
+                    )
+                }
+            ).skb.eval(),
+        ],
+        how="horizontal",
+    ).tail(24 * 7)
+).transform_fold(
+    ["load_mw"] + predicted_target_column_names,
+).mark_line(
+    tooltip=True
+).encode(
+    x="prediction_time:T", y="value:Q", color="key:N"
+).interactive()
 
 # %%
