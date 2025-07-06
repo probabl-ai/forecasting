@@ -417,7 +417,7 @@ features = (
 features
 
 # %%
-horizons = range(1, 3)  # Forecasting horizons from 1 to 24 hours
+horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
 target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
 targets = prediction_time.join(
@@ -671,27 +671,61 @@ predicted_target_column_names = [
     f"predicted_{target_column_name}" for target_column_name in target_column_names
 ]
 
-altair.Chart(
-    pl.concat(
-        [
-            targets.skb.eval(),
-            predictions.rename(
-                {
-                    target_name: predicted_name
-                    for target_name, predicted_name in zip(
-                        target_column_names, predicted_target_column_names
-                    )
-                }
-            ).skb.eval(),
-        ],
-        how="horizontal",
-    ).tail(24 * 7)
-).transform_fold(
-    ["load_mw"] + predicted_target_column_names,
-).mark_line(
-    tooltip=True
-).encode(
-    x="prediction_time:T", y="value:Q", color="key:N"
-).interactive()
+# %%
+output = pl.concat(
+    [
+        targets.skb.select(cols=["prediction_time", "load_mw"]).skb.eval(),
+        predictions.rename(
+            {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
+        ).skb.eval(),
+    ],
+    how="horizontal",
+).tail(24 * 14)
+
+# %%
+import datetime
+
+
+def plot_horizon(output, prediction_time, past_true_values=5):
+    # Find the row that contains the forecasted values
+    row = output.filter(pl.col("prediction_time") == prediction_time).rows()[0]
+    # Build the forecast dataframe by concatenating the different horizons
+    forecast = pl.DataFrame(
+        {
+            "forecast_time": row[0] + datetime.timedelta(hours=h),
+            "forecast_value": predicted_value,
+        }
+        for h, predicted_value in enumerate(row[2:], start=1)
+    )
+    # Get the past true values and also the future true values of to the last horizon
+    true_values = output.filter(
+        (
+            pl.col("prediction_time")
+            >= prediction_time - datetime.timedelta(hours=past_true_values)
+        )
+        & (
+            pl.col("prediction_time")
+            <= prediction_time + datetime.timedelta(hours=len(row) - 2)
+        )
+    )
+    # plot the true and forecasted values
+    true_values_chart = (
+        altair.Chart(true_values)
+        .transform_fold(["load_mw"])
+        .mark_line(tooltip=True)
+        .encode(x="prediction_time:T", y="load_mw:Q", color="key:N")
+    )
+    forecast_chart = (
+        altair.Chart(forecast)
+        .transform_fold(["forecast_value"])
+        .mark_line(tooltip=True)
+        .encode(x="forecast_time:T", y="forecast_value:Q", color="key:N")
+    )
+    return (true_values_chart + forecast_chart).interactive()
+
+
+# %%
+time_to_plot = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
+plot_horizon(output, time_to_plot, past_true_values=24 * 5)
 
 # %%
