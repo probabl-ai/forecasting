@@ -133,7 +133,9 @@ all_city_weather_raw["brest"].drop_nulls(subset=["temperature_2m"])
 all_city_weather = time.skb.eval()
 for city_name, city_weather_raw in all_city_weather_raw.items():
     all_city_weather = all_city_weather.join(
-        city_weather_raw.rename(lambda x: x if x == "time" else x + "_" + city_name),
+        city_weather_raw.rename(
+            lambda x: x if x == "time" else "weather_" + x + "_" + city_name
+        ),
         on="time",
         how="inner",
     )
@@ -163,10 +165,10 @@ holidays_fr = holidays.country_holidays("FR", years=range(2019, 2026))
 fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
 calendar = time.with_columns(
     [
-        fr_time.dt.date().is_in(holidays_fr.keys()).alias("is_holiday_fr"),
-        fr_time.dt.weekday().alias("day_of_week_fr"),
-        fr_time.dt.ordinal_day().alias("day_of_year_fr"),
-        fr_time.dt.hour().alias("hour_of_day_fr"),
+        fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
+        fr_time.dt.weekday().alias("cal_day_of_week"),
+        fr_time.dt.ordinal_day().alias("cal_day_of_year"),
+        fr_time.dt.hour().alias("cal_hour_of_day"),
     ],
 )
 calendar
@@ -298,8 +300,8 @@ altair.Chart(electricity_lagged.tail(100).skb.eval()).transform_fold(
         "load_mw_lag_1w",
         "load_mw_rolling_median_24h",
         "load_mw_rolling_median_7d",
-        "load_mw_iqr_24h",
-        "load_mw_iqr_7d",
+        "load_mw_rolling_iqr_24h",
+        "load_mw_rolling_iqr_7d",
     ],
     as_=["key", "load_mw"],
 ).mark_line(tooltip=True).encode(x="time:T", y="load_mw:Q", color="key:N").interactive()
@@ -355,7 +357,7 @@ altair.Chart(
         & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
     ).skb.eval()
 ).transform_fold(
-    [f"temperature_2m_{city_name}" for city_name in city_names],
+    [f"weather_temperature_2m_{city_name}" for city_name in city_names],
 ).mark_line(
     tooltip=True
 ).encode(
@@ -403,13 +405,35 @@ prediction_time = time = skrub.var(
 prediction_time
 
 # %%
+import polars.selectors as cs
+
+
+horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
+horizon_of_interest = 24
+
 features = (
     (
         prediction_time.join(
             electricity_lagged, left_on="prediction_time", right_on="time"
         )
-        .join(all_city_weather, left_on="prediction_time", right_on="time")
-        .join(calendar, left_on="prediction_time", right_on="time")
+        .join(
+            all_city_weather.with_columns(
+                cs.starts_with("weather_")
+                .shift(-horizon_of_interest)
+                # .name.suffix(f"_future_{horizon_of_interest}h")
+            ),
+            left_on="prediction_time",
+            right_on="time",
+        )
+        .join(
+            calendar.with_columns(
+                cs.starts_with("weather_")
+                .shift(-horizon_of_interest)
+                # .name.suffix(f"_future_{horizon_of_interest}h")
+            ),
+            left_on="prediction_time",
+            right_on="time",
+        )
     )
     .drop("prediction_time")
     .skb.mark_as_X()
@@ -417,7 +441,6 @@ features = (
 features
 
 # %%
-horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
 target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
 targets = prediction_time.join(
@@ -434,20 +457,42 @@ targets = prediction_time.join(
 )
 
 # %%
-horizon_of_interest = 2
 target_column_name = target_column_name_pattern.format(horizon=horizon_of_interest)
 predicted_target_column_name = "predicted_" + target_column_name
 target = targets[target_column_name].skb.mark_as_y()
 
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
+import skrub.selectors as s
 
+load_selector = s.glob("load_*")
+cal_selector = s.glob("cal_*")
+weather_selector = s.glob("weather_*")
+moisture_selector = s.glob("weather_moisture_*")
+cloud_cover_selector = s.glob("weather_cloud_cover_*")
+rolling_load_selector = s.glob("load_mw_rolling_*")
+nothing_selector = s.glob("")  # cannot match non-empty feature names
 
 predictions = features.skb.apply(
+    skrub.DropCols(
+        cols=skrub.choose_from(
+            {
+                "none": nothing_selector,
+                "load": load_selector,
+                "weather": weather_selector,
+                "calendar": cal_selector,
+                "moisture": moisture_selector,
+                "cloud_cover": cloud_cover_selector,
+                "rolling_load": rolling_load_selector,
+            },
+            name="dropped_features",
+        )
+    )
+).skb.apply(
     HistGradientBoostingRegressor(
         random_state=0,
         learning_rate=skrub.choose_float(
-            0.01, 0.9, default=0.1, log=True, name="learning_rate"
+            0.01, 1, default=0.1, log=True, name="learning_rate"
         ),
         max_leaf_nodes=skrub.choose_int(
             3, 300, default=30, log=True, name="max_leaf_nodes"
@@ -479,11 +524,33 @@ altair.Chart(
 
 # %%
 from sklearn.model_selection import TimeSeriesSplit
+
+
+max_train_size = 2 * 52 * 24 * 7  # max ~2 years of training data
+test_size = 24 * 7 * 24  # 24 weeks of test data
+gap = 7 * 24  # 1 week gap between train and test sets
+ts_cv_5 = TimeSeriesSplit(
+    n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap
+)
+
+for cv_idx, (train_idx, test_idx) in enumerate(
+    ts_cv_5.split(prediction_time.skb.eval())
+):
+    print(f"CV iteration #{cv_idx}")
+    train_datetimes = prediction_time.skb.eval()[train_idx]
+    test_datetimes = prediction_time.skb.eval()[test_idx]
+    print(
+        f"Train: {train_datetimes.shape[0]} rows, "
+        f"Test: {test_datetimes.shape[0]} rows"
+    )
+    print(f"Train time range: {train_datetimes[0, 0]} to " f"{train_datetimes[-1, 0]} ")
+    print(f"Test time range: {test_datetimes[0, 0]} to " f"{test_datetimes[-1, 0]} ")
+
+# %%
 from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_scorer
 
-mape_scorer = make_scorer(mean_absolute_percentage_error)
 
-ts_cv_5 = TimeSeriesSplit(n_splits=5, max_train_size=10_000, gap=24)
+mape_scorer = make_scorer(mean_absolute_percentage_error)
 
 predictions.skb.cross_validate(
     cv=ts_cv_5,
@@ -497,16 +564,19 @@ predictions.skb.cross_validate(
 ).round(3)
 
 # %%
-ts_cv_3 = TimeSeriesSplit(n_splits=3, max_train_size=10_000, gap=24)
+ts_cv_3 = TimeSeriesSplit(
+    n_splits=3, test_size=test_size, max_train_size=max_train_size, gap=24
+)
 randomized_search = predictions.skb.get_randomized_search(
     cv=ts_cv_3,
     scoring="r2",
-    n_iter=30,
+    n_iter=100,
     fitted=True,
     verbose=1,
     n_jobs=-1,
 )
-randomized_search.results_
+# %%
+randomized_search.results_.round(3)
 
 # %%
 randomized_search.plot_results()
@@ -542,75 +612,6 @@ randomized_search.plot_results()
 # for ts_cv_train_idx, ts_cv_test_idx in ts_cv_5.split(prediction_time.skb.eval()):
 #     features[ts_cv_train_idx].fit
 
-
-# %%
-predictions = features.skb.apply(
-    skrub.SelectCols(
-        cols=skrub.choose_from(
-            [
-                skrub.selectors.all(),
-                skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_"),
-                ),
-                skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_")
-                    or name.startswith("temperature_"),
-                ),
-                skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_")
-                    or name.startswith("precipitation_"),
-                ),
-                skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_")
-                    or name.startswith("wind_speed_"),
-                ),
-                skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_")
-                    or name.startswith("cloud_cover_"),
-                ),
-                # calendar features
-                skrub.selectors.filter_names(
-                    lambda name: name.startswith("load_mw_") or name.endswith("_fr"),
-                ),
-            ],
-            name="feature_subset",
-        )
-    )
-).skb.apply(
-    HistGradientBoostingRegressor(
-        random_state=0,
-        learning_rate=skrub.choose_float(
-            0.01, 0.9, default=0.1, log=True, name="learning_rate"
-        ),
-    ),
-    y=target,
-)
-
-# %%
-randomized_search = predictions.skb.get_randomized_search(
-    cv=ts_cv_3,
-    scoring="r2",
-    n_iter=30,
-    fitted=True,
-    verbose=1,
-    n_jobs=-1,
-)
-randomized_search.results_
-
-# %%
-# %%
-# nested_cv_results = skrub.cross_validate(
-#     environment=predictions.skb.get_data(),
-#     pipeline=randomized_search,
-#     cv=ts_cv_5,
-#     scoring={
-#         "r2": get_scorer("r2"),
-#         "mape": mape_scorer,
-#     },
-#     n_jobs=-1,
-#     return_pipeline=True,
-# ).round(3)
-# nested_cv_results
 
 # %%
 from sklearn.multioutput import MultiOutputRegressor
