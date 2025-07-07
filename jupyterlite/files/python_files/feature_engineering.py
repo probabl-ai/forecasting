@@ -638,18 +638,13 @@ randomized_search.plot_results().update_layout(margin=dict(l=150))
 from sklearn.multioutput import MultiOutputRegressor
 
 model = MultiOutputRegressor(
-    estimator=HistGradientBoostingRegressor(
-        random_state=0,
-        learning_rate=skrub.choose_float(
-            0.01, 0.9, default=0.1, log=True, name="learning_rate"
-        ),
-    ),
+    estimator=HistGradientBoostingRegressor(random_state=0), n_jobs=-1
 )
 
 # %%
 predictions = features.skb.apply(
     model, y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y()
-).skb.set_name("model")
+).skb.set_name("multioutput_gbdt")
 
 # %%
 from sklearn.metrics import r2_score
@@ -684,10 +679,13 @@ cv_results = predictions.skb.cross_validate(
 cv_results
 
 # %%
-learner = predictions.skb.get_pipeline(fitted=True)
+fitted_pipeline = predictions.skb.get_pipeline(fitted=True)
 
 # %%
-sklearn_learner = learner.find_fitted_estimator("model")
+sklearn_learner = fitted_pipeline.find_fitted_estimator("multioutput_gbdt")
+sklearn_learner
+
+# %%
 sklearn_learner.estimators_
 
 # %%
@@ -695,7 +693,7 @@ target_column_names = [target_column_name_pattern.format(horizon=h) for h in hor
 predicted_target_column_names = [
     f"predicted_{target_column_name}" for target_column_name in target_column_names
 ]
-predictions = predictions.rename(
+named_predictions = predictions.rename(
     {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
 )
 
@@ -703,23 +701,33 @@ predictions = predictions.rename(
 import datetime
 
 
-def plot_horizon_forecast(targets, predictions, plot_at_time, historical_timedelta):
+def plot_horizon_forecast(
+    targets, named_predictions, plot_at_time, historical_timedelta
+):
     """Plot the true target and the forecasted values."""
     merged_data = targets.skb.select(cols=["prediction_time", "load_mw"]).skb.concat(
-        [predictions], axis=1
+        [named_predictions], axis=1
     )
     start_time = plot_at_time - historical_timedelta
-    end_time = plot_at_time + datetime.timedelta(hours=predictions.skb.eval().shape[1])
-
-    true_values_past = merged_data.filter(
-        pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
-    ).skb.select(cols=["prediction_time", "load_mw"]).rename(
-        {"load_mw": "Past true load"}
+    end_time = plot_at_time + datetime.timedelta(
+        hours=named_predictions.skb.eval().shape[1]
     )
-    true_values_future = merged_data.filter(
-        pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
-    ).skb.select(cols=["prediction_time", "load_mw"]).rename(
-        {"load_mw": "Future true load"}
+
+    true_values_past = (
+        merged_data.filter(
+            pl.col("prediction_time").is_between(
+                start_time, plot_at_time, closed="both"
+            )
+        )
+        .skb.select(cols=["prediction_time", "load_mw"])
+        .rename({"load_mw": "Past true load"})
+    )
+    true_values_future = (
+        merged_data.filter(
+            pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
+        )
+        .skb.select(cols=["prediction_time", "load_mw"])
+        .rename({"load_mw": "Future true load"})
     )
 
     predicted_record = (
@@ -766,10 +774,10 @@ def plot_horizon_forecast(targets, predictions, plot_at_time, historical_timedel
 # %%
 plot_at_time = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
 historical_timedelta = datetime.timedelta(hours=24 * 5)
-plot_horizon_forecast(targets, predictions, plot_at_time, historical_timedelta)
+plot_horizon_forecast(targets, named_predictions, plot_at_time, historical_timedelta)
 
 # %%
 plot_at_time = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
-plot_horizon_forecast(targets, predictions, plot_at_time, historical_timedelta)
+plot_horizon_forecast(targets, named_predictions, plot_at_time, historical_timedelta)
 
 # %%
