@@ -589,26 +589,38 @@ cv_results.round(3)
 # %%
 
 
-def collect_cv_predictions(pipelines, cv_splitter, predictions):
+def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
 
+    split_generator = cv_splitter.split(prediction_time.skb.eval())
     def splitter(X, y):
         """Workaround to transform a scikit-learn splitter into a function understood
         by `skrub.train_test_split`."""
-        train_idx, test_idx = next(cv_splitter.split(X, y))
+        train_idx, test_idx = next(split_generator)
         return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
 
-    return [
-         pipeline.predict(
-            predictions.skb.train_test_split(
-                predictions.skb.get_data(), splitter=splitter
-            )["test"]
+    results = []
+    for (_, test_idx), pipeline in zip(
+        cv_splitter.split(prediction_time.skb.eval()), pipelines
+    ):
+        split = predictions.skb.train_test_split(
+            predictions.skb.get_data(), splitter=splitter
         )
-        for pipeline in pipelines
-    ]
+        results.append(
+            pl.DataFrame(
+                {
+                    "prediction_time": prediction_time.skb.eval()[test_idx],
+                    "load_mw": split["test"]["_skrub_y"],
+                    "predicted_load_mw": pipeline.predict(split["test"]),
+                }
+            )
+        )
+    return results
 
 
 # %%
-cv_predictions = collect_cv_predictions(cv_results["pipeline"], ts_cv_5, predictions)
+cv_predictions = collect_cv_predictions(
+    cv_results["pipeline"], ts_cv_5, predictions, prediction_time
+)
 
 
 # %%
@@ -696,18 +708,12 @@ def plot_horizon_forecast(
     end_time = plot_at_time + datetime.timedelta(
         hours=named_predictions.skb.eval().shape[1]
     )
-    true_values_past = (
-        merged_data.filter(
-            pl.col("prediction_time").is_between(
-                start_time, plot_at_time, closed="both"
-            )
-        ).rename({"load_mw": "Past true load"})
-    )
-    true_values_future = (
-        merged_data.filter(
-            pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
-        ).rename({"load_mw": "Future true load"})
-    )
+    true_values_past = merged_data.filter(
+        pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
+    ).rename({"load_mw": "Past true load"})
+    true_values_future = merged_data.filter(
+        pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
+    ).rename({"load_mw": "Future true load"})
     predicted_record = (
         merged_data.skb.select(
             cols=skrub.selectors.filter_names(str.startswith, "predict")
