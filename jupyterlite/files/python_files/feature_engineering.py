@@ -409,37 +409,61 @@ prediction_time
 import polars.selectors as cs
 
 
-horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
-horizon_of_interest = 24
+@skrub.deferred
+def build_features(
+    prediction_time,
+    electricity_lagged,
+    all_city_weather,
+    calendar,
+    future_feature_horizons=[1, 12, 24],
+):
 
-features = (
-    (
+    return (
         prediction_time.join(
             electricity_lagged, left_on="prediction_time", right_on="time"
         )
         .join(
-            all_city_weather.with_columns(
-                cs.starts_with("weather_").shift(-horizon_of_interest)
-                # .name.suffix(f"_future_{horizon_of_interest}h")
+            all_city_weather.select(
+                [pl.col("time")]
+                + [
+                    pl.col(c).shift(-h).alias(c + f"_future_{h}h")
+                    for c in all_city_weather.columns
+                    if c != "time"
+                    for h in future_feature_horizons
+                ]
             ),
             left_on="prediction_time",
             right_on="time",
         )
         .join(
-            calendar.with_columns(
-                cs.starts_with("weather_").shift(-horizon_of_interest)
-                # .name.suffix(f"_future_{horizon_of_interest}h")
+            calendar.select(
+                [pl.col("time")]
+                + [
+                    pl.col(c).shift(-h).alias(c + f"_future_{h}h")
+                    for c in calendar.columns
+                    if c != "time"
+                    for h in future_feature_horizons
+                ]
             ),
             left_on="prediction_time",
             right_on="time",
         )
-    )
-    .drop("prediction_time")
-    .skb.mark_as_X()
-)
+    ).drop("prediction_time")
+
+
+features = build_features(
+    prediction_time=prediction_time,
+    electricity_lagged=electricity_lagged,
+    all_city_weather=all_city_weather,
+    calendar=calendar,
+).skb.mark_as_X()
+
 features
 
 # %%
+horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
+horizon_of_interest = horizons[-1]  # Focus on the 24-hour horizon
+
 target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
 targets = prediction_time.join(
@@ -464,29 +488,23 @@ target = targets[target_column_name].skb.mark_as_y()
 from sklearn.ensemble import HistGradientBoostingRegressor
 import skrub.selectors as s
 
-load_selector = s.glob("load_*")
-cal_selector = s.glob("cal_*")
-holiday_selector = s.glob("cal_is_holiday")
-weather_selector = s.glob("weather_*")
-temperature_selector = s.glob("weather_temperature_*")
-moisture_selector = s.glob("weather_moisture_*")
-cloud_cover_selector = s.glob("weather_cloud_cover_*")
-rolling_load_selector = s.glob("load_mw_rolling_*")
-nothing_selector = s.glob("")  # cannot match non-empty feature names
 
 predictions = features.skb.apply(
     skrub.DropCols(
         cols=skrub.choose_from(
             {
-                "none": nothing_selector,
-                "load": load_selector,
-                "rolling_load": rolling_load_selector,
-                "weather": weather_selector,
-                "temperature": temperature_selector,
-                "moisture": moisture_selector,
-                "cloud_cover": cloud_cover_selector,
-                "calendar": cal_selector,
-                "holiday": holiday_selector,
+                "none": s.glob(""),  # No column has empty name.
+                "load": s.glob("load_*"),
+                "rolling_load": s.glob("load_mw_rolling_*"),
+                "weather": s.glob("weather_*"),
+                "temperature": s.glob("weather_temperature_*"),
+                "moisture": s.glob("weather_moisture_*"),
+                "cloud_cover": s.glob("weather_cloud_cover_*"),
+                "calendar": s.glob("cal_*"),
+                "holiday": s.glob("cal_is_holiday"),
+                "future_1h": s.glob("*_future_1h"),
+                "future_12h": s.glob("*_future_12h"),
+                "future_24h": s.glob("*_future_24h"),
             },
             name="dropped_features",
         )
