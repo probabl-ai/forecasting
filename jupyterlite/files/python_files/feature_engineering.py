@@ -587,8 +587,6 @@ cv_results = predictions.skb.cross_validate(
 cv_results.round(3)
 
 # %%
-
-
 def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
 
     index_generator = cv_splitter.split(prediction_time.skb.eval())
@@ -627,6 +625,63 @@ cv_predictions = collect_cv_predictions(
 )
 cv_predictions[0]
 
+
+# %%
+import numpy as np
+
+
+def plot_reliability_diagram(cv_predictions):
+    # min and max load over all predictions and observations for any folds:
+    min_load = np.min(
+        [
+            min(
+                cv_prediction["load_mw"].min(),
+                cv_prediction["predicted_load_mw"].min(),
+            )
+            for cv_prediction in cv_predictions
+        ]
+    )
+    max_load = np.max(
+        [
+            max(
+                cv_prediction["load_mw"].max(),
+                cv_prediction["predicted_load_mw"].max(),
+            )
+            for cv_prediction in cv_predictions
+        ]
+    )
+    scale = altair.Scale(domain=[min_load, max_load])
+    chart = None
+    for i, cv_predictions_i in enumerate(cv_predictions):
+        mean_per_bins = (
+            cv_predictions_i.group_by(
+                pl.col("predicted_load_mw").qcut(np.linspace(0, 1, 10))
+            )
+            .agg(
+                [
+                    pl.col("load_mw").mean().alias("mean_load_mw"),
+                    pl.col("predicted_load_mw").mean().alias("mean_predicted_load_mw"),
+                ]
+            )
+            .sort("predicted_load_mw")
+        )
+
+        this_chart = (
+            altair.Chart(mean_per_bins)
+            .mark_line(tooltip=True)
+            .encode(
+                x=altair.X("mean_predicted_load_mw:Q", scale=scale),
+                y=altair.Y("mean_load_mw:Q", scale=scale),
+            )
+        )
+        if chart is None:
+            chart = this_chart
+        else:
+            chart += this_chart
+    return chart
+
+
+plot_reliability_diagram(cv_predictions).interactive()
 
 # %%
 ts_cv_2 = TimeSeriesSplit(
