@@ -600,8 +600,7 @@ randomized_search = predictions.skb.get_randomized_search(
 randomized_search.results_.round(3)
 
 # %%
-randomized_search.plot_results().update_layout(margin=dict(l=150))
-
+randomized_search.plot_results().update_layout(margin=dict(l=180))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
