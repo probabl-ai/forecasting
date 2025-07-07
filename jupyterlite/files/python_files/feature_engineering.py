@@ -419,8 +419,7 @@ features = (
         )
         .join(
             all_city_weather.with_columns(
-                cs.starts_with("weather_")
-                .shift(-horizon_of_interest)
+                cs.starts_with("weather_").shift(-horizon_of_interest)
                 # .name.suffix(f"_future_{horizon_of_interest}h")
             ),
             left_on="prediction_time",
@@ -428,8 +427,7 @@ features = (
         )
         .join(
             calendar.with_columns(
-                cs.starts_with("weather_")
-                .shift(-horizon_of_interest)
+                cs.starts_with("weather_").shift(-horizon_of_interest)
                 # .name.suffix(f"_future_{horizon_of_interest}h")
             ),
             left_on="prediction_time",
@@ -584,7 +582,7 @@ randomized_search = predictions.skb.get_randomized_search(
 randomized_search.results_.round(3)
 
 # %%
-randomized_search.plot_results()
+randomized_search.plot_results().update_layout(margin=dict(l=150))
 
 
 # %%
@@ -693,15 +691,19 @@ import datetime
 
 
 def plot_horizon(output, prediction_time, past_true_values=5):
-    # Find the row that contains the forecasted values
-    row = output.filter(pl.col("prediction_time") == prediction_time).rows()[0]
+    # TODO: display 2 segments for the true load values: past and future.
+    # TODO: use a dict with naming instead of a positional tuple for the
+    # forecast record. Find the row that contains the forecasted values
+    predict_record = output.filter(pl.col("prediction_time") == prediction_time).rows()[
+        0
+    ]
     # Build the forecast dataframe by concatenating the different horizons
     forecast = pl.DataFrame(
         {
-            "forecast_time": row[0] + datetime.timedelta(hours=h),
+            "forecast_time": predict_record[0] + datetime.timedelta(hours=h),
             "forecast_value": predicted_value,
         }
-        for h, predicted_value in enumerate(row[2:], start=1)
+        for h, predicted_value in enumerate(predict_record[2:], start=1)
     )
     # Get the past true values and also the future true values of to the last horizon
     true_values = output.filter(
@@ -711,7 +713,7 @@ def plot_horizon(output, prediction_time, past_true_values=5):
         )
         & (
             pl.col("prediction_time")
-            <= prediction_time + datetime.timedelta(hours=len(row) - 2)
+            <= prediction_time + datetime.timedelta(hours=len(predict_record) - 2)
         )
     )
     # plot the true and forecasted values
@@ -734,4 +736,7 @@ def plot_horizon(output, prediction_time, past_true_values=5):
 time_to_plot = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
 plot_horizon(output, time_to_plot, past_true_values=24 * 5)
 
+# %%
+time_to_plot = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
+plot_horizon(output, time_to_plot, past_true_values=24 * 5)
 # %%
