@@ -31,7 +31,7 @@ nbclient.exceptions.CellTimeoutError: A cell timed out while it was being execut
 The message was: Cell execution timed out.
 Here is a preview of the cell contents:
 -------------------
-['ts_cv_3 = TimeSeriesSplit(', '    n_splits=3, test_size=test_size, max_train_size=max_train_size, gap=24', ')', 'randomized_search = predictions.skb.get_randomized_search(', '    cv=ts_cv_3,']
+['ts_cv_2 = TimeSeriesSplit(', '    n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24', ')', 'randomized_search = predictions.skb.get_randomized_search(', '    cv=ts_cv_2,']
 ...
 ['    n_iter=100,', '    fitted=True,', '    verbose=1,', '    n_jobs=-1,', ')']
 -------------------

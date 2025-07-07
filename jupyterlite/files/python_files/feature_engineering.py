@@ -415,7 +415,7 @@ def build_features(
     electricity_lagged,
     all_city_weather,
     calendar,
-    future_feature_horizons=[1, 12, 24],
+    future_feature_horizons=[1, 24],
 ):
 
     return (
@@ -501,10 +501,10 @@ predictions = features.skb.apply(
                 "moisture": s.glob("weather_moisture_*"),
                 "cloud_cover": s.glob("weather_cloud_cover_*"),
                 "calendar": s.glob("cal_*"),
-                "holiday": s.glob("cal_is_holiday"),
+                "holiday": s.glob("cal_is_holiday*"),
                 "future_1h": s.glob("*_future_1h"),
-                "future_12h": s.glob("*_future_12h"),
                 "future_24h": s.glob("*_future_24h"),
+                "non_paris_weather": s.glob("weather_*") & ~s.glob("weather_*_paris_*"),
             },
             name="dropped_features",
         )
@@ -585,11 +585,11 @@ predictions.skb.cross_validate(
 ).round(3)
 
 # %%
-ts_cv_3 = TimeSeriesSplit(
-    n_splits=3, test_size=test_size, max_train_size=max_train_size, gap=24
+ts_cv_2 = TimeSeriesSplit(
+    n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
 randomized_search = predictions.skb.get_randomized_search(
-    cv=ts_cv_3,
+    cv=ts_cv_2,
     scoring="r2",
     n_iter=100,
     fitted=True,
@@ -642,9 +642,95 @@ model = MultiOutputRegressor(
 )
 
 # %%
-predictions = features.skb.apply(
+multioutput_predictions = features.skb.apply(
     model, y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y()
 ).skb.set_name("multioutput_gbdt")
+
+# %%
+target_column_names = [target_column_name_pattern.format(horizon=h) for h in horizons]
+predicted_target_column_names = [
+    f"predicted_{target_column_name}" for target_column_name in target_column_names
+]
+named_predictions = multioutput_predictions.rename(
+    {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
+)
+
+# %%
+import datetime
+
+
+def plot_horizon_forecast(
+    targets, named_predictions, plot_at_time, historical_timedelta
+):
+    """Plot the true target and the forecast values."""
+    merged_data = targets.skb.select(cols=["prediction_time", "load_mw"]).skb.concat(
+        [named_predictions], axis=1
+    )
+    start_time = plot_at_time - historical_timedelta
+    end_time = plot_at_time + datetime.timedelta(
+        hours=named_predictions.skb.eval().shape[1]
+    )
+    true_values_past = (
+        merged_data.filter(
+            pl.col("prediction_time").is_between(
+                start_time, plot_at_time, closed="both"
+            )
+        ).rename({"load_mw": "Past true load"})
+    )
+    true_values_future = (
+        merged_data.filter(
+            pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
+        ).rename({"load_mw": "Future true load"})
+    )
+    predicted_record = (
+        merged_data.skb.select(
+            cols=skrub.selectors.filter_names(str.startswith, "predict")
+        )
+        .row(by_predicate=pl.col("prediction_time") == plot_at_time, named=True)
+        .skb.eval()
+    )
+    forecast_values = pl.DataFrame(
+        {
+            "prediction_time": predicted_record["prediction_time"]
+            + datetime.timedelta(hours=horizon),
+            "Forecast load": predicted_record[
+                "predicted_" + target_column_name_pattern.format(horizon=horizon)
+            ],
+        }
+        for horizon in range(1, len(predicted_record))
+    )
+
+    true_values_past_chart = (
+        altair.Chart(true_values_past.skb.eval())
+        .transform_fold(["Past true load"])
+        .mark_line(tooltip=True)
+        .encode(x="prediction_time:T", y="Past true load:Q", color="key:N")
+    )
+    true_values_future_chart = (
+        altair.Chart(true_values_future.skb.eval())
+        .transform_fold(["Future true load"])
+        .mark_line(tooltip=True)
+        .encode(x="prediction_time:T", y="Future true load:Q", color="key:N")
+    )
+    forecast_values_chart = (
+        altair.Chart(forecast_values)
+        .transform_fold(["Forecast load"])
+        .mark_line(tooltip=True)
+        .encode(x="prediction_time:T", y="Forecast load:Q", color="key:N")
+    )
+    return (
+        true_values_past_chart + true_values_future_chart + forecast_values_chart
+    ).interactive()
+
+
+# %%
+plot_at_time = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
+historical_timedelta = datetime.timedelta(hours=24 * 5)
+plot_horizon_forecast(targets, named_predictions, plot_at_time, historical_timedelta)
+
+# %%
+plot_at_time = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
+plot_horizon_forecast(targets, named_predictions, plot_at_time, historical_timedelta)
 
 # %%
 from sklearn.metrics import r2_score
@@ -667,7 +753,7 @@ def scoring(regressor, X, y):
     }
 
 
-cv_results = predictions.skb.cross_validate(
+cv_results = multioutput_predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
     return_train_score=True,
@@ -677,107 +763,4 @@ cv_results = predictions.skb.cross_validate(
 
 # %%
 cv_results
-
-# %%
-fitted_pipeline = predictions.skb.get_pipeline(fitted=True)
-
-# %%
-sklearn_learner = fitted_pipeline.find_fitted_estimator("multioutput_gbdt")
-sklearn_learner
-
-# %%
-sklearn_learner.estimators_
-
-# %%
-target_column_names = [target_column_name_pattern.format(horizon=h) for h in horizons]
-predicted_target_column_names = [
-    f"predicted_{target_column_name}" for target_column_name in target_column_names
-]
-named_predictions = predictions.rename(
-    {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
-)
-
-# %%
-import datetime
-
-
-def plot_horizon_forecast(
-    targets, named_predictions, plot_at_time, historical_timedelta
-):
-    """Plot the true target and the forecasted values."""
-    merged_data = targets.skb.select(cols=["prediction_time", "load_mw"]).skb.concat(
-        [named_predictions], axis=1
-    )
-    start_time = plot_at_time - historical_timedelta
-    end_time = plot_at_time + datetime.timedelta(
-        hours=named_predictions.skb.eval().shape[1]
-    )
-
-    true_values_past = (
-        merged_data.filter(
-            pl.col("prediction_time").is_between(
-                start_time, plot_at_time, closed="both"
-            )
-        )
-        .skb.select(cols=["prediction_time", "load_mw"])
-        .rename({"load_mw": "Past true load"})
-    )
-    true_values_future = (
-        merged_data.filter(
-            pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
-        )
-        .skb.select(cols=["prediction_time", "load_mw"])
-        .rename({"load_mw": "Future true load"})
-    )
-
-    predicted_record = (
-        merged_data.skb.select(
-            cols=skrub.selectors.filter_names(str.startswith, "predict")
-        )
-        .row(by_predicate=pl.col("prediction_time") == plot_at_time, named=True)
-        .skb.eval()
-    )
-    forecasted_values = pl.DataFrame(
-        {
-            "prediction_time": predicted_record["prediction_time"]
-            + datetime.timedelta(hours=horizon),
-            "Forecasted load": predicted_record[
-                "predicted_" + target_column_name_pattern.format(horizon=horizon)
-            ],
-        }
-        for horizon in range(1, len(predicted_record))
-    )
-
-    true_values_past_chart = (
-        altair.Chart(true_values_past.skb.eval())
-        .transform_fold(["Past true load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Past true load:Q", color="key:N")
-    )
-    true_values_future_chart = (
-        altair.Chart(true_values_future.skb.eval())
-        .transform_fold(["Future true load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Future true load:Q", color="key:N")
-    )
-    forecasted_values_chart = (
-        altair.Chart(forecasted_values)
-        .transform_fold(["Forecasted load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Forecasted load:Q", color="key:N")
-    )
-    return (
-        true_values_past_chart + true_values_future_chart + forecasted_values_chart
-    ).interactive()
-
-
-# %%
-plot_at_time = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
-historical_timedelta = datetime.timedelta(hours=24 * 5)
-plot_horizon_forecast(targets, named_predictions, plot_at_time, historical_timedelta)
-
-# %%
-plot_at_time = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
-plot_horizon_forecast(targets, named_predictions, plot_at_time, historical_timedelta)
-
 # %%
