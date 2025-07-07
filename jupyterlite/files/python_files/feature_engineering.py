@@ -165,10 +165,11 @@ holidays_fr = holidays.country_holidays("FR", years=range(2019, 2026))
 fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
 calendar = time.with_columns(
     [
-        fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
+        fr_time.dt.hour().alias("cal_hour_of_day"),
         fr_time.dt.weekday().alias("cal_day_of_week"),
         fr_time.dt.ordinal_day().alias("cal_day_of_year"),
-        fr_time.dt.hour().alias("cal_hour_of_day"),
+        fr_time.dt.year().alias("cal_year"),
+        fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
     ],
 )
 calendar
@@ -467,7 +468,9 @@ import skrub.selectors as s
 
 load_selector = s.glob("load_*")
 cal_selector = s.glob("cal_*")
+holiday_selector = s.glob("cal_is_holiday")
 weather_selector = s.glob("weather_*")
+temperature_selector = s.glob("weather_temperature_*")
 moisture_selector = s.glob("weather_moisture_*")
 cloud_cover_selector = s.glob("weather_cloud_cover_*")
 rolling_load_selector = s.glob("load_mw_rolling_*")
@@ -479,11 +482,13 @@ predictions = features.skb.apply(
             {
                 "none": nothing_selector,
                 "load": load_selector,
+                "rolling_load": rolling_load_selector,
                 "weather": weather_selector,
-                "calendar": cal_selector,
+                "temperature": temperature_selector,
                 "moisture": moisture_selector,
                 "cloud_cover": cloud_cover_selector,
-                "rolling_load": rolling_load_selector,
+                "calendar": cal_selector,
+                "holiday": holiday_selector,
             },
             name="dropped_features",
         )
