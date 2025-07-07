@@ -573,16 +573,43 @@ from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_sco
 
 mape_scorer = make_scorer(mean_absolute_percentage_error)
 
-predictions.skb.cross_validate(
+cv_results = predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring={
         "r2": get_scorer("r2"),
         "mape": mape_scorer,
     },
     return_train_score=True,
+    return_pipeline=True,
     verbose=1,
     n_jobs=-1,
-).round(3)
+)
+cv_results.round(3)
+
+# %%
+
+
+def collect_cv_predictions(pipelines, cv_splitter, predictions):
+
+    def splitter(X, y):
+        """Workaround to transform a scikit-learn splitter into a function understood
+        by `skrub.train_test_split`."""
+        train_idx, test_idx = next(cv_splitter.split(X, y))
+        return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
+
+    return [
+         pipeline.predict(
+            predictions.skb.train_test_split(
+                predictions.skb.get_data(), splitter=splitter
+            )["test"]
+        )
+        for pipeline in pipelines
+    ]
+
+
+# %%
+cv_predictions = collect_cv_predictions(cv_results["pipeline"], ts_cv_5, predictions)
+
 
 # %%
 ts_cv_2 = TimeSeriesSplit(
@@ -600,7 +627,7 @@ randomized_search = predictions.skb.get_randomized_search(
 randomized_search.results_.round(3)
 
 # %%
-randomized_search.plot_results().update_layout(margin=dict(l=180))
+randomized_search.plot_results().update_layout(margin=dict(l=150))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
