@@ -493,7 +493,7 @@ predictions = features.skb.apply(
     skrub.DropCols(
         cols=skrub.choose_from(
             {
-                "none": s.glob(""),  # No column has empty name.
+                "none": s.glob(""),  # No column has an empty name.
                 "load": s.glob("load_*"),
                 "rolling_load": s.glob("load_mw_rolling_*"),
                 "weather": s.glob("weather_*"),
@@ -787,7 +787,7 @@ def scoring(regressor, X, y):
     }
 
 
-cv_results = multioutput_predictions.skb.cross_validate(
+multioutput_cv_results = multioutput_predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
     return_train_score=True,
@@ -796,5 +796,5 @@ cv_results = multioutput_predictions.skb.cross_validate(
 ).round(3)
 
 # %%
-cv_results
+multioutput_cv_results
 # %%
