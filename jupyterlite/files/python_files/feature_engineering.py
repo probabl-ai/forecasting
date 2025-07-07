@@ -654,13 +654,16 @@ def scoring(regressor, X, y):
     }
 
 
-predictions.skb.cross_validate(
+cv_results = predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
     return_train_score=True,
     verbose=1,
     n_jobs=-1,
 ).round(3)
+
+# %%
+cv_results
 
 # %%
 learner = predictions.skb.get_pipeline(fitted=True)
