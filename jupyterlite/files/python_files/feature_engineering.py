@@ -591,6 +591,8 @@ cv_results.round(3)
 
 def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
 
+    # We need to create a generator outside of the function such that we don't recreate
+    # one inside the `splitter` function and always get the first split.
     split_generator = cv_splitter.split(prediction_time.skb.eval())
     def splitter(X, y):
         """Workaround to transform a scikit-learn splitter into a function understood
