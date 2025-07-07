@@ -630,7 +630,7 @@ cv_predictions[0]
 import numpy as np
 
 
-def plot_reliability_diagram(cv_predictions):
+def plot_reliability_diagram(cv_predictions, n_bins=10):
     # min and max load over all predictions and observations for any folds:
     min_load = np.min(
         [
@@ -655,7 +655,7 @@ def plot_reliability_diagram(cv_predictions):
     for i, cv_predictions_i in enumerate(cv_predictions):
         mean_per_bins = (
             cv_predictions_i.group_by(
-                pl.col("predicted_load_mw").qcut(np.linspace(0, 1, 10))
+                pl.col("predicted_load_mw").qcut(np.linspace(0, 1, n_bins))
             )
             .agg(
                 [
