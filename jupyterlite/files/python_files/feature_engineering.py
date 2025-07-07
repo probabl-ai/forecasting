@@ -591,27 +591,29 @@ cv_results.round(3)
 
 def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
 
-    # We need to create a generator outside of the function such that we don't recreate
-    # one inside the `splitter` function and always get the first split.
-    split_generator = cv_splitter.split(prediction_time.skb.eval())
-    def splitter(X, y):
+    index_generator = cv_splitter.split(prediction_time.skb.eval())
+
+    def splitter(X, y, index_generator):
         """Workaround to transform a scikit-learn splitter into a function understood
         by `skrub.train_test_split`."""
-        train_idx, test_idx = next(split_generator)
+        train_idx, test_idx = next(index_generator)
         return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
 
     results = []
+
     for (_, test_idx), pipeline in zip(
         cv_splitter.split(prediction_time.skb.eval()), pipelines
     ):
         split = predictions.skb.train_test_split(
-            predictions.skb.get_data(), splitter=splitter
+            predictions.skb.get_data(),
+            splitter=splitter,
+            index_generator=index_generator,
         )
         results.append(
             pl.DataFrame(
                 {
                     "prediction_time": prediction_time.skb.eval()[test_idx],
-                    "load_mw": split["test"]["_skrub_y"],
+                    "load_mw": split["y_test"],
                     "predicted_load_mw": pipeline.predict(split["test"]),
                 }
             )
@@ -623,6 +625,7 @@ def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time)
 cv_predictions = collect_cv_predictions(
     cv_results["pipeline"], ts_cv_5, predictions, prediction_time
 )
+cv_predictions[0]
 
 
 # %%
@@ -797,4 +800,43 @@ multioutput_cv_results = multioutput_predictions.skb.cross_validate(
 
 # %%
 multioutput_cv_results
+
+# %%
+import itertools
+from IPython.display import display
+
+for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "test"]):
+    columns = multioutput_cv_results.columns[
+        multioutput_cv_results.columns.str.startswith(f"{dataset_type}_{metric_name}")
+    ]
+    data_to_plot = multioutput_cv_results[columns]
+    data_to_plot.columns = [
+        col.replace(f"{dataset_type}_", "")
+        .replace(f"{metric_name}_", "")
+        .replace("_", " ")
+        for col in columns
+    ]
+
+    data_long = data_to_plot.melt(var_name="horizon", value_name="score")
+    chart = (
+        altair.Chart(
+            data_long,
+            title=f"{dataset_type.title()} {metric_name.upper()} Scores by Horizon",
+        )
+        .mark_boxplot(extent="min-max")
+        .encode(
+            x=altair.X(
+                "horizon:N",
+                title="Horizon",
+                sort=altair.Sort(
+                    [f"horizon {h}h" for h in range(1, data_to_plot.shape[1])]
+                ),
+            ),
+            y=altair.Y("score:Q", title=f"{metric_name.upper()} Score"),
+            color=altair.Color("horizon:N", legend=None),
+        )
+    )
+
+    display(chart)
+
 # %%
