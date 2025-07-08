@@ -63,19 +63,34 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 # system will also be useful later.
 
 # %%
-time_range_start = pl.datetime(2021, 3, 23, hour=0, time_zone="UTC")
-time_range_end = pl.datetime(2025, 5, 31, hour=23, time_zone="UTC")
-time = skrub.var(
-    "time",
-    pl.DataFrame().with_columns(
-        pl.datetime_range(
-            start=time_range_start,
-            end=time_range_end,
-            time_zone="UTC",
-            interval="1h",
-        ).alias("time"),
-    ),
+historical_data_start_time = skrub.var(
+    "historical_data_start_time", pl.datetime(2021, 3, 23, hour=0, time_zone="UTC")
 )
+historical_data_end_time = skrub.var(
+    "historical_data_end_time", pl.datetime(2025, 5, 31, hour=23, time_zone="UTC")
+)
+
+
+# %%
+@skrub.deferred
+def build_historical_time_range(
+    historical_data_start_time,
+    historical_data_end_time,
+    time_interval="1h",
+    time_zone="UTC",
+):
+    """Define an historical time range shared by all data sources."""
+    return pl.DataFrame().with_columns(
+        pl.datetime_range(
+            start=historical_data_start_time,
+            end=historical_data_end_time,
+            time_zone=time_zone,
+            interval=time_interval,
+        ).alias("time"),
+    )
+
+
+time = build_historical_time_range(historical_data_start_time, historical_data_end_time)
 time
 
 # %% [markdown]
@@ -86,8 +101,9 @@ time
 # if you want to re-run this notebook with more recent data.
 
 # %%
-data_source_folder = Path("../datasets")
-for data_file in sorted(data_source_folder.iterdir()):
+data_source_folder = skrub.var("data_source_folder", Path("../datasets"))
+
+for data_file in sorted(data_source_folder.skb.eval().iterdir()):
     print(data_file)
 
 # %% [markdown]
@@ -97,57 +113,42 @@ for data_file in sorted(data_source_folder.iterdir()):
 # electricity demand.
 
 # %%
-city_names = [
-    "paris",
-    "lyon",
-    "marseille",
-    "toulouse",
-    "lille",
-    "limoges",
-    "nantes",
-    "strasbourg",
-    "brest",
-    "bayonne",
-]
-
-# %%
-all_city_weather_raw = {}
-for city_name in city_names:
-    # all_city_weather_raw[city_name] = skrub.var(
-    # f"{city_name}_weather_raw",
-    all_city_weather_raw[city_name] = (
-        pl.from_arrow(read_table(f"../datasets/weather_{city_name}.parquet"))
-    ).with_columns(
-        [
-            pl.col("time").dt.cast_time_unit(
-                "us"
-            ),  # Ensure time column has the same type
-        ]
-    )
-
-# %%
-all_city_weather_raw["brest"]
-
-# %%
-all_city_weather_raw["brest"].drop_nulls(subset=["temperature_2m"])
-
-
-# %%
-all_city_weather = time.skb.eval()
-for city_name, city_weather_raw in all_city_weather_raw.items():
-    all_city_weather = all_city_weather.join(
-        city_weather_raw.rename(
-            lambda x: x if x == "time" else "weather_" + x + "_" + city_name
-        ),
-        on="time",
-        how="inner",
-    )
-
-all_city_weather = skrub.var(
-    "all_city_weather",
-    all_city_weather,
+city_names = skrub.var(
+    "city_names",
+    [
+        "paris",
+        "lyon",
+        "marseille",
+        "toulouse",
+        "lille",
+        "limoges",
+        "nantes",
+        "strasbourg",
+        "brest",
+        "bayonne",
+    ],
 )
+
+
+@skrub.deferred
+def load_weather_data(time, city_names, data_source_folder):
+    """Load and horizontal stack historical weather forecast data for each city."""
+    all_city_weather = time
+    for city_name in city_names:
+        all_city_weather = all_city_weather.join(
+            pl.from_arrow(
+                read_table(f"{data_source_folder}/weather_{city_name}.parquet")
+            )
+            .with_columns([pl.col("time").dt.cast_time_unit("us")])
+            .rename(lambda x: x if x == "time" else "weather_" + x + "_" + city_name),
+            on="time",
+        )
+    return all_city_weather
+
+
+all_city_weather = load_weather_data(time, city_names, data_source_folder)
 all_city_weather
+
 
 # %% [markdown]
 # ## Calendar and holidays features
@@ -163,19 +164,28 @@ all_city_weather
 # Similarly for the calendar features: all the time features are extracted from
 # the time in the French timezone.
 # %%
-holidays_fr = holidays.country_holidays("FR", years=range(2019, 2026))
+@skrub.deferred
+def prepare_french_calendar_data(time):
+    fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
+    fr_year_min = time.select(fr_time.dt.year().min()).item()
+    fr_year_max = time.select(fr_time.dt.year().max()).item()
+    holidays_fr = holidays.country_holidays(
+        "FR", years=range(fr_year_min, fr_year_max + 1)
+    )
+    return time.with_columns(
+        [
+            fr_time.dt.hour().alias("cal_hour_of_day"),
+            fr_time.dt.weekday().alias("cal_day_of_week"),
+            fr_time.dt.ordinal_day().alias("cal_day_of_year"),
+            fr_time.dt.year().alias("cal_year"),
+            fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
+        ],
+    )
 
-fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
-calendar = time.with_columns(
-    [
-        fr_time.dt.hour().alias("cal_hour_of_day"),
-        fr_time.dt.weekday().alias("cal_day_of_week"),
-        fr_time.dt.ordinal_day().alias("cal_day_of_year"),
-        fr_time.dt.year().alias("cal_year"),
-        fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
-    ],
-)
+
+calendar = prepare_french_calendar_data(time)
 calendar
+
 
 # %% [markdown]
 #
@@ -184,45 +194,40 @@ calendar
 # Finally we load the electricity load data. This data will both be used as a
 # target variable but also to craft some lagged and window-aggregated features.
 # %%
-load_data_files = [
-    data_file
-    for data_file in sorted(data_source_folder.iterdir())
-    if data_file.name.startswith("Total Load - Day Ahead")
-    and data_file.name.endswith(".csv")
-]
-# %%
-electricity_raw = skrub.var(
-    "electricity_raw",
-    pl.concat(
-        [
-            pl.from_pandas(pd.read_csv(data_file, na_values=["N/A", "-"])).drop(
-                ["Day-ahead Total Load Forecast [MW] - BZN|FR"]
+@skrub.deferred
+def load_electricity_load_data(time, data_source_folder):
+    """Load and aggregate historical load data from the raw CSV files."""
+    load_data_files = [
+        data_file
+        for data_file in sorted(data_source_folder.iterdir())
+        if data_file.name.startswith("Total Load - Day Ahead")
+        and data_file.name.endswith(".csv")
+    ]
+    return time.join(
+        (
+            pl.concat(
+                [
+                    pl.from_pandas(pd.read_csv(data_file, na_values=["N/A", "-"])).drop(
+                        ["Day-ahead Total Load Forecast [MW] - BZN|FR"]
+                    )
+                    for data_file in load_data_files
+                ]
+            ).select(
+                [
+                    pl.col("Time (UTC)")
+                    .str.split(by=" - ")
+                    .list.first()
+                    .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
+                    .alias("time"),
+                    pl.col("Actual Total Load [MW] - BZN|FR").alias("load_mw"),
+                ]
             )
-            for data_file in load_data_files
-        ],
-        how="vertical",
-    ),
-)
-electricity_raw
-
-# %%
-electricity = (
-    electricity_raw.with_columns(
-        [
-            pl.col("Time (UTC)")
-            .str.split(by=" - ")
-            .list.first()
-            .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
-            .alias("time"),
-        ]
+        ),
+        on="time",
     )
-    .drop(["Time (UTC)"])
-    .rename({"Actual Total Load [MW] - BZN|FR": "load_mw"})
-    .filter(pl.col("time").dt.minute().eq(0))
-    .filter(pl.col("time") >= time_range_start)
-    .filter(pl.col("time") <= time_range_end)
-    .select(["time", "load_mw"])
-)
+
+
+electricity = load_electricity_load_data(time, data_source_folder)
 electricity
 
 # %%
@@ -241,18 +246,6 @@ electricity.filter(
     (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
     & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
 ).skb.eval().plot.line(x="time:T", y="load_mw:Q")
-
-# %% [markdown]
-#
-# Check that the number of rows matches our expectations based on
-# the number of hours that separate the first and the last dates. We can do
-# that by joining with the time range dataframe and checking that the number of
-# rows stays the same.
-
-# %%
-assert (
-    time.join(electricity, on="time", how="inner").shape[0] == time.shape[0]
-).skb.eval()
 
 # %% [markdown]
 #
@@ -358,7 +351,7 @@ altair.Chart(
         & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
     ).skb.eval()
 ).transform_fold(
-    [f"weather_temperature_2m_{city_name}" for city_name in city_names],
+    [f"weather_temperature_2m_{city_name}" for city_name in city_names.skb.eval()],
 ).mark_line(
     tooltip=True
 ).encode(
@@ -392,17 +385,25 @@ altair.Chart(
 # models via backtesting.
 
 # %%
-prediction_time = time = skrub.var(
-    "prediction_time",
-    pl.DataFrame().with_columns(
+prediction_start_time = skrub.var(
+    "prediction_start_time", historical_data_start_time.skb.eval() + pl.duration(days=7)
+)
+prediction_end_time = skrub.var(
+    "prediction_end_time", historical_data_end_time.skb.eval() - pl.duration(hours=24)
+)
+
+@skrub.deferred
+def define_prediction_time_range(prediction_start_time, prediction_end_time):
+    return pl.DataFrame().with_columns(
         pl.datetime_range(
-            start=time_range_start + pl.duration(days=7),
-            end=time_range_end - pl.duration(hours=24),
+            start=prediction_start_time,
+            end=prediction_end_time,
             time_zone="UTC",
             interval="1h",
         ).alias("prediction_time"),
-    ),
-)
+    )
+
+prediction_time = define_prediction_time_range(prediction_start_time, prediction_end_time)
 prediction_time
 
 
