@@ -1287,3 +1287,76 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
     display(chart)
 
 # %%
+# TODO: Exercise using RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor
+
+multioutput_predictions_rf = features_with_dropped_cols.skb.apply(
+    RandomForestRegressor(max_leaf_nodes=30, random_state=0, n_jobs=-1),
+    y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
+).skb.set_name("random_forest")
+
+# %%
+named_predictions_rf = multioutput_predictions_rf.rename(
+    {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
+)
+
+# %%
+plot_at_time = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
+historical_timedelta = datetime.timedelta(hours=24 * 5)
+plot_horizon_forecast(targets, named_predictions_rf, plot_at_time, historical_timedelta)
+
+# %%
+plot_at_time = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
+plot_horizon_forecast(targets, named_predictions_rf, plot_at_time, historical_timedelta)
+
+# %%
+multioutput_cv_results_rf = multioutput_predictions_rf.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    return_train_score=True,
+    verbose=1,
+    n_jobs=-1,
+)
+
+# %%
+multioutput_cv_results_rf.round(3)
+
+# %%
+import itertools
+from IPython.display import display
+
+for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "test"]):
+    columns = multioutput_cv_results_rf.columns[
+        multioutput_cv_results.columns.str.startswith(f"{dataset_type}_{metric_name}")
+    ]
+    data_to_plot = multioutput_cv_results_rf[columns]
+    data_to_plot.columns = [
+        col.replace(f"{dataset_type}_", "")
+        .replace(f"{metric_name}_", "")
+        .replace("_", " ")
+        for col in columns
+    ]
+
+    data_long = data_to_plot.melt(var_name="horizon", value_name="score")
+    chart = (
+        altair.Chart(
+            data_long,
+            title=f"{dataset_type.title()} {metric_name.upper()} Scores by Horizon",
+        )
+        .mark_boxplot(extent="min-max")
+        .encode(
+            x=altair.X(
+                "horizon:N",
+                title="Horizon",
+                sort=altair.Sort(
+                    [f"horizon {h}h" for h in range(1, data_to_plot.shape[1])]
+                ),
+            ),
+            y=altair.Y("score:Q", title=f"{metric_name.upper()} Score"),
+            color=altair.Color("horizon:N", legend=None),
+        )
+    )
+
+    display(chart)
+
+# %%
