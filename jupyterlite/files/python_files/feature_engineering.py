@@ -950,6 +950,88 @@ plot_reliability_diagram(cv_predictions).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
 
+# %%
+def plot_residuals_vs_predicted(cv_predictions):
+    """Plot residuals vs predicted values scatter plot for all CV folds."""
+    all_scatter_plots = []
+
+    for i, cv_prediction in enumerate(cv_predictions):
+        # Get date range for this CV fold
+        min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
+        max_date = cv_prediction["prediction_time"].max().strftime("%Y-%m-%d")
+        fold_label = f"#{i+1} - {min_date} to {max_date}"
+
+        # Calculate residuals
+        residuals_data = cv_prediction.with_columns(
+            [(pl.col("predicted_load_mw") - pl.col("load_mw")).alias("residual")]
+        ).with_columns([pl.lit(fold_label).alias("fold")])
+
+        # Create scatter plot for this CV fold
+        scatter_plot = (
+            altair.Chart(residuals_data)
+            .mark_circle(opacity=0.6, size=20)
+            .encode(
+                x=altair.X(
+                    "predicted_load_mw:Q",
+                    title="Predicted Load (MW)",
+                    scale=altair.Scale(zero=False),
+                ),
+                y=altair.Y("residual:Q", title="Residual (MW)"),
+                color=altair.Color("fold:N", legend=None),
+                tooltip=[
+                    "prediction_time:T",
+                    "load_mw:Q",
+                    "predicted_load_mw:Q",
+                    "residual:Q",
+                    "fold:N",
+                ],
+            )
+        )
+
+        all_scatter_plots.append(scatter_plot)
+
+    # Get the range of predicted values for the perfect line
+    all_predictions = pl.concat(
+        [cv_pred["predicted_load_mw"] for cv_pred in cv_predictions]
+    )
+    min_pred, max_pred = all_predictions.min(), all_predictions.max()
+
+    # Create perfect residuals line at y=0
+    perfect_line = (
+        altair.Chart(
+            pl.DataFrame(
+                {
+                    "predicted_load_mw": [min_pred, max_pred],
+                    "perfect_residual": [0, 0],
+                    "label": ["Perfect"] * 2,
+                }
+            )
+        )
+        .mark_line(strokeDash=[5, 5], opacity=0.8, color="black")
+        .encode(
+            x=altair.X("predicted_load_mw:Q", title="Predicted Load (MW)"),
+            y=altair.Y("perfect_residual:Q", title="Residual (MW)"),
+            color=altair.Color(
+                "label:N",
+                scale=altair.Scale(range=["black"]),
+                legend=None,
+            ),
+        )
+    )
+
+    # Combine all scatter plots
+    combined_scatter = all_scatter_plots[0]
+    for plot in all_scatter_plots[1:]:
+        combined_scatter += plot
+
+    # Layer the scatter plots with the perfect line
+    return (combined_scatter + perfect_line).resolve_scale(color="independent")
+
+
+plot_residuals_vs_predicted(cv_predictions).interactive().properties(
+    title="Residuals vs Predicted Values from cross-validation predictions"
+)
+
 
 # %%
 def plot_binned_residuals(cv_predictions, by="hour"):
