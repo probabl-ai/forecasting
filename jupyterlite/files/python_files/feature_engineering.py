@@ -37,6 +37,7 @@ import tzdata  # noqa: F401
 import pandas as pd
 from pyarrow.parquet import read_table
 
+import numpy as np
 import polars as pl
 import skrub
 from pathlib import Path
@@ -628,9 +629,6 @@ cv_predictions[0]
 
 
 # %%
-import numpy as np
-
-
 def plot_reliability_diagram(cv_predictions, n_bins=10):
     # min and max load over all predictions and observations for any folds:
     all_loads = pl.concat(
@@ -642,7 +640,27 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
     all_loads = pl.concat(all_loads["load_mw", "predicted_load_mw"])
     min_load, max_load = all_loads.min(), all_loads.max()
     scale = altair.Scale(domain=[min_load, max_load])
-    chart = None
+    chart = (
+        altair.Chart(
+            pl.DataFrame(
+                {
+                    "predicted_load_mw": [min_load, max_load],
+                    "mean_load_mw": [min_load, max_load],
+                    "label": ["Perfect"] * 2,
+                }
+            )
+        )
+        .mark_line(tooltip=True, opacity=0.5, stroke="dotted")
+        .encode(
+            x=altair.X("predicted_load_mw:Q", scale=scale),
+            y=altair.Y("mean_load_mw:Q", scale=scale),
+            color=altair.Color(
+                "label:N",
+                scale=altair.Scale(range=["black"]),
+                legend=altair.Legend(title="Legend"),
+            ),
+        )
+    )
     for i, cv_predictions_i in enumerate(cv_predictions):
         mean_per_bins = (
             cv_predictions_i.group_by(
@@ -657,18 +675,14 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
             .sort("predicted_load_mw")
         )
 
-        this_chart = (
+        chart += (
             altair.Chart(mean_per_bins)
-            .mark_line(tooltip=True)
+            .mark_line(tooltip=True, point=True, opacity=0.5)
             .encode(
                 x=altair.X("mean_predicted_load_mw:Q", scale=scale),
                 y=altair.Y("mean_load_mw:Q", scale=scale),
             )
         )
-        if chart is None:
-            chart = this_chart
-        else:
-            chart += this_chart
     return chart
 
 
