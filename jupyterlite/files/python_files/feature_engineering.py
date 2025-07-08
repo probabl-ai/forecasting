@@ -968,6 +968,7 @@ def plot_binned_residuals(cv_predictions, by="hour"):
 
     all_iqr_bands = []
     all_mean_lines = []
+    time_range = None  # Will store the min/max time values for the perfect line
 
     for i, cv_prediction in enumerate(cv_predictions):
         # Get date range for this CV fold
@@ -997,6 +998,17 @@ def plot_binned_residuals(cv_predictions, by="hour"):
             .with_columns(pl.lit(fold_label).alias("fold"))
         )
 
+        # Store time range for perfect line (use the first CV fold)
+        if time_range is None:
+            time_range = (
+                residuals_stats[time_column].min(),
+                residuals_stats[time_column].max(),
+            )
+        else:
+            time_range = (
+                min(time_range[0], residuals_stats[time_column].min()),
+                max(time_range[1], residuals_stats[time_column].max()),
+            )
         # Create IQR band for this CV fold
         iqr_band = (
             altair.Chart(residuals_stats)
@@ -1023,6 +1035,29 @@ def plot_binned_residuals(cv_predictions, by="hour"):
         all_iqr_bands.append(iqr_band)
         all_mean_lines.append(mean_line)
 
+    # Create perfect residuals line at y=0
+    perfect_line = (
+        altair.Chart(
+            pl.DataFrame(
+                {
+                    time_column: [time_range[0], time_range[1]],
+                    "perfect_residual": [0, 0],
+                    "label": ["Perfect"] * 2,
+                }
+            )
+        )
+        .mark_line(strokeDash=[5, 5], opacity=0.8, color="black")
+        .encode(
+            x=altair.X(f"{time_column}:O", title=x_title),
+            y=altair.Y("perfect_residual:Q", title="Mean residual (MW)"),
+            color=altair.Color(
+                "label:N",
+                scale=altair.Scale(range=["black"]),
+                legend=None,
+            ),
+        )
+    )
+
     # Combine all IQR bands
     combined_iqr = all_iqr_bands[0]
     for band in all_iqr_bands[1:]:
@@ -1033,8 +1068,10 @@ def plot_binned_residuals(cv_predictions, by="hour"):
     for line in all_mean_lines[1:]:
         combined_lines += line
 
-    # Layer the IQR bands behind the mean lines
-    return (combined_iqr + combined_lines).resolve_scale(color="independent")
+    # Layer the IQR bands behind the mean lines, with perfect line on top
+    return (combined_iqr + combined_lines + perfect_line).resolve_scale(
+        color="independent"
+    )
 
 
 plot_binned_residuals(cv_predictions, by="hour").interactive().properties(
