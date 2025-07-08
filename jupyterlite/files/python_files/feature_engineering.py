@@ -392,6 +392,7 @@ prediction_end_time = skrub.var(
     "prediction_end_time", historical_data_end_time.skb.eval() - pl.duration(hours=24)
 )
 
+
 @skrub.deferred
 def define_prediction_time_range(prediction_start_time, prediction_end_time):
     return pl.DataFrame().with_columns(
@@ -403,7 +404,10 @@ def define_prediction_time_range(prediction_start_time, prediction_end_time):
         ).alias("prediction_time"),
     )
 
-prediction_time = define_prediction_time_range(prediction_start_time, prediction_end_time)
+
+prediction_time = define_prediction_time_range(
+    prediction_start_time, prediction_end_time
+)
 prediction_time
 
 
@@ -488,7 +492,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 import skrub.selectors as s
 
 
-predictions = features.skb.apply(
+features_with_dropped_cols = features.skb.apply(
     skrub.DropCols(
         cols=skrub.choose_from(
             {
@@ -508,7 +512,9 @@ predictions = features.skb.apply(
             name="dropped_cols",
         )
     )
-).skb.apply(
+)
+
+predictions = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(
         random_state=0,
         loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
@@ -720,6 +726,22 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
         )
     )
 
+    model_chart = (
+        altair.Chart(results)
+        .mark_line(strokeDash=[4, 2, 4, 2], opacity=0.8, tooltip=True)
+        .encode(
+            x=altair.X(
+                "cum_population:Q",
+                title="Fraction of observations sorted by predicted label",
+            ),
+            y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
+            color=altair.Color(
+                "model_label:N", legend=altair.Legend(title="Models"), sort=None
+            ),
+            detail="cv_idx:N",
+        )
+    )
+
     diagonal_chart = (
         altair.Chart(
             pl.DataFrame(
@@ -737,21 +759,9 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
                 title="Fraction of observations sorted by predicted label",
             ),
             y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
-            color=altair.Color("model_label:N", legend=altair.Legend(title="Models")),
-        )
-    )
-
-    model_chart = (
-        altair.Chart(results)
-        .mark_line(opacity=0.3, tooltip=True)
-        .encode(
-            x=altair.X(
-                "cum_population:Q",
-                title="Fraction of observations sorted by predicted label",
+            color=altair.Color(
+                "model_label:N", legend=altair.Legend(title="Models"), sort=None
             ),
-            y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
-            color=altair.Color("model_label:N", legend=altair.Legend(title="Models")),
-            detail="cv_idx:N",
         )
     )
 
@@ -992,10 +1002,6 @@ def plot_residuals_by_month(cv_predictions):
 
 plot_residuals_by_month(cv_predictions).interactive()
 
-
-# %%
-
-
 # %%
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
@@ -1038,12 +1044,87 @@ randomized_search.plot_results().update_layout(margin=dict(l=150))
 #     )
 
 # %%
-# from joblib import Parallel, delayed
+# TODO: Exercise applying a a linear model with some additional feature engineering
+from sklearn.linear_model import Ridge
+from sklearn.kernel_approximation import Nystroem
 
-# cv_predictions = []
-# for ts_cv_train_idx, ts_cv_test_idx in ts_cv_5.split(prediction_time.skb.eval()):
-#     features[ts_cv_train_idx].fit
+model = skrub.tabular_learner(
+    estimator=Ridge(alpha=skrub.choose_float(1e-6, 1e6, log=True, default=1e-3))
+)
+model.steps.insert(
+    -1,
+    (
+        "nystroem",
+        Nystroem(n_components=skrub.choose_int(10, 200, log=True, default=150)),
+    ),
+)
 
+predictions_ridge = features_with_dropped_cols.skb.apply(model, y=target)
+predictions_ridge
+
+# %%
+altair.Chart(
+    pl.concat(
+        [
+            targets.skb.eval(),
+            predictions_ridge.rename(
+                {target_column_name: predicted_target_column_name}
+            ).skb.eval(),
+        ],
+        how="horizontal",
+    ).tail(24 * 7)
+).transform_fold(
+    [target_column_name, predicted_target_column_name],
+).mark_line(
+    tooltip=True
+).encode(
+    x="prediction_time:T", y="value:Q", color="key:N"
+).interactive()
+
+# %%
+ts_cv_2 = TimeSeriesSplit(
+    n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
+)
+randomized_search = predictions_ridge.skb.get_randomized_search(
+    cv=ts_cv_2,
+    scoring="r2",
+    n_iter=100,
+    fitted=True,
+    verbose=1,
+    n_jobs=-1,
+)
+
+# %%
+randomized_search.plot_results().update_layout(margin=dict(l=200))
+
+# %%
+nested_cv_results = skrub.cross_validate(
+    environment=predictions_ridge.skb.get_data(),
+    pipeline=randomized_search,
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": mape_scorer,
+    },
+    n_jobs=-1,
+    return_pipeline=True,
+).round(3)
+
+# %%
+nested_cv_results.round(3)
+
+# %%
+cv_predictions_ridge = collect_cv_predictions(
+    nested_cv_results["pipeline"], ts_cv_5, predictions_ridge, prediction_time
+)
+
+# %%
+plot_lorenz_curve(cv_predictions_ridge, n_samples=500).interactive()
+
+# %%
+plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
+    title="Reliability diagram from cross-validation predictions"
+)
 
 # %%
 from sklearn.multioutput import MultiOutputRegressor
@@ -1053,7 +1134,7 @@ model = MultiOutputRegressor(
 )
 
 # %%
-multioutput_predictions = features.skb.apply(
+multioutput_predictions = features_with_dropped_cols.skb.apply(
     model, y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y()
 ).skb.set_name("multioutput_gbdt")
 
