@@ -586,6 +586,7 @@ cv_results = predictions.skb.cross_validate(
 )
 cv_results.round(3)
 
+
 # %%
 def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
 
@@ -632,24 +633,14 @@ import numpy as np
 
 def plot_reliability_diagram(cv_predictions, n_bins=10):
     # min and max load over all predictions and observations for any folds:
-    min_load = np.min(
+    all_loads = pl.concat(
         [
-            min(
-                cv_prediction["load_mw"].min(),
-                cv_prediction["predicted_load_mw"].min(),
-            )
+            cv_prediction.select(["load_mw", "predicted_load_mw"])
             for cv_prediction in cv_predictions
         ]
     )
-    max_load = np.max(
-        [
-            max(
-                cv_prediction["load_mw"].max(),
-                cv_prediction["predicted_load_mw"].max(),
-            )
-            for cv_prediction in cv_predictions
-        ]
-    )
+    all_loads = pl.concat(all_loads["load_mw", "predicted_load_mw"])
+    min_load, max_load = all_loads.min(), all_loads.max()
     scale = altair.Scale(domain=[min_load, max_load])
     chart = None
     for i, cv_predictions_i in enumerate(cv_predictions):
