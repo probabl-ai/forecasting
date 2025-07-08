@@ -1129,13 +1129,11 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 # %%
 from sklearn.multioutput import MultiOutputRegressor
 
-model = MultiOutputRegressor(
-    estimator=HistGradientBoostingRegressor(random_state=0), n_jobs=-1
-)
-
-# %%
 multioutput_predictions = features_with_dropped_cols.skb.apply(
-    model, y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y()
+    MultiOutputRegressor(
+        estimator=HistGradientBoostingRegressor(random_state=0), n_jobs=-1
+    ),
+    y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
 ).skb.set_name("multioutput_gbdt")
 
 # %%
