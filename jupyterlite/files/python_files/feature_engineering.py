@@ -1455,7 +1455,7 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
 from sklearn.ensemble import RandomForestRegressor
 
 multioutput_predictions_rf = features_with_dropped_cols.skb.apply(
-    RandomForestRegressor(max_leaf_nodes=30, random_state=0, n_jobs=-1),
+    RandomForestRegressor(min_samples_leaf=30, random_state=0, n_jobs=-1),
     y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
 ).skb.set_name("random_forest")
 
