@@ -38,6 +38,7 @@ import tzdata  # noqa: F401
 import pandas as pd
 from pyarrow.parquet import read_table
 
+import altair
 import numpy as np
 import polars as pl
 import skrub
@@ -290,9 +291,6 @@ electricity_lagged = electricity.with_columns(
 electricity_lagged
 
 # %%
-import altair
-
-
 altair.Chart(electricity_lagged.tail(100).skb.eval()).transform_fold(
     [
         "load_mw",
@@ -626,6 +624,137 @@ cv_predictions = collect_cv_predictions(
 )
 cv_predictions[0]
 
+# %%
+
+
+def lorenz_curve(observed_value, predicted_value, n_samples=1_000):
+    """Compute the Lorenz curve for a given true and predicted values."""
+
+    def gini_index(cum_proportion_population, cum_proportion_y_true):
+        from sklearn.metrics import auc
+
+        return 1 - 2 * auc(cum_proportion_population, cum_proportion_y_true)
+
+    observed_value = np.asarray(observed_value)
+    predicted_value = np.asarray(predicted_value)
+
+    sort_idx = np.argsort(predicted_value)
+    observed_value_sorted = observed_value[sort_idx]
+
+    original_n_samples = observed_value_sorted.shape[0]
+    cum_proportion_population = np.cumsum(np.ones(original_n_samples))
+    cum_proportion_population /= cum_proportion_population[-1]
+
+    cum_proportion_y_true = np.cumsum(observed_value_sorted)
+    cum_proportion_y_true /= cum_proportion_y_true[-1]
+
+    gini_model = gini_index(cum_proportion_population, cum_proportion_y_true)
+
+    cum_proportion_population_interpolated = np.linspace(0, 1, n_samples)
+    cum_proportion_y_true_interpolated = np.interp(
+        cum_proportion_population_interpolated,
+        cum_proportion_population,
+        cum_proportion_y_true,
+    )
+
+    return pl.DataFrame(
+        {
+            "cum_population": cum_proportion_population_interpolated,
+            "cum_observed": cum_proportion_y_true_interpolated,
+        }
+    ).with_columns(
+        pl.lit(gini_model).alias("gini_index"),
+    )
+
+
+def plot_lorenz_curve(cv_predictions, n_samples=1_000):
+    """Plot the Lorenz curve for a given true and predicted values."""
+
+    results = []
+    for cv_idx, predictions in enumerate(cv_predictions):
+        results.append(
+            lorenz_curve(
+                observed_value=predictions["load_mw"],
+                predicted_value=predictions["predicted_load_mw"],
+                n_samples=n_samples,
+            ).with_columns(
+                pl.lit(cv_idx).alias("cv_idx"),
+                pl.lit("model").alias("model"),
+            )
+        )
+
+        results.append(
+            lorenz_curve(
+                observed_value=predictions["load_mw"],
+                predicted_value=predictions["load_mw"],
+                n_samples=n_samples,
+            ).with_columns(
+                pl.lit(cv_idx).alias("cv_idx"),
+                pl.lit("oracle").alias("model"),
+            )
+        )
+
+    results = pl.concat(results)
+
+    gini_stats = results.group_by("model").agg(
+        [
+            pl.col("gini_index")
+            .mean()
+            .map_elements(lambda x: f"{x:.4f}", return_dtype=pl.String)
+            .alias("gini_mean"),
+            pl.col("gini_index")
+            .std()
+            .map_elements(lambda x: f"{x:.4f}", return_dtype=pl.String)
+            .alias("gini_std_dev"),
+        ]
+    )
+
+    results = results.join(gini_stats, on="model").with_columns(
+        pl.format("{} ({} +/- {})", "model", "gini_mean", "gini_std_dev").alias(
+            "model_label"
+        )
+    )
+
+    diagonal_chart = (
+        altair.Chart(
+            pl.DataFrame(
+                {
+                    "cum_population": [0, 1],
+                    "cum_observed": [0, 1],
+                    "model_label": "Non-informative model",
+                }
+            )
+        )
+        .mark_line(strokeDash=[4, 4], opacity=0.5, tooltip=True)
+        .encode(
+            x=altair.X(
+                "cum_population:Q",
+                title="Fraction of observations sorted by predicted label",
+            ),
+            y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
+            color=altair.Color("model_label:N", legend=altair.Legend(title="Models")),
+        )
+    )
+
+    model_chart = (
+        altair.Chart(results)
+        .mark_line(opacity=0.3, tooltip=True)
+        .encode(
+            x=altair.X(
+                "cum_population:Q",
+                title="Fraction of observations sorted by predicted label",
+            ),
+            y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
+            color=altair.Color("model_label:N", legend=altair.Legend(title="Models")),
+            detail="cv_idx:N",
+        )
+    )
+
+    return model_chart + diagonal_chart
+
+
+plot_lorenz_curve(cv_predictions, n_samples=500).interactive()
+
 
 # %%
 def plot_reliability_diagram(cv_predictions, n_bins=10):
@@ -857,6 +986,10 @@ def plot_residuals_by_month(cv_predictions):
 
 
 plot_residuals_by_month(cv_predictions).interactive()
+
+
+# %%
+
 
 # %%
 ts_cv_2 = TimeSeriesSplit(
