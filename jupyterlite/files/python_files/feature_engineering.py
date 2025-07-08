@@ -569,14 +569,19 @@ for cv_idx, (train_idx, test_idx) in enumerate(
 
 # %%
 from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_scorer
+from sklearn.metrics import d2_tweedie_score
 
 
 mape_scorer = make_scorer(mean_absolute_percentage_error)
+poisson_scorer = make_scorer(d2_tweedie_score, power=1.0)
+gamma_scorer = make_scorer(d2_tweedie_score, power=2.0)
 
 cv_results = predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring={
         "r2": get_scorer("r2"),
+        "d2_poisson": poisson_scorer,
+        "d2_gamma": gamma_scorer,
         "mape": mape_scorer,
     },
     return_train_score=True,
