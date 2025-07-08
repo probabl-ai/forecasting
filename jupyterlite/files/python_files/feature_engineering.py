@@ -189,6 +189,7 @@ all_city_weather
 # patterns are influenced by inhabitants' daily routines aligned with the local
 # timezone.
 
+
 # %%
 @skrub.deferred
 def prepare_french_calendar_data(time):
@@ -498,6 +499,7 @@ features
 horizons = range(1, 25)
 target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
+
 @skrub.deferred
 def build_targets(prediction_time, electricity, horizons):
     return prediction_time.join(
@@ -512,6 +514,7 @@ def build_targets(prediction_time, electricity, horizons):
         left_on="prediction_time",
         right_on="time",
     )
+
 
 targets = build_targets(prediction_time, electricity, horizons)
 targets
@@ -687,8 +690,7 @@ cv_results = hgbr_predictions.skb.cross_validate(
         "r2": get_scorer("r2"),
         "d2_poisson": make_scorer(mean_absolute_percentage_error),
         "d2_gamma": make_scorer(d2_tweedie_score, power=1.0),
-        "mape": make_scorer(d2_tweedie_score, power=2.0)
-,
+        "mape": make_scorer(d2_tweedie_score, power=2.0),
     },
     return_train_score=True,
     return_pipeline=True,
