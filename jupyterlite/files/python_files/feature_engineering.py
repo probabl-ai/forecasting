@@ -639,6 +639,8 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
     all_loads = pl.concat(all_loads["load_mw", "predicted_load_mw"])
     min_load, max_load = all_loads.min(), all_loads.max()
     scale = altair.Scale(domain=[min_load, max_load])
+
+    # Create the perfect line
     chart = (
         altair.Chart(
             pl.DataFrame(
@@ -660,7 +662,14 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
             ),
         )
     )
+
+    # Add lines for each CV fold with date labels
     for i, cv_predictions_i in enumerate(cv_predictions):
+        # Get date range for this CV fold
+        min_date = cv_predictions_i["prediction_time"].min().strftime("%Y-%m-%d")
+        max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
+        fold_label = f"#{i+1} - {min_date} to {max_date}"
+
         mean_per_bins = (
             cv_predictions_i.group_by(
                 pl.col("predicted_load_mw").qcut(np.linspace(0, 1, n_bins))
@@ -672,16 +681,23 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
                 ]
             )
             .sort("predicted_load_mw")
+            .with_columns(pl.lit(fold_label).alias("fold"))
         )
+
         chart += (
             altair.Chart(mean_per_bins)
             .mark_line(tooltip=True, point=True, opacity=0.8)
             .encode(
                 x=altair.X("mean_predicted_load_mw:Q", scale=scale),
                 y=altair.Y("mean_load_mw:Q", scale=scale),
+                color=altair.Color(
+                    "fold:N",
+                    legend=altair.Legend(title=None),
+                ),
+                detail= altair.Detail("fold:N")
             )
         )
-    return chart
+    return chart.resolve_scale(color="independent")
 
 
 plot_reliability_diagram(cv_predictions).interactive().properties(
@@ -699,7 +715,7 @@ def plot_residuals_by_hour(cv_predictions):
         # Get date range for this CV fold
         min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_prediction["prediction_time"].max().strftime("%Y-%m-%d")
-        fold_label = f"#{i+1} ({min_date} to {max_date})"
+        fold_label = f"#{i+1} - {min_date} to {max_date}"
 
         residuals_by_hour_detailed = cv_prediction.with_columns(
             [
@@ -730,7 +746,6 @@ def plot_residuals_by_hour(cv_predictions):
                 x=altair.X("hour_of_day:O", title="Hour of day"),
                 y=altair.Y("q25_residual:Q"),
                 y2=altair.Y2("q75_residual:Q"),
-                tooltip=["hour_of_day:O", "fold:N", "q25_residual:Q", "q75_residual:Q"],
             )
         )
 
@@ -808,12 +823,6 @@ def plot_residuals_by_month(cv_predictions):
                 x=altair.X("month_of_year:O", title="Month of year"),
                 y=altair.Y("q25_residual:Q"),
                 y2=altair.Y2("q75_residual:Q"),
-                tooltip=[
-                    "month_of_year:O",
-                    "fold:N",
-                    "q25_residual:Q",
-                    "q75_residual:Q",
-                ],
             )
         )
 
