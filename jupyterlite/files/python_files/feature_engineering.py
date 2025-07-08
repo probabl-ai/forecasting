@@ -407,6 +407,7 @@ prediction_time = time = skrub.var(
 )
 prediction_time
 
+
 # %%
 @skrub.deferred
 def build_features(
@@ -642,15 +643,15 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
         altair.Chart(
             pl.DataFrame(
                 {
-                    "predicted_load_mw": [min_load, max_load],
+                    "mean_predicted_load_mw": [min_load, max_load],
                     "mean_load_mw": [min_load, max_load],
                     "label": ["Perfect"] * 2,
                 }
             )
         )
-        .mark_line(tooltip=True, opacity=0.5, stroke="dotted")
+        .mark_line(tooltip=True, opacity=0.8, strokeDash=[5, 5])
         .encode(
-            x=altair.X("predicted_load_mw:Q", scale=scale),
+            x=altair.X("mean_predicted_load_mw:Q", scale=scale),
             y=altair.Y("mean_load_mw:Q", scale=scale),
             color=altair.Color(
                 "label:N",
@@ -672,10 +673,9 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
             )
             .sort("predicted_load_mw")
         )
-
         chart += (
             altair.Chart(mean_per_bins)
-            .mark_line(tooltip=True, point=True, opacity=0.5)
+            .mark_line(tooltip=True, point=True, opacity=0.8)
             .encode(
                 x=altair.X("mean_predicted_load_mw:Q", scale=scale),
                 y=altair.Y("mean_load_mw:Q", scale=scale),
@@ -684,7 +684,170 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
     return chart
 
 
-plot_reliability_diagram(cv_predictions).interactive()
+plot_reliability_diagram(cv_predictions).interactive().properties(
+    title="Reliability diagram from cross-validation predictions"
+)
+
+
+# %%
+def plot_residuals_by_hour(cv_predictions):
+    """Plot the average residuals per hour of the day, one line and IQR band per CV fold."""
+    all_iqr_bands = []
+    all_mean_lines = []
+
+    for i, cv_prediction in enumerate(cv_predictions):
+        # Get date range for this CV fold
+        min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
+        max_date = cv_prediction["prediction_time"].max().strftime("%Y-%m-%d")
+        fold_label = f"#{i+1} ({min_date} to {max_date})"
+
+        residuals_by_hour_detailed = cv_prediction.with_columns(
+            [
+                (pl.col("load_mw") - pl.col("predicted_load_mw")).alias("residual"),
+                pl.col("prediction_time").dt.hour().alias("hour_of_day"),
+            ]
+        )
+
+        # Calculate statistics for this CV fold
+        residuals_stats = (
+            residuals_by_hour_detailed.group_by("hour_of_day")
+            .agg(
+                [
+                    pl.col("residual").mean().alias("mean_residual"),
+                    pl.col("residual").quantile(0.25).alias("q25_residual"),
+                    pl.col("residual").quantile(0.75).alias("q75_residual"),
+                ]
+            )
+            .sort("hour_of_day")
+            .with_columns(pl.lit(fold_label).alias("fold"))
+        )
+
+        # Create IQR band for this CV fold
+        iqr_band = (
+            altair.Chart(residuals_stats)
+            .mark_area(opacity=0.15)
+            .encode(
+                x=altair.X("hour_of_day:O", title="Hour of day"),
+                y=altair.Y("q25_residual:Q"),
+                y2=altair.Y2("q75_residual:Q"),
+                tooltip=["hour_of_day:O", "fold:N", "q25_residual:Q", "q75_residual:Q"],
+            )
+        )
+
+        # Create mean line for this CV fold
+        mean_line = (
+            altair.Chart(residuals_stats)
+            .mark_line(tooltip=True, point=True, opacity=0.8)
+            .encode(
+                x=altair.X("hour_of_day:O", title="Hour of day"),
+                y=altair.Y("mean_residual:Q", title="Mean residual (MW)"),
+                color=altair.Color("fold:N", legend=altair.Legend(title="CV Fold")),
+            )
+        )
+
+        all_iqr_bands.append(iqr_band)
+        all_mean_lines.append(mean_line)
+
+    # Combine all IQR bands
+    combined_iqr = all_iqr_bands[0]
+    for band in all_iqr_bands[1:]:
+        combined_iqr += band
+
+    # Combine all mean lines
+    combined_lines = all_mean_lines[0]
+    for line in all_mean_lines[1:]:
+        combined_lines += line
+
+    # Layer the IQR bands behind the mean lines
+    return (combined_iqr + combined_lines).resolve_scale(color="shared")
+
+
+plot_residuals_by_hour(cv_predictions).interactive().properties(
+    title="Residuals by hour of the day from cross-validation predictions"
+)
+
+
+# %%
+def plot_residuals_by_month(cv_predictions):
+    """Plot the average residuals per month of the year, one line and IQR band per CV fold."""
+    all_iqr_bands = []
+    all_mean_lines = []
+
+    for i, cv_prediction in enumerate(cv_predictions):
+        # Get date range for this CV fold
+        min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
+        max_date = cv_prediction["prediction_time"].max().strftime("%Y-%m-%d")
+        fold_label = f"#{i+1} - {min_date} to {max_date}"
+
+        residuals_by_month_detailed = cv_prediction.with_columns(
+            [
+                (pl.col("load_mw") - pl.col("predicted_load_mw")).alias("residual"),
+                pl.col("prediction_time").dt.month().alias("month_of_year"),
+            ]
+        )
+
+        # Calculate statistics for this CV fold
+        residuals_stats = (
+            residuals_by_month_detailed.group_by("month_of_year")
+            .agg(
+                [
+                    pl.col("residual").mean().alias("mean_residual"),
+                    pl.col("residual").quantile(0.25).alias("q25_residual"),
+                    pl.col("residual").quantile(0.75).alias("q75_residual"),
+                ]
+            )
+            .sort("month_of_year")
+            .with_columns(pl.lit(fold_label).alias("fold"))
+        )
+
+        # Create IQR band for this CV fold
+        iqr_band = (
+            altair.Chart(residuals_stats)
+            .mark_area(opacity=0.15)
+            .encode(
+                x=altair.X("month_of_year:O", title="Month of year"),
+                y=altair.Y("q25_residual:Q"),
+                y2=altair.Y2("q75_residual:Q"),
+                tooltip=[
+                    "month_of_year:O",
+                    "fold:N",
+                    "q25_residual:Q",
+                    "q75_residual:Q",
+                ],
+            )
+        )
+
+        # Create mean line for this CV fold
+        mean_line = (
+            altair.Chart(residuals_stats)
+            .mark_line(tooltip=True, point=True, opacity=0.8)
+            .encode(
+                x=altair.X("month_of_year:O", title="Month of year"),
+                y=altair.Y("mean_residual:Q", title="Mean residual (MW)"),
+                color=altair.Color("fold:N", legend=altair.Legend(title="CV Fold")),
+            )
+        )
+
+        all_iqr_bands.append(iqr_band)
+        all_mean_lines.append(mean_line)
+
+    # Combine all IQR bands
+    combined_iqr = all_iqr_bands[0]
+    for band in all_iqr_bands[1:]:
+        combined_iqr += band
+
+    # Combine all mean lines
+    combined_lines = all_mean_lines[0]
+    for line in all_mean_lines[1:]:
+        combined_lines += line
+
+    # Layer the IQR bands behind the mean lines
+    return (combined_iqr + combined_lines).properties(
+        title="Residuals by month of the year from cross-validation predictions"
+    )
+
+
+plot_residuals_by_month(cv_predictions).interactive()
 
 # %%
 ts_cv_2 = TimeSeriesSplit(
