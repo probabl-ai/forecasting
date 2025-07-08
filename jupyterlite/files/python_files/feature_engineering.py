@@ -504,12 +504,13 @@ predictions = features.skb.apply(
                 "future_24h": s.glob("*_future_24h"),
                 "non_paris_weather": s.glob("weather_*") & ~s.glob("weather_*_paris_*"),
             },
-            name="dropped_features",
+            name="dropped_cols",
         )
     )
 ).skb.apply(
     HistGradientBoostingRegressor(
         random_state=0,
+        loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
         learning_rate=skrub.choose_float(
             0.01, 1, default=0.1, log=True, name="learning_rate"
         ),
@@ -587,7 +588,6 @@ cv_results.round(3)
 
 # %%
 def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
-
     index_generator = cv_splitter.split(prediction_time.skb.eval())
 
     def splitter(X, y, index_generator):
@@ -597,7 +597,6 @@ def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time)
         return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
 
     results = []
-
     for (_, test_idx), pipeline in zip(
         cv_splitter.split(prediction_time.skb.eval()), pipelines
     ):
@@ -823,7 +822,7 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
                     "fold:N",
                     legend=altair.Legend(title=None),
                 ),
-                detail= altair.Detail("fold:N")
+                detail=altair.Detail("fold:N"),
             )
         )
     return chart.resolve_scale(color="independent")
@@ -848,7 +847,7 @@ def plot_residuals_by_hour(cv_predictions):
 
         residuals_by_hour_detailed = cv_prediction.with_columns(
             [
-                (pl.col("load_mw") - pl.col("predicted_load_mw")).alias("residual"),
+                (pl.col("predicted_load_mw") - pl.col("load_mw")).alias("residual"),
                 pl.col("prediction_time").dt.hour().alias("hour_of_day"),
             ]
         )
@@ -925,7 +924,7 @@ def plot_residuals_by_month(cv_predictions):
 
         residuals_by_month_detailed = cv_prediction.with_columns(
             [
-                (pl.col("load_mw") - pl.col("predicted_load_mw")).alias("residual"),
+                (pl.col("predicted_load_mw") - pl.col("load_mw")).alias("residual"),
                 pl.col("prediction_time").dt.month().alias("month_of_year"),
             ]
         )
