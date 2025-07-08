@@ -1,16 +1,17 @@
 # %% [markdown]
 # # Feature engineering for electricity load forecasting
 #
-# The purpose of this notebook is to demonstrate how to use `skrub` and `polars`
-# to perform feature engineering for electricity load forecasting.
+# The purpose of this notebook is to demonstrate how to use `skrub` and
+# `polars` to perform feature engineering for electricity load forecasting.
 #
-# We will build a set of features from different sources:
+# We will build a set of features (and targets) from different data sources:
 #
 # - Historical weather data for 10 medium to large urban areas in France;
-# - Holidays and calendar features for France;
+# - Holidays and standard calendar features for France;
 # - Historical electricity load data for the whole of France.
 #
-# All these data sources cover a time range from March 23, 2021 to May 31, 2025.
+# All these data sources cover a time range from March 23, 2021 to May 31,
+# 2025.
 #
 # Since our maximum forecasting horizon is 24 hours, we consider that the
 # future weather data is known at a chosen prediction time. Similarly, the
@@ -20,20 +21,29 @@
 # Therefore, features derived from the weather and calendar data can be used to
 # engineer "future covariates". Since the load data is our prediction target,
 # we will can also use it to engineer "past covariates" such as lagged features
-# and rolling aggregations.
+# and rolling aggregations. The future values of the load data (with respect to
+# the prediction time) are used as targets for the forecasting model.
 #
 # ## Environment setup
 #
-# We need to install some extra dependencies for this notebook if needed (when running
-# jupyterlite). We need the development version of skrub to be able to use the
-# skrub expressions.
+# We need to install some extra dependencies for this notebook if needed (when
+# running jupyterlite). We need the development version of skrub to be able to
+# use the skrub expressions.
+
 # %%
 # %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
 # %pip install -q https://pypi.anaconda.org/ogrisel/simple/skrub/0.6.dev0/skrub-0.6.dev0-py3-none-any.whl
 # %pip install -q altair holidays plotly nbformat
+
+# %% [markdown]
+#
+# The following 3 imports are only needed to workaround some limitations when
+# using polars in a pyodide/jupyterlite notebook.
+#
+# TODO: remove those workarounds once pyodide 0.28 is released with support for
+# the latest polars version.
+
 # %%
-# The following 3 imports are only needed to workaround some limitations
-# when using polars in a pyodide/jupyterlite notebook.
 import tzdata  # noqa: F401
 import pandas as pd
 from pyarrow.parquet import read_table
@@ -51,16 +61,23 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 
 # %% [markdown]
-# ## Time range
+# ## Shared time range for all historical data sources
 #
 # Let's define a hourly time range from March 23, 2021 to May 31, 2025 that
 # will be used to join the electricity load data and the weather data. The time
 # range is in UTC timezone to avoid any ambiguity when joining with the weather
 # data that is also in UTC.
 #
-# We wrap the polars dataframe in a skrub variable to benefit from the
-# built-in TableReport display in the notebook. Using the skrub expression
-# system will also be useful later.
+# We wrap the resulting polars dataframe in a `skrub` expression to benefit
+# from the built-in `skrub.TableReport` display in the notebook. Using the
+# `skrub` expression system will also be useful for other reasons: all
+# operations in this notebook chain operations chained together in a directed
+# acyclic graph that is automatically tracked by `skrub`. This allows us to
+# extract the resulting pipeline and apply it to new data later on, exactly
+# like a trained scikit-learn pipeline. The main difference is that we do so
+# incrementally and while eagerly executing and inspecting the results of each
+# step as is customary when working with dataframe libraries such as polars and
+# pandas in Jupyter notebooks.
 
 # %%
 historical_data_start_time = skrub.var(
@@ -95,10 +112,16 @@ time
 
 # %% [markdown]
 #
-# To avoid network issues when running this notebook, the necessary data
-# files have already been downloaded and saved in the `datasets` folder.
-# See the README.md file for instructions to download the data manually
-# if you want to re-run this notebook with more recent data.
+# If you run the above locally with pydot and graphviz installed, you can
+# visualize the expression graph of the `time` variable by expanding the "Show
+# graph" button.
+#
+# Let's now load the data records for the time range defined above.
+#
+# To avoid network issues when running this notebook, the necessary data files
+# have already been downloaded and saved in the `datasets` folder. See the
+# README.md file for instructions to download the data manually if you want to
+# re-run this notebook with more recent data.
 
 # %%
 data_source_folder = skrub.var("data_source_folder", Path("../datasets"))
@@ -108,9 +131,9 @@ for data_file in sorted(data_source_folder.skb.eval().iterdir()):
 
 # %% [markdown]
 #
-# List of 10 medium to large urban areas to approximately cover most regions in
-# France with a slight focus on most populated regions that are likely to drive
-# electricity demand.
+# We define a list of 10 medium to large urban areas to approximately cover
+# most regions in France with a slight focus on most populated regions that are
+# likely to drive electricity demand.
 
 # %%
 city_names = skrub.var(
@@ -162,7 +185,10 @@ all_city_weather
 # French timezone.
 #
 # Similarly for the calendar features: all the time features are extracted from
-# the time in the French timezone.
+# the time in the French timezone, since it is likely that electricity usage
+# patterns are influenced by inhabitants' daily routines aligned with the local
+# timezone.
+
 # %%
 @skrub.deferred
 def prepare_french_calendar_data(time):
@@ -463,29 +489,54 @@ features = build_features(
 
 features
 
-# %%
-horizons = range(1, 25)  # Forecasting horizons from 1 to 24 hours
-horizon_of_interest = horizons[-1]  # Focus on the 24-hour horizon
+# %% [markdown]
+#
+# Let's build training and evaluation targets for all possible horizons from 1
+# to 24 hours.
 
+# %%
+horizons = range(1, 25)
 target_column_name_pattern = "load_mw_horizon_{horizon}h"
 
-targets = prediction_time.join(
-    electricity.with_columns(
-        [
-            pl.col("load_mw")
-            .shift(-h)
-            .alias(target_column_name_pattern.format(horizon=h))
-            for h in horizons
-        ]
-    ),
-    left_on="prediction_time",
-    right_on="time",
-)
+@skrub.deferred
+def build_targets(prediction_time, electricity, horizons):
+    return prediction_time.join(
+        electricity.with_columns(
+            [
+                pl.col("load_mw")
+                .shift(-h)
+                .alias(target_column_name_pattern.format(horizon=h))
+                for h in horizons
+            ]
+        ),
+        left_on="prediction_time",
+        right_on="time",
+    )
 
+targets = build_targets(prediction_time, electricity, horizons)
+targets
+
+
+# %% [markdown]
+# For now, let's focus on the last horizon (24 hours) to train a model
+# predicting the electricity load at the next 24 hours.
 # %%
+horizon_of_interest = horizons[-1]  # Focus on the 24-hour horizon
 target_column_name = target_column_name_pattern.format(horizon=horizon_of_interest)
 predicted_target_column_name = "predicted_" + target_column_name
 target = targets[target_column_name].skb.mark_as_y()
+target
+
+# %% [markdown]
+#
+# Let's define our first single output prediction pipeline. This pipeline
+# chains our previous feature engineering steps with a `skrub.DropCols` step to
+# drop some columns that we do not want to use as features, and a
+# `HistGradientBoostingRegressor` model from scikit-learn.
+#
+# The `skrub.choose_from`, `skrub.choose_float`, and `skrub.choose_int`
+# functions are used to define hyperparameters that can be tuned via
+# cross-validated randomized search.
 
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
@@ -514,7 +565,7 @@ features_with_dropped_cols = features.skb.apply(
     )
 )
 
-predictions = features_with_dropped_cols.skb.apply(
+hgbr_predictions = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(
         random_state=0,
         loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
@@ -527,14 +578,54 @@ predictions = features_with_dropped_cols.skb.apply(
     ),
     y=target,
 )
-predictions
+hgbr_predictions
+
+# %% [markdown]
+#
+# The `predictions` expression captures the whole expression graph that
+# includes the feature engineering steps, the target variable, and the model
+# training step.
+#
+# In particular, the input data keys for the full pipeline can be
+# inspected as follows:
+
+# %%
+hgbr_predictions.skb.get_data().keys()
+
+# %% [markdown]
+#
+# Furthermore, the hyper-parameters of the full pipeline can be retrieved as
+# follows:
+
+# %%
+hgbr_pipeline = hgbr_predictions.skb.get_pipeline()
+hgbr_pipeline.describe_params()
+
+# %% [markdown]
+#
+# When running this notebook locally, you can also interactively inspect all
+# the steps of the DAG using the following (once uncommented):
+
+# %%
+# predictions.skb.full_report()
+
+# %% [markdown]
+#
+# Since we passed input values to all the upstream `skrub` variables, `skrub`
+# automatically evaluates the whole expression graph graph (train and predict
+# on the same data) so that we can interactively check that everything will
+# work as expected.
+#
+# Let's use altair to visualize the predictions against the target values for
+# the last 24 hours of the prediction time range used to train the model. This
+# allows us can (over)fit the data with the features at hand.
 
 # %%
 altair.Chart(
     pl.concat(
         [
             targets.skb.eval(),
-            predictions.rename(
+            hgbr_predictions.rename(
                 {target_column_name: predicted_target_column_name}
             ).skb.eval(),
         ],
@@ -548,6 +639,17 @@ altair.Chart(
     x="prediction_time:T", y="value:Q", color="key:N"
 ).interactive()
 
+# %% [markdown]
+#
+# ## Assessing the model performance via cross-validation
+#
+# Being able to fit the training data is not enough. We need to assess the
+# ability of the training pipeline to learn a predictive model that can
+# generalize to unseen data.
+#
+# Furthermore, we want to assess the uncertainty of this estimate of the
+# generalization performance via time-based cross-validation, also known as
+# backtesting.
 
 # %%
 from sklearn.model_selection import TimeSeriesSplit
@@ -572,23 +674,21 @@ for cv_idx, (train_idx, test_idx) in enumerate(
     )
     print(f"Train time range: {train_datetimes[0, 0]} to " f"{train_datetimes[-1, 0]} ")
     print(f"Test time range: {test_datetimes[0, 0]} to " f"{test_datetimes[-1, 0]} ")
+    print()
 
 # %%
 from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_scorer
 from sklearn.metrics import d2_tweedie_score
 
 
-mape_scorer = make_scorer(mean_absolute_percentage_error)
-poisson_scorer = make_scorer(d2_tweedie_score, power=1.0)
-gamma_scorer = make_scorer(d2_tweedie_score, power=2.0)
-
-cv_results = predictions.skb.cross_validate(
+cv_results = hgbr_predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring={
         "r2": get_scorer("r2"),
-        "d2_poisson": poisson_scorer,
-        "d2_gamma": gamma_scorer,
-        "mape": mape_scorer,
+        "d2_poisson": make_scorer(mean_absolute_percentage_error),
+        "d2_gamma": make_scorer(d2_tweedie_score, power=1.0),
+        "mape": make_scorer(d2_tweedie_score, power=2.0)
+,
     },
     return_train_score=True,
     return_pipeline=True,
@@ -631,7 +731,7 @@ def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time)
 
 # %%
 cv_predictions = collect_cv_predictions(
-    cv_results["pipeline"], ts_cv_5, predictions, prediction_time
+    cv_results["pipeline"], ts_cv_5, hgbr_predictions, prediction_time
 )
 cv_predictions[0]
 
@@ -1006,7 +1106,7 @@ plot_residuals_by_month(cv_predictions).interactive()
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-randomized_search = predictions.skb.get_randomized_search(
+randomized_search = hgbr_predictions.skb.get_randomized_search(
     cv=ts_cv_2,
     scoring="r2",
     n_iter=100,
@@ -1027,7 +1127,7 @@ randomized_search.plot_results().update_layout(margin=dict(l=150))
 #     cv=ts_cv_5,
 #     scoring={
 #         "r2": get_scorer("r2"),
-#         "mape": mape_scorer,
+#         "mape": make_scorer(mean_absolute_percentage_error),
 #     },
 #     n_jobs=-1,
 #     return_pipeline=True,
@@ -1104,7 +1204,7 @@ nested_cv_results = skrub.cross_validate(
     cv=ts_cv_5,
     scoring={
         "r2": get_scorer("r2"),
-        "mape": mape_scorer,
+        "mape": make_scorer(mean_absolute_percentage_error),
     },
     n_jobs=-1,
     return_pipeline=True,
