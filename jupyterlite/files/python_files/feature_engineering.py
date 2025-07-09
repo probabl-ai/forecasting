@@ -750,8 +750,6 @@ def collect_cv_predictions(
     cv_splitter,
     predictions,
     prediction_time,
-    method_name="predict",
-    method_kwargs=None,
 ):
     index_generator = cv_splitter.split(prediction_time.skb.eval())
 
@@ -762,13 +760,10 @@ def collect_cv_predictions(
         return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
 
     results = []
-    if method_kwargs is None:
-        method_kwargs = {}
 
     for (_, test_idx), pipeline in zip(
         cv_splitter.split(prediction_time.skb.eval()), pipelines
     ):
-        method = getattr(pipeline, method_name)
         split = predictions.skb.train_test_split(
             predictions.skb.get_data(),
             splitter=splitter,
@@ -779,7 +774,7 @@ def collect_cv_predictions(
                 {
                     "prediction_time": prediction_time.skb.eval()[test_idx],
                     "load_mw": split["y_test"],
-                    "predicted_load_mw": method(split["test"], **method_kwargs),
+                    "predicted_load_mw": pipeline.predict(split["test"]),
                 }
             )
         )
@@ -1306,9 +1301,9 @@ from sklearn.metrics import d2_pinball_score
 scoring = {
     "r2": get_scorer("r2"),
     "mape": make_scorer(mean_absolute_percentage_error),
-    "d2_pinball_05_loss": make_scorer(d2_pinball_score, alpha=0.05),
-    "d2_pinball_50_loss": make_scorer(d2_pinball_score, alpha=0.5),
-    "d2_pinball_95_loss": make_scorer(d2_pinball_score, alpha=0.95),
+    "d2_pinball_05": make_scorer(d2_pinball_score, alpha=0.05),
+    "d2_pinball_50": make_scorer(d2_pinball_score, alpha=0.50),
+    "d2_pinball_95": make_scorer(d2_pinball_score, alpha=0.95),
 }
 
 # %%
@@ -1492,7 +1487,6 @@ def mean_width(y_true, y_quantile_low, y_quantile_high):
     return float(np.abs(y_quantile_high - y_quantile_low).mean().round(1))
 
 
-
 # %%
 coverage(
     cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
@@ -1573,6 +1567,24 @@ plot_reliability_diagram(
 # Ideally, the classifier should be efficient when trained on a large number of
 # classes (induced by the number of bins). Therefore we use a Random Forest
 # classifier as the default base estimator.
+#
+# There are several advantages to this approach:
+# - a single model is trained and can jointly estimate quantiles for all
+#   quantile levels (assuming a well tuned number of bins);
+# - the quantile levels can be chosen at prediction time, which allows for a
+#   flexible quantile regression model;
+# - in practice, the resulting predictions are often reasonably well calibrated
+#   as we will see in the reliability diagrams below.
+#
+# One possible drawback is that current implementations of gradient boosting
+# models tend to be very slow to train with a large number of classes. Random
+# Forests are much more efficient in this case, but they do not always provide
+# the best predictive performance. It could be the case that combining this
+# approach with tabular neural networks can lead to competitive results.
+#
+# However, the current scikit-learn API is not expressive enough to to handle
+# the output shape of the quantile prediction function. We therefore cannot
+# make it fit into a skrub pipeline.
 
 # %%
 from scipy.interpolate import interp1d
@@ -1650,40 +1662,107 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
         return np.asarray([interp1d(y_cdf_i, edges)(quantiles) for y_cdf_i in y_cdf])
 
     def predict(self, X):
-        return self.predict_quantiles(X, self.quantile).ravel()
+        return self.predict_quantiles(X, quantiles=(self.quantile,)).ravel()
 
 
 # %%
-from sklearn.ensemble import HistGradientBoostingClassifier
-from threadpoolctl import threadpool_limits
-
-
-# with threadpool_limits(1):
-if True:
-    predictions_bqr = features_with_dropped_cols.skb.apply(
-        BinnedQuantileRegressor(
-            RandomForestClassifier(
-                n_jobs=-1, n_estimators=200, min_samples_leaf=5, random_state=0
-            ),
-            # HistGradientBoostingClassifier(random_state=0),
-            n_bins=30,
-        ),
-        y=target,
-    )
+quantiles = (0.05, 0.5, 0.95)
+bqr = BinnedQuantileRegressor(
+    RandomForestClassifier(
+        n_estimators=300,
+        min_samples_leaf=5,
+        max_features=0.2,
+        n_jobs=-1,
+        random_state=0,
+    ),
+    n_bins=30,
+)
+bqr
 
 # %%
-predictions_bqr
+from sklearn.model_selection import cross_validate
 
-# %%
-cv_results_bqr = predictions_bqr.skb.cross_validate(
+X, y = features_with_dropped_cols.skb.eval(), target.skb.eval()
+
+cv_results_bqr = cross_validate(
+    bqr,
+    X,
+    y,
     cv=ts_cv_5,
     scoring={
-        "d2_pinball": make_scorer(d2_pinball_score, alpha=0.5),
-        "MAPE": make_scorer(mean_absolute_percentage_error),
+        "d2_pinball_50": make_scorer(d2_pinball_score, alpha=0.5),
     },
-    return_pipeline=True,
+    return_estimator=True,
+    return_indices=True,
     verbose=1,
     n_jobs=-1,
 )
-cv_results_bqr
+
 # %%
+cv_predictions_bqr_all = [
+    cv_predictions_bqr_05 := [],
+    cv_predictions_bqr_50 := [],
+    cv_predictions_bqr_95 := [],
+]
+for fold_ix, (qreg, test_idx) in enumerate(
+    zip(cv_results_bqr["estimator"], cv_results_bqr["indices"]["test"])
+):
+    print(f"CV iteration #{fold_ix}")
+    print(f"Test set size: {test_idx.shape[0]} rows")
+    print(
+        f"Test time range: {prediction_time.skb.eval()[test_idx][0, 0]} to "
+        f"{prediction_time.skb.eval()[test_idx][-1, 0]} "
+    )
+    y_pred_all_quantiles = qreg.predict_quantiles(X[test_idx], quantiles=quantiles)
+
+    coverage_score = coverage(
+        y[test_idx],
+        y_pred_all_quantiles[:, 0],
+        y_pred_all_quantiles[:, 2],
+    )
+    print(f"Coverage: {coverage_score:.3f}")
+
+    mean_width_score = mean_width(
+        y[test_idx],
+        y_pred_all_quantiles[:, 0],
+        y_pred_all_quantiles[:, 2],
+    )
+    print(f"Mean prediction interval width: " f"{mean_width_score:.1f} MW")
+
+    for q_idx, (quantile, predictions) in enumerate(
+        zip(quantiles, cv_predictions_bqr_all)
+    ):
+        observed = y[test_idx]
+        predicted = y_pred_all_quantiles[:, q_idx]
+        predictions.append(
+            pl.DataFrame(
+                {
+                    "prediction_time": prediction_time.skb.eval()[test_idx],
+                    "load_mw": observed,
+                    "predicted_load_mw": predicted,
+                }
+            )
+        )
+        print(f"d2_pinball score: {d2_pinball_score(observed, predicted):.3f}")
+    print()
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_bqr_50, kind="quantile", quantile_level=0.50
+).interactive().properties(
+    title="Reliability diagram for quantile 0.50 from cross-validation predictions"
+)
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_bqr_05, kind="quantile", quantile_level=0.05
+).interactive().properties(
+    title="Reliability diagram for quantile 0.05 from cross-validation predictions"
+)
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_bqr_95, kind="quantile", quantile_level=0.95
+).interactive().properties(
+    title="Reliability diagram for quantile 0.95 from cross-validation predictions"
+)
