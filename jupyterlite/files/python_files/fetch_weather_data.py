@@ -1,6 +1,6 @@
 # %% [markdown]
 # # Historical weather data download from open-meteo.com
-# 
+#
 # This notebook downloads historical weather data for 10 medium to large urban
 # areas in France from the Open Meteo Historical Forecast API. The data is
 # saved in a Parquet file in the `datasets` folder.
@@ -27,7 +27,7 @@ from retry_requests import retry
 # List of 10 medium to large urban areas with their GPS coordinates to cover
 # most regions in France with a slight focus on most populated regions that
 # are likely to drive electricity demand.
-# 
+#
 # The coordinates were suggested by Mistral's Le Chat. So better check on a map
 # if they are correct.
 
