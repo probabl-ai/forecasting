@@ -1531,7 +1531,7 @@ plt.tight_layout()
 
 # %% [markdown]
 #
-# ## Reliability diagrams for quantile regression
+# ## Reliability diagrams and Lorenz curves for quantile regression
 
 # %%
 plot_reliability_diagram(
@@ -1553,6 +1553,22 @@ plot_reliability_diagram(
 ).interactive().properties(
     title="Reliability diagram for quantile 0.95 from cross-validation predictions"
 )
+
+# %%
+plot_lorenz_curve(cv_predictions_hgbr_50).interactive().properties(
+    title="Lorenz curve for quantile 0.50 from cross-validation predictions"
+)
+
+# %%
+plot_lorenz_curve(cv_predictions_hgbr_05).interactive().properties(
+    title="Lorenz curve for quantile 0.05 from cross-validation predictions"
+)
+
+# %%
+plot_lorenz_curve(cv_predictions_hgbr_95).interactive().properties(
+    title="Lorenz curve for quantile 0.95 from cross-validation predictions"
+)
+
 
 # %% [markdown]
 #
@@ -1746,6 +1762,9 @@ for fold_ix, (qreg, test_idx) in enumerate(
         print(f"d2_pinball score: {d2_pinball_score(observed, predicted):.3f}")
     print()
 
+# %% [markdown
+# Let's assess the calibration of the quantile regression model:
+
 # %%
 plot_reliability_diagram(
     cv_predictions_bqr_50, kind="quantile", quantile_level=0.50
@@ -1765,4 +1784,24 @@ plot_reliability_diagram(
     cv_predictions_bqr_95, kind="quantile", quantile_level=0.95
 ).interactive().properties(
     title="Reliability diagram for quantile 0.95 from cross-validation predictions"
+)
+
+# %% [markdown]
+#
+# We can complement this assessment with the Lorenz curves, which only assess
+# the ranking power of the predictions, irrespective of their absolute values.
+
+# %%
+plot_lorenz_curve(cv_predictions_bqr_50).interactive().properties(
+    title="Lorenz curve for quantile 0.50 from cross-validation predictions"
+)
+
+# %%
+plot_lorenz_curve(cv_predictions_bqr_05).interactive().properties(
+    title="Lorenz curve for quantile 0.05 from cross-validation predictions"
+)
+
+# %%
+plot_lorenz_curve(cv_predictions_bqr_95).interactive().properties(
+    title="Lorenz curve for quantile 0.95 from cross-validation predictions"
 )
