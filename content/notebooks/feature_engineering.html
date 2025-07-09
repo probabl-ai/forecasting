@@ -387,7 +387,11 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#remark-lagged-features-engineering-and-system-lag">Remark lagged features engineering and system lag</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#investigating-outliers-in-the-lagged-features">Investigating outliers in the lagged features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#final-dataset">Final dataset</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#assessing-the-model-performance-via-cross-validation">Assessing the model performance via cross-validation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#assessing-the-model-performance-via-cross-validation">Assessing the model performance via cross-validation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exercise-non-linear-feature-engineering-coupled-with-linear-predictive-model">Exercise: non-linear feature engineering coupled with linear predictive model</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#predicting-multiple-horizons-with-a-multi-output-model">Predicting multiple horizons with a multi-output model</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reliability-diagram-for-quantile-regression">Reliability diagram for quantile regression</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quantile-regression-as-classification">Quantile regression as classification</a></li>
 </ul>
@@ -1359,31 +1363,103 @@ backtesting.</p>
 </div>
 </div>
 </div>
+<section id="exercise-non-linear-feature-engineering-coupled-with-linear-predictive-model">
+<h3>Exercise: non-linear feature engineering coupled with linear predictive model<a class="headerlink" href="#exercise-non-linear-feature-engineering-coupled-with-linear-predictive-model" title="Link to this heading">#</a></h3>
+<p>Now, it is your turn to make a predictive model. Towards this end, we request you
+to preprocess the input features with non-linear feature engineering:</p>
+<ul class="simple">
+<li><p>the first step is to impute the missing values using a <code class="docutils literal notranslate"><span class="pre">SimpleImputer</span></code>. Make sure
+to include the indicator of missing values in the feature set (i.e. look at the
+<code class="docutils literal notranslate"><span class="pre">add_indicator</span></code> parameter);</p></li>
+<li><p>use a <code class="docutils literal notranslate"><span class="pre">SplineTransformer</span></code> to create non-linear features. Use the default parameters
+but make sure to set <code class="docutils literal notranslate"><span class="pre">sparse_output=True</span></code> since it subsequent processing will be
+faster and more memory efficient with such data structure;</p></li>
+<li><p>use a <code class="docutils literal notranslate"><span class="pre">VarianceThreshold</span></code> to remove features with potential constant features;</p></li>
+<li><p>use a <code class="docutils literal notranslate"><span class="pre">SelectKBest</span></code> to select the most informative features. Set <code class="docutils literal notranslate"><span class="pre">k</span></code> to be chosen
+from a log-uniform distribution between 100 and 1,000 (i.e. use <code class="docutils literal notranslate"><span class="pre">skrub.choose_int</span></code>);</p></li>
+<li><p>use a <code class="docutils literal notranslate"><span class="pre">Nystroem</span></code> to approximate an RBF kernel. Set <code class="docutils literal notranslate"><span class="pre">n_components</span></code> to be chosen
+from a log-uniform distribution between 10 and 200 (i.e. use <code class="docutils literal notranslate"><span class="pre">skrub.choose_int</span></code>).</p></li>
+<li><p>finally, use a <code class="docutils literal notranslate"><span class="pre">Ridge</span></code> as the final predictive model. Set <code class="docutils literal notranslate"><span class="pre">alpha</span></code> to be
+chosen from a log-uniform distribution between 1e-6 and 1e3 (i.e. use
+<code class="docutils literal notranslate"><span class="pre">skrub.choose_float</span></code>).</p></li>
+</ul>
+<p>Use a scikit-learn <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> using <code class="docutils literal notranslate"><span class="pre">make_pipeline</span></code> to chain the steps together.</p>
+<p>Once the predictive model is defined, apply it on the <code class="docutils literal notranslate"><span class="pre">feature_with_dropped_cols</span></code>
+expression. Do not forget to define that <code class="docutils literal notranslate"><span class="pre">target</span></code> is the <code class="docutils literal notranslate"><span class="pre">y</span></code> variable.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># TODO: Exercise applying a linear model with some additional feature engineering</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Here we provide all the imports for creating the predictive model.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.feature_selection</span><span class="w"> </span><span class="kn">import</span> <span class="n">SelectKBest</span><span class="p">,</span> <span class="n">VarianceThreshold</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.impute</span><span class="w"> </span><span class="kn">import</span> <span class="n">SimpleImputer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.linear_model</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ridge</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.kernel_approximation</span><span class="w"> </span><span class="kn">import</span> <span class="n">Nystroem</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.pipeline</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_pipeline</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.preprocessing</span><span class="w"> </span><span class="kn">import</span> <span class="n">SplineTransformer</span>
-
-<span class="n">model</span> <span class="o">=</span> <span class="n">make_pipeline</span><span class="p">(</span>
-    <span class="n">SimpleImputer</span><span class="p">(</span><span class="n">add_indicator</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-    <span class="n">SplineTransformer</span><span class="p">(</span><span class="n">sparse_output</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
-    <span class="n">VarianceThreshold</span><span class="p">(</span><span class="n">threshold</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span>
-    <span class="n">SelectKBest</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">choose_int</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">1_000</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;n_selected_splines&quot;</span><span class="p">)),</span>
-    <span class="n">Nystroem</span><span class="p">(</span>
-        <span class="n">n_components</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">choose_int</span><span class="p">(</span>
-            <span class="mi">10</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;n_components&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">150</span>
-        <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Write your code here.</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">predictions_ridge</span> <span class="o">=</span> <span class="n">features_with_dropped_cols</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+    <span class="n">make_pipeline</span><span class="p">(</span>
+        <span class="n">SimpleImputer</span><span class="p">(</span><span class="n">add_indicator</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+        <span class="n">SplineTransformer</span><span class="p">(</span><span class="n">sparse_output</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+        <span class="n">VarianceThreshold</span><span class="p">(</span><span class="n">threshold</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span>
+        <span class="n">SelectKBest</span><span class="p">(</span>
+            <span class="n">k</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">choose_int</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">1_000</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;n_selected_splines&quot;</span><span class="p">)</span>
+        <span class="p">),</span>
+        <span class="n">Nystroem</span><span class="p">(</span>
+            <span class="n">n_components</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">choose_int</span><span class="p">(</span>
+                <span class="mi">10</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;n_components&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">150</span>
+            <span class="p">)</span>
+        <span class="p">),</span>
+        <span class="n">Ridge</span><span class="p">(</span>
+            <span class="n">alpha</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">choose_float</span><span class="p">(</span><span class="mf">1e-6</span><span class="p">,</span> <span class="mf">1e3</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">)</span>
+        <span class="p">),</span>
     <span class="p">),</span>
-    <span class="n">Ridge</span><span class="p">(</span><span class="n">alpha</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">choose_float</span><span class="p">(</span><span class="mf">1e-6</span><span class="p">,</span> <span class="mf">1e3</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;alpha&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1e-2</span><span class="p">)),</span>
+    <span class="n">y</span><span class="o">=</span><span class="n">target</span><span class="p">,</span>
 <span class="p">)</span>
-
-<span class="n">predictions_ridge</span> <span class="o">=</span> <span class="n">features_with_dropped_cols</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="n">target</span><span class="p">)</span>
 <span class="n">predictions_ridge</span>
+</pre></div>
+</div>
+</div>
+</div>
+<p>Now that you defined the predictive model, let’s make a similar analysis than earlier.
+First, let’s make a sanity check that plot forecast of our model on a subset of the
+training data to make a sanity check.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Write your code here.</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
 </pre></div>
 </div>
 </div>
@@ -1411,6 +1487,30 @@ backtesting.</p>
 </div>
 </div>
 </div>
+<p>Now, let’s evaluate the performance of the model using cross-validation. Use the
+time-based cross-validation splitter <code class="docutils literal notranslate"><span class="pre">ts_cv_5</span></code> defined earlier. Make sure to compute
+the R2 score and the mean absolute percentage error. Return the training scores as
+well as the fitted pipeline such that we can make additional analysis.</p>
+<p>Does this model perform better or worse than the previous model?
+Is it underfitting or overfitting?</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Write your code here.</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+</pre></div>
+</div>
+</div>
+</div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_ridge</span> <span class="o">=</span> <span class="n">predictions_ridge</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">cross_validate</span><span class="p">(</span>
@@ -1424,6 +1524,28 @@ backtesting.</p>
     <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
     <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
 <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<p>Call all cross-validated predictions to plot the Lorenz curve and the reliability
+diagram. Call the function <code class="docutils literal notranslate"><span class="pre">collect_cv_predictions</span></code> to collect the predictions and
+then call the <code class="docutils literal notranslate"><span class="pre">plot_lorenz_curve</span></code> and <code class="docutils literal notranslate"><span class="pre">plot_reliability_diagram</span></code> functions to plot
+the results.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Write your code here.</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
 </pre></div>
 </div>
 </div>
@@ -1449,6 +1571,29 @@ backtesting.</p>
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_reliability_diagram</span><span class="p">(</span><span class="n">cv_predictions_ridge</span><span class="p">)</span><span class="o">.</span><span class="n">interactive</span><span class="p">()</span><span class="o">.</span><span class="n">properties</span><span class="p">(</span>
     <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Reliability diagram from cross-validation predictions&quot;</span>
 <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<p>Now, you can perform a randomized search on the hyper-parameters of the model.
+Use the <code class="docutils literal notranslate"><span class="pre">ts_cv_2</span></code> splitter defined earlier. This search is quite computationally
+expensive, so feel free to reduce the number of iterations but doing at least 100
+iterations is nice to have an overview of the impact of the hyper-parameters.
+Use <code class="docutils literal notranslate"><span class="pre">plot_results</span></code> to show the parallel coordinates plot of the results.</p>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Write your code here.</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
+<span class="c1">#</span>
 </pre></div>
 </div>
 </div>
@@ -1506,6 +1651,10 @@ computationally expensive.</p>
 </div>
 </div>
 </div>
+</section>
+</section>
+<section id="predicting-multiple-horizons-with-a-multi-output-model">
+<h2>Predicting multiple horizons with a multi-output model<a class="headerlink" href="#predicting-multiple-horizons-with-a-multi-output-model" title="Link to this heading">#</a></h2>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.multioutput</span><span class="w"> </span><span class="kn">import</span> <span class="n">MultiOutputRegressor</span>
@@ -1822,27 +1971,27 @@ computationally expensive.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_hgbr_05</span><span class="p">[[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cv_results_hgbr_05</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">)]]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span>
-    <span class="n">axis</span><span class="o">=</span><span class="mi">0</span>
-<span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_hgbr_05</span><span class="p">[</span>
+    <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cv_results_hgbr_05</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">)]</span>
+<span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_hgbr_50</span><span class="p">[[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cv_results_hgbr_50</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">)]]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span>
-    <span class="n">axis</span><span class="o">=</span><span class="mi">0</span>
-<span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_hgbr_50</span><span class="p">[</span>
+    <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cv_results_hgbr_50</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">)]</span>
+<span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_hgbr_95</span><span class="p">[[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cv_results_hgbr_95</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">)]]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span>
-    <span class="n">axis</span><span class="o">=</span><span class="mi">0</span>
-<span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_hgbr_95</span><span class="p">[</span>
+    <span class="p">[</span><span class="n">col</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="n">cv_results_hgbr_95</span><span class="o">.</span><span class="n">columns</span> <span class="k">if</span> <span class="n">col</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;test_&quot;</span><span class="p">)]</span>
+<span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -2342,7 +2491,11 @@ classifier as the default base estimator.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#remark-lagged-features-engineering-and-system-lag">Remark lagged features engineering and system lag</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#investigating-outliers-in-the-lagged-features">Investigating outliers in the lagged features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#final-dataset">Final dataset</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#assessing-the-model-performance-via-cross-validation">Assessing the model performance via cross-validation</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#assessing-the-model-performance-via-cross-validation">Assessing the model performance via cross-validation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exercise-non-linear-feature-engineering-coupled-with-linear-predictive-model">Exercise: non-linear feature engineering coupled with linear predictive model</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#predicting-multiple-horizons-with-a-multi-output-model">Predicting multiple horizons with a multi-output model</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reliability-diagram-for-quantile-regression">Reliability diagram for quantile regression</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quantile-regression-as-classification">Quantile regression as classification</a></li>
 </ul>

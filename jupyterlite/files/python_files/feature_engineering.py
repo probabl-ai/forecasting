@@ -843,8 +843,36 @@ randomized_search_hgbr.plot_results().update_layout(margin=dict(l=150))
 #         .to_dict()
 #     )
 
+# %% [markdown]
+#
+# ### Exercise: non-linear feature engineering coupled with linear predictive model
+#
+# Now, it is your turn to make a predictive model. Towards this end, we request you
+# to preprocess the input features with non-linear feature engineering:
+#
+# - the first step is to impute the missing values using a `SimpleImputer`. Make sure
+#   to include the indicator of missing values in the feature set (i.e. look at the
+#   `add_indicator` parameter);
+# - use a `SplineTransformer` to create non-linear features. Use the default parameters
+#   but make sure to set `sparse_output=True` since it subsequent processing will be
+#   faster and more memory efficient with such data structure;
+# - use a `VarianceThreshold` to remove features with potential constant features;
+# - use a `SelectKBest` to select the most informative features. Set `k` to be chosen
+#   from a log-uniform distribution between 100 and 1,000 (i.e. use `skrub.choose_int`);
+# - use a `Nystroem` to approximate an RBF kernel. Set `n_components` to be chosen
+#   from a log-uniform distribution between 10 and 200 (i.e. use `skrub.choose_int`).
+# - finally, use a `Ridge` as the final predictive model. Set `alpha` to be
+#   chosen from a log-uniform distribution between 1e-6 and 1e3 (i.e. use
+#   `skrub.choose_float`).
+#
+# Use a scikit-learn `Pipeline` using `make_pipeline` to chain the steps together.
+#
+# Once the predictive model is defined, apply it on the `feature_with_dropped_cols`
+# expression. Do not forget to define that `target` is the `y` variable.
+
+
 # %%
-# TODO: Exercise applying a linear model with some additional feature engineering
+# Here we provide all the imports for creating the predictive model.
 from sklearn.feature_selection import SelectKBest, VarianceThreshold
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
@@ -852,21 +880,61 @@ from sklearn.kernel_approximation import Nystroem
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import SplineTransformer
 
-model = make_pipeline(
-    SimpleImputer(add_indicator=True),
-    SplineTransformer(sparse_output=True),
-    VarianceThreshold(threshold=1e-6),
-    SelectKBest(k=skrub.choose_int(100, 1_000, log=True, name="n_selected_splines")),
-    Nystroem(
-        n_components=skrub.choose_int(
-            10, 200, log=True, name="n_components", default=150
-        )
-    ),
-    Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
-)
+# %%
+# Write your code here.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
-predictions_ridge = features_with_dropped_cols.skb.apply(model, y=target)
+# %%
+predictions_ridge = features_with_dropped_cols.skb.apply(
+    make_pipeline(
+        SimpleImputer(add_indicator=True),
+        SplineTransformer(sparse_output=True),
+        VarianceThreshold(threshold=1e-6),
+        SelectKBest(
+            k=skrub.choose_int(100, 1_000, log=True, name="n_selected_splines")
+        ),
+        Nystroem(
+            n_components=skrub.choose_int(
+                10, 200, log=True, name="n_components", default=150
+            )
+        ),
+        Ridge(
+            alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)
+        ),
+    ),
+    y=target,
+)
 predictions_ridge
+
+# %% [markdown]
+#
+# Now that you defined the predictive model, let's make a similar analysis than earlier.
+# First, let's make a sanity check that plot forecast of our model on a subset of the
+# training data to make a sanity check.
+
+# %%
+# Write your code here.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 # %%
 altair.Chart(
@@ -887,6 +955,31 @@ altair.Chart(
     x="prediction_time:T", y="value:Q", color="key:N"
 ).interactive()
 
+
+# %% [markdown]
+#
+# Now, let's evaluate the performance of the model using cross-validation. Use the
+# time-based cross-validation splitter `ts_cv_5` defined earlier. Make sure to compute
+# the R2 score and the mean absolute percentage error. Return the training scores as
+# well as the fitted pipeline such that we can make additional analysis.
+#
+# Does this model perform better or worse than the previous model?
+# Is it underfitting or overfitting?
+
+# %%
+# Write your code here.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+
 # %%
 cv_results_ridge = predictions_ridge.skb.cross_validate(
     cv=ts_cv_5,
@@ -900,6 +993,26 @@ cv_results_ridge = predictions_ridge.skb.cross_validate(
     n_jobs=-1,
 )
 
+# %% [markdown]
+#
+# Call all cross-validated predictions to plot the Lorenz curve and the reliability
+# diagram. Call the function `collect_cv_predictions` to collect the predictions and
+# then call the `plot_lorenz_curve` and `plot_reliability_diagram` functions to plot
+# the results.
+
+# %%
+# Write your code here.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 # %%
 cv_predictions_ridge = collect_cv_predictions(
@@ -913,6 +1026,28 @@ plot_lorenz_curve(cv_predictions_ridge, n_samples=500).interactive()
 plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
+
+# %% [markdown]
+#
+# Now, you can perform a randomized search on the hyper-parameters of the model.
+# Use the `ts_cv_2` splitter defined earlier. This search is quite computationally
+# expensive, so feel free to reduce the number of iterations but doing at least 100
+# iterations is nice to have an overview of the impact of the hyper-parameters.
+# Use `plot_results` to show the parallel coordinates plot of the results.
+
+# %%
+# Write your code here.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 # %%
 randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
@@ -954,6 +1089,10 @@ randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
 
 # %%
 # nested_cv_results_ridge.round(3)
+
+# %% [markdown]
+#
+# ## Predicting multiple horizons with a multi-output model
 
 # %%
 from sklearn.multioutput import MultiOutputRegressor
@@ -1202,19 +1341,19 @@ cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
 )
 
 # %%
-cv_results_hgbr_05[[col for col in cv_results_hgbr_05.columns if col.startswith("test_")]].mean(
-    axis=0
-).round(3)
+cv_results_hgbr_05[
+    [col for col in cv_results_hgbr_05.columns if col.startswith("test_")]
+].mean(axis=0).round(3)
 
 # %%
-cv_results_hgbr_50[[col for col in cv_results_hgbr_50.columns if col.startswith("test_")]].mean(
-    axis=0
-).round(3)
+cv_results_hgbr_50[
+    [col for col in cv_results_hgbr_50.columns if col.startswith("test_")]
+].mean(axis=0).round(3)
 
 # %%
-cv_results_hgbr_95[[col for col in cv_results_hgbr_95.columns if col.startswith("test_")]].mean(
-    axis=0
-).round(3)
+cv_results_hgbr_95[
+    [col for col in cv_results_hgbr_95.columns if col.startswith("test_")]
+].mean(axis=0).round(3)
 
 # %%
 results = pl.concat(
