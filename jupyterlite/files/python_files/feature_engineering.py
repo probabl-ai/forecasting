@@ -1618,32 +1618,33 @@ combined_chart.interactive()
 import matplotlib.pyplot as plt
 from sklearn.metrics import PredictionErrorDisplay
 
-fig, axs = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
 
-PredictionErrorDisplay.from_predictions(
-    y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    y_pred=predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    kind="actual_vs_predicted",
-    ax=axs[0],
-)
-axs[0].set_title("0.05 Quantile")
+for kind in ["actual_vs_predicted", "residual_vs_predicted"]:
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
 
-PredictionErrorDisplay.from_predictions(
-    y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    y_pred=predictions_gbrt_50["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    kind="actual_vs_predicted",
-    ax=axs[1],
-)
-axs[1].set_title("Median")
+    PredictionErrorDisplay.from_predictions(
+        y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        y_pred=predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        kind=kind,
+        ax=axs[0],
+    )
+    axs[0].set_title("0.05 quantile regression")
 
-PredictionErrorDisplay.from_predictions(
-    y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    y_pred=predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    kind="actual_vs_predicted",
-    ax=axs[2],
-)
-axs[2].set_title("0.95 Quantile")
-_ = fig.suptitle("GBRT Predictions for different quantiles")
+    PredictionErrorDisplay.from_predictions(
+        y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        y_pred=predictions_gbrt_50["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        kind=kind,
+        ax=axs[1],
+    )
+    axs[1].set_title("Median regression")
+
+    PredictionErrorDisplay.from_predictions(
+        y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        y_pred=predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        kind=kind,
+        ax=axs[2],
+    )
+    axs[2].set_title("0.95 quantile regression")
 
 
 # %%
