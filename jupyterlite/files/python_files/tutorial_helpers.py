@@ -2,6 +2,7 @@ import datetime
 
 import numpy as np
 import polars as pl
+import polars.selectors as cs
 import altair
 import skrub
 
@@ -66,7 +67,7 @@ def lorenz_curve(observed_value, predicted_value, n_samples=1_000):
     )
 
 
-def plot_lorenz_curve(cv_predictions, n_samples=1_000):
+def plot_lorenz_curve(cv_predictions, n_samples=500):
     """Plot the Lorenz curve for a given cross-validation results containing
     observed and predicted values.
 
@@ -75,7 +76,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
     cv_predictions : list of polars.DataFrame
         A list of polars DataFrames, each containing the observed and predicted values
         for a given fold. It is the output of the `collect_cv_predictions` function.
-    n_samples : int, default=1_000
+    n_samples : int, default=500
         The number of samples to use to compute the Lorenz curve.
 
     Returns
@@ -483,7 +484,7 @@ def plot_binned_residuals(cv_predictions, by="hour"):
         color="independent"
     )
 
-
+@skrub.deferred
 def plot_horizon_forecast(
     targets,
     named_predictions,
@@ -511,25 +512,23 @@ def plot_horizon_forecast(
     altair.Chart
         A chart with the true target and the forecast values for different horizons.
     """
-    merged_data = targets.skb.select(cols=["prediction_time", "load_mw"]).skb.concat(
-        [named_predictions], axis=1
+    merged_data = pl.concat(
+        [targets.select(pl.col("prediction_time"), pl.col("load_mw")), named_predictions],
+        how="horizontal",
     )
     start_time = plot_at_time - historical_timedelta
     end_time = plot_at_time + datetime.timedelta(
-        hours=named_predictions.skb.eval().shape[1]
+        hours=named_predictions.shape[1]
     )
     true_values_past = merged_data.filter(
         pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
     ).rename({"load_mw": "Past true load"})
     true_values_future = merged_data.filter(
-        pl.col("prediction_time").is_between(plot_at_time, end_time, closed="both")
+        pl.col("prediction_time").is_between(plot_at_time, end_time, closed="right")
     ).rename({"load_mw": "Future true load"})
     predicted_record = (
-        merged_data.skb.select(
-            cols=skrub.selectors.filter_names(str.startswith, "predict")
-        )
+        merged_data.select(cs.starts_with("predict"))
         .row(by_predicate=pl.col("prediction_time") == plot_at_time, named=True)
-        .skb.eval()
     )
     forecast_values = pl.DataFrame(
         {
@@ -541,15 +540,14 @@ def plot_horizon_forecast(
         }
         for horizon in range(1, len(predicted_record))
     )
-
     true_values_past_chart = (
-        altair.Chart(true_values_past.skb.eval())
+        altair.Chart(true_values_past)
         .transform_fold(["Past true load"])
         .mark_line(tooltip=True)
         .encode(x="prediction_time:T", y="Past true load:Q", color="key:N")
     )
     true_values_future_chart = (
-        altair.Chart(true_values_future.skb.eval())
+        altair.Chart(true_values_future)
         .transform_fold(["Future true load"])
         .mark_line(tooltip=True)
         .encode(x="prediction_time:T", y="Future true load:Q", color="key:N")

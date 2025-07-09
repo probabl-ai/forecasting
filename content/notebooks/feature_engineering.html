@@ -384,7 +384,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#calendar-and-holidays-features">Calendar and holidays features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#electricity-load-data">Electricity load data</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lagged-features">Lagged features</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#remark-lagged-features-engineering-and-system-lag">Remark lagged features engineering and system lag</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#important-remark-about-lagged-features-engineering-and-system-lag">Important remark about lagged features engineering and system lag</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#investigating-outliers-in-the-lagged-features">Investigating outliers in the lagged features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#final-dataset">Final dataset</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#assessing-the-model-performance-via-cross-validation">Assessing the model performance via cross-validation</a><ul class="nav section-nav flex-column">
@@ -392,7 +392,7 @@ document.write(`
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#predicting-multiple-horizons-with-a-multi-output-model">Predicting multiple horizons with a multi-output model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reliability-diagram-for-quantile-regression">Reliability diagram for quantile regression</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reliability-diagrams-for-quantile-regression">Reliability diagrams for quantile regression</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quantile-regression-as-classification">Quantile regression as classification</a></li>
 </ul>
             </nav>
@@ -798,8 +798,8 @@ feature over the last 24 hours and over the last 7 days.</p>
 </div>
 </div>
 </section>
-<section id="remark-lagged-features-engineering-and-system-lag">
-<h2>Remark lagged features engineering and system lag<a class="headerlink" href="#remark-lagged-features-engineering-and-system-lag" title="Link to this heading">#</a></h2>
+<section id="important-remark-about-lagged-features-engineering-and-system-lag">
+<h2>Important remark about lagged features engineering and system lag<a class="headerlink" href="#important-remark-about-lagged-features-engineering-and-system-lag" title="Link to this heading">#</a></h2>
 <p>When working with historical data, we often have access to all the past
 measurements in the dataset. However, when we want to use the lagged features
 in a forecasting model, we need to be careful about the length of the
@@ -933,7 +933,7 @@ models via backtesting.</p>
 
 <span class="n">prediction_time</span> <span class="o">=</span> <span class="n">define_prediction_time_range</span><span class="p">(</span>
     <span class="n">prediction_start_time</span><span class="p">,</span> <span class="n">prediction_end_time</span>
-<span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">subsample</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span> <span class="n">how</span><span class="o">=</span><span class="s2">&quot;head&quot;</span><span class="p">)</span>
 <span class="n">prediction_time</span>
 </pre></div>
 </div>
@@ -1134,10 +1134,10 @@ allows us can (over)fit the data with the features at hand.</p>
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">altair</span><span class="o">.</span><span class="n">Chart</span><span class="p">(</span>
     <span class="n">pl</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
         <span class="p">[</span>
-            <span class="n">targets</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">(),</span>
+            <span class="n">targets</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">(),</span>
             <span class="n">hgbr_predictions</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span>
                 <span class="p">{</span><span class="n">target_column_name</span><span class="p">:</span> <span class="n">predicted_target_column_name</span><span class="p">}</span>
-            <span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">(),</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">(),</span>
         <span class="p">],</span>
         <span class="n">how</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span><span class="p">,</span>
     <span class="p">)</span><span class="o">.</span><span class="n">tail</span><span class="p">(</span><span class="mi">24</span> <span class="o">*</span> <span class="mi">7</span><span class="p">)</span>
@@ -1216,7 +1216,14 @@ backtesting.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">collect_cv_predictions</span><span class="p">(</span><span class="n">pipelines</span><span class="p">,</span> <span class="n">cv_splitter</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">prediction_time</span><span class="p">):</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">collect_cv_predictions</span><span class="p">(</span>
+    <span class="n">pipelines</span><span class="p">,</span>
+    <span class="n">cv_splitter</span><span class="p">,</span>
+    <span class="n">predictions</span><span class="p">,</span>
+    <span class="n">prediction_time</span><span class="p">,</span>
+    <span class="n">method_name</span><span class="o">=</span><span class="s2">&quot;predict&quot;</span><span class="p">,</span>
+    <span class="n">method_kwargs</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
     <span class="n">index_generator</span> <span class="o">=</span> <span class="n">cv_splitter</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">prediction_time</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">splitter</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">index_generator</span><span class="p">):</span>
@@ -1226,9 +1233,13 @@ backtesting.</p>
         <span class="k">return</span> <span class="n">X</span><span class="p">[</span><span class="n">train_idx</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_idx</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train_idx</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_idx</span><span class="p">]</span>
 
     <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">method_kwargs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">method_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+
     <span class="k">for</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">test_idx</span><span class="p">),</span> <span class="n">pipeline</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
         <span class="n">cv_splitter</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">prediction_time</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">()),</span> <span class="n">pipelines</span>
     <span class="p">):</span>
+        <span class="n">method</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pipeline</span><span class="p">,</span> <span class="n">method_name</span><span class="p">)</span>
         <span class="n">split</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">train_test_split</span><span class="p">(</span>
             <span class="n">predictions</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">get_data</span><span class="p">(),</span>
             <span class="n">splitter</span><span class="o">=</span><span class="n">splitter</span><span class="p">,</span>
@@ -1239,7 +1250,7 @@ backtesting.</p>
                 <span class="p">{</span>
                     <span class="s2">&quot;prediction_time&quot;</span><span class="p">:</span> <span class="n">prediction_time</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">()[</span><span class="n">test_idx</span><span class="p">],</span>
                     <span class="s2">&quot;load_mw&quot;</span><span class="p">:</span> <span class="n">split</span><span class="p">[</span><span class="s2">&quot;y_test&quot;</span><span class="p">],</span>
-                    <span class="s2">&quot;predicted_load_mw&quot;</span><span class="p">:</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">split</span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]),</span>
+                    <span class="s2">&quot;predicted_load_mw&quot;</span><span class="p">:</span> <span class="n">method</span><span class="p">(</span><span class="n">split</span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span> <span class="o">**</span><span class="n">method_kwargs</span><span class="p">),</span>
                 <span class="p">}</span>
             <span class="p">)</span>
         <span class="p">)</span>
@@ -1260,7 +1271,7 @@ backtesting.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_lorenz_curve</span><span class="p">(</span><span class="n">hgbr_cv_predictions</span><span class="p">,</span> <span class="n">n_samples</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span><span class="o">.</span><span class="n">interactive</span><span class="p">()</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_lorenz_curve</span><span class="p">(</span><span class="n">hgbr_cv_predictions</span><span class="p">)</span><span class="o">.</span><span class="n">interactive</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -1469,10 +1480,10 @@ training data to make a sanity check.</p>
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">altair</span><span class="o">.</span><span class="n">Chart</span><span class="p">(</span>
     <span class="n">pl</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
         <span class="p">[</span>
-            <span class="n">targets</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">(),</span>
+            <span class="n">targets</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">(),</span>
             <span class="n">predictions_ridge</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span>
                 <span class="p">{</span><span class="n">target_column_name</span><span class="p">:</span> <span class="n">predicted_target_column_name</span><span class="p">}</span>
-            <span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">(),</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">(),</span>
         <span class="p">],</span>
         <span class="n">how</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span><span class="p">,</span>
     <span class="p">)</span><span class="o">.</span><span class="n">tail</span><span class="p">(</span><span class="mi">24</span> <span class="o">*</span> <span class="mi">7</span><span class="p">)</span>
@@ -1528,10 +1539,11 @@ Is it underfitting or overfitting?</p>
 </div>
 </div>
 </div>
-<p>Call all cross-validated predictions to plot the Lorenz curve and the reliability
-diagram. Call the function <code class="docutils literal notranslate"><span class="pre">collect_cv_predictions</span></code> to collect the predictions and
-then call the <code class="docutils literal notranslate"><span class="pre">plot_lorenz_curve</span></code> and <code class="docutils literal notranslate"><span class="pre">plot_reliability_diagram</span></code> functions to plot
-the results.</p>
+<p>Compute all cross-validated predictions to plot the Lorenz curve and the
+reliability diagram for this pipeline.</p>
+<p>To do so, you can use the function <code class="docutils literal notranslate"><span class="pre">collect_cv_predictions</span></code> to collect the
+predictions and then call the <code class="docutils literal notranslate"><span class="pre">plot_lorenz_curve</span></code> and
+<code class="docutils literal notranslate"><span class="pre">plot_reliability_diagram</span></code> functions to plot the results.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Write your code here.</span>
@@ -1561,7 +1573,7 @@ the results.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_lorenz_curve</span><span class="p">(</span><span class="n">cv_predictions_ridge</span><span class="p">,</span> <span class="n">n_samples</span><span class="o">=</span><span class="mi">500</span><span class="p">)</span><span class="o">.</span><span class="n">interactive</span><span class="p">()</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_lorenz_curve</span><span class="p">(</span><span class="n">cv_predictions_ridge</span><span class="p">)</span><span class="o">.</span><span class="n">interactive</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -1684,7 +1696,7 @@ computationally expensive.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">19</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
 <span class="n">historical_timedelta</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">24</span> <span class="o">*</span> <span class="mi">5</span><span class="p">)</span>
 <span class="n">plot_horizon_forecast</span><span class="p">(</span>
     <span class="n">targets</span><span class="p">,</span>
@@ -1692,21 +1704,21 @@ computationally expensive.</p>
     <span class="n">plot_at_time</span><span class="p">,</span>
     <span class="n">historical_timedelta</span><span class="p">,</span>
     <span class="n">target_column_name_pattern</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
 <span class="n">plot_horizon_forecast</span><span class="p">(</span>
     <span class="n">targets</span><span class="p">,</span>
     <span class="n">named_predictions</span><span class="p">,</span>
     <span class="n">plot_at_time</span><span class="p">,</span>
     <span class="n">historical_timedelta</span><span class="p">,</span>
     <span class="n">target_column_name_pattern</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -1798,8 +1810,9 @@ computationally expensive.</p>
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># TODO: Exercise using RandomForestRegressor</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">RandomForestRegressor</span>
 
+
 <span class="n">multioutput_predictions_rf</span> <span class="o">=</span> <span class="n">features_with_dropped_cols</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
-    <span class="n">RandomForestRegressor</span><span class="p">(</span><span class="n">min_samples_leaf</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
+    <span class="n">RandomForestRegressor</span><span class="p">(</span><span class="n">min_samples_leaf</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span>
     <span class="n">y</span><span class="o">=</span><span class="n">targets</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">drop</span><span class="p">(</span><span class="n">cols</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">,</span> <span class="s2">&quot;load_mw&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">mark_as_y</span><span class="p">(),</span>
 <span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="s2">&quot;random_forest&quot;</span><span class="p">)</span>
 </pre></div>
@@ -1817,7 +1830,7 @@ computationally expensive.</p>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
 <span class="n">historical_timedelta</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="mi">24</span> <span class="o">*</span> <span class="mi">5</span><span class="p">)</span>
 <span class="n">plot_horizon_forecast</span><span class="p">(</span>
     <span class="n">targets</span><span class="p">,</span>
@@ -1825,21 +1838,21 @@ computationally expensive.</p>
     <span class="n">plot_at_time</span><span class="p">,</span>
     <span class="n">historical_timedelta</span><span class="p">,</span>
     <span class="n">target_column_name_pattern</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2025</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_at_time</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">tzinfo</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span>
 <span class="n">plot_horizon_forecast</span><span class="p">(</span>
     <span class="n">targets</span><span class="p">,</span>
     <span class="n">named_predictions_rf</span><span class="p">,</span>
     <span class="n">plot_at_time</span><span class="p">,</span>
     <span class="n">historical_timedelta</span><span class="p">,</span>
     <span class="n">target_column_name_pattern</span><span class="p">,</span>
-<span class="p">)</span>
+<span class="p">)</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">preview</span><span class="p">()</span>
 </pre></div>
 </div>
 </div>
@@ -2289,8 +2302,8 @@ computationally expensive.</p>
 </div>
 </div>
 </section>
-<section id="reliability-diagram-for-quantile-regression">
-<h2>Reliability diagram for quantile regression<a class="headerlink" href="#reliability-diagram-for-quantile-regression" title="Link to this heading">#</a></h2>
+<section id="reliability-diagrams-for-quantile-regression">
+<h2>Reliability diagrams for quantile regression<a class="headerlink" href="#reliability-diagrams-for-quantile-regression" title="Link to this heading">#</a></h2>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plot_reliability_diagram</span><span class="p">(</span>
@@ -2370,6 +2383,7 @@ classifier as the default base estimator.</p>
             <span class="n">strategy</span><span class="o">=</span><span class="s2">&quot;quantile&quot;</span><span class="p">,</span>
             <span class="n">subsample</span><span class="o">=</span><span class="mi">200_000</span><span class="p">,</span>
             <span class="n">encode</span><span class="o">=</span><span class="s2">&quot;ordinal&quot;</span><span class="p">,</span>
+            <span class="n">quantile_method</span><span class="o">=</span><span class="s2">&quot;averaged_inverted_cdf&quot;</span><span class="p">,</span>
             <span class="n">random_state</span><span class="o">=</span><span class="n">random_state</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -2412,6 +2426,52 @@ classifier as the default base estimator.</p>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">predict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">X</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">predict_quantiles</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">quantile</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">sklearn.ensemble</span><span class="w"> </span><span class="kn">import</span> <span class="n">HistGradientBoostingClassifier</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">threadpoolctl</span><span class="w"> </span><span class="kn">import</span> <span class="n">threadpool_limits</span>
+
+
+<span class="c1"># with threadpool_limits(1):</span>
+<span class="k">if</span> <span class="kc">True</span><span class="p">:</span>
+    <span class="n">predictions_bqr</span> <span class="o">=</span> <span class="n">features_with_dropped_cols</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span>
+        <span class="n">BinnedQuantileRegressor</span><span class="p">(</span>
+            <span class="n">RandomForestClassifier</span><span class="p">(</span>
+                <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_estimators</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span> <span class="n">min_samples_leaf</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">random_state</span><span class="o">=</span><span class="mi">0</span>
+            <span class="p">),</span>
+            <span class="c1"># HistGradientBoostingClassifier(random_state=0),</span>
+            <span class="n">n_bins</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span>
+        <span class="p">),</span>
+        <span class="n">y</span><span class="o">=</span><span class="n">target</span><span class="p">,</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">predictions_bqr</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">cv_results_bqr</span> <span class="o">=</span> <span class="n">predictions_bqr</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">cross_validate</span><span class="p">(</span>
+    <span class="n">cv</span><span class="o">=</span><span class="n">ts_cv_5</span><span class="p">,</span>
+    <span class="n">scoring</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;d2_pinball&quot;</span><span class="p">:</span> <span class="n">make_scorer</span><span class="p">(</span><span class="n">d2_pinball_score</span><span class="p">,</span> <span class="n">alpha</span><span class="o">=</span><span class="mf">0.5</span><span class="p">),</span>
+        <span class="s2">&quot;MAPE&quot;</span><span class="p">:</span> <span class="n">make_scorer</span><span class="p">(</span><span class="n">mean_absolute_percentage_error</span><span class="p">),</span>
+    <span class="p">},</span>
+    <span class="n">return_pipeline</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">cv_results_bqr</span>
 </pre></div>
 </div>
 </div>
@@ -2488,7 +2548,7 @@ classifier as the default base estimator.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#calendar-and-holidays-features">Calendar and holidays features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#electricity-load-data">Electricity load data</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#lagged-features">Lagged features</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#remark-lagged-features-engineering-and-system-lag">Remark lagged features engineering and system lag</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#important-remark-about-lagged-features-engineering-and-system-lag">Important remark about lagged features engineering and system lag</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#investigating-outliers-in-the-lagged-features">Investigating outliers in the lagged features</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#final-dataset">Final dataset</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#assessing-the-model-performance-via-cross-validation">Assessing the model performance via cross-validation</a><ul class="nav section-nav flex-column">
@@ -2496,7 +2556,7 @@ classifier as the default base estimator.</p>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#predicting-multiple-horizons-with-a-multi-output-model">Predicting multiple horizons with a multi-output model</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reliability-diagram-for-quantile-regression">Reliability diagram for quantile regression</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reliability-diagrams-for-quantile-regression">Reliability diagrams for quantile regression</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#quantile-regression-as-classification">Quantile regression as classification</a></li>
 </ul>
   </nav></div>

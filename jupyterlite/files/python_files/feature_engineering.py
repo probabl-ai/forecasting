@@ -339,7 +339,7 @@ altair.Chart(electricity_lagged.tail(100).skb.eval()).transform_fold(
 
 # %% [markdown]
 #
-# ## Remark lagged features engineering and system lag
+# ## Important remark about lagged features engineering and system lag
 #
 # When working with historical data, we often have access to all the past
 # measurements in the dataset. However, when we want to use the lagged features
@@ -475,7 +475,7 @@ def define_prediction_time_range(prediction_start_time, prediction_end_time):
 
 prediction_time = define_prediction_time_range(
     prediction_start_time, prediction_end_time
-)
+).skb.subsample(n=1000, how="head")
 prediction_time
 
 
@@ -668,10 +668,10 @@ hgbr_pipeline.describe_params()
 altair.Chart(
     pl.concat(
         [
-            targets.skb.eval(),
+            targets.skb.preview(),
             hgbr_predictions.rename(
                 {target_column_name: predicted_target_column_name}
-            ).skb.eval(),
+            ).skb.preview(),
         ],
         how="horizontal",
     ).tail(24 * 7)
@@ -742,7 +742,14 @@ hgbr_cv_results.round(3)
 
 
 # %%
-def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time):
+def collect_cv_predictions(
+    pipelines,
+    cv_splitter,
+    predictions,
+    prediction_time,
+    method_name="predict",
+    method_kwargs=None,
+):
     index_generator = cv_splitter.split(prediction_time.skb.eval())
 
     def splitter(X, y, index_generator):
@@ -752,9 +759,13 @@ def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time)
         return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
 
     results = []
+    if method_kwargs is None:
+        method_kwargs = {}
+
     for (_, test_idx), pipeline in zip(
         cv_splitter.split(prediction_time.skb.eval()), pipelines
     ):
+        method = getattr(pipeline, method_name)
         split = predictions.skb.train_test_split(
             predictions.skb.get_data(),
             splitter=splitter,
@@ -765,7 +776,7 @@ def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time)
                 {
                     "prediction_time": prediction_time.skb.eval()[test_idx],
                     "load_mw": split["y_test"],
-                    "predicted_load_mw": pipeline.predict(split["test"]),
+                    "predicted_load_mw": method(split["test"], **method_kwargs),
                 }
             )
         )
@@ -779,7 +790,7 @@ hgbr_cv_predictions = collect_cv_predictions(
 hgbr_cv_predictions[0]
 
 # %%
-plot_lorenz_curve(hgbr_cv_predictions, n_samples=500).interactive()
+plot_lorenz_curve(hgbr_cv_predictions).interactive()
 
 # %%
 plot_reliability_diagram(hgbr_cv_predictions).interactive().properties(
@@ -940,10 +951,10 @@ predictions_ridge
 altair.Chart(
     pl.concat(
         [
-            targets.skb.eval(),
+            targets.skb.preview(),
             predictions_ridge.rename(
                 {target_column_name: predicted_target_column_name}
-            ).skb.eval(),
+            ).skb.preview(),
         ],
         how="horizontal",
     ).tail(24 * 7)
@@ -995,10 +1006,12 @@ cv_results_ridge = predictions_ridge.skb.cross_validate(
 
 # %% [markdown]
 #
-# Call all cross-validated predictions to plot the Lorenz curve and the reliability
-# diagram. Call the function `collect_cv_predictions` to collect the predictions and
-# then call the `plot_lorenz_curve` and `plot_reliability_diagram` functions to plot
-# the results.
+# Compute all cross-validated predictions to plot the Lorenz curve and the
+# reliability diagram for this pipeline.
+#
+# To do so, you can use the function `collect_cv_predictions` to collect the
+# predictions and then call the `plot_lorenz_curve` and
+# `plot_reliability_diagram` functions to plot the results.
 
 # %%
 # Write your code here.
@@ -1020,7 +1033,7 @@ cv_predictions_ridge = collect_cv_predictions(
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_ridge, n_samples=500).interactive()
+plot_lorenz_curve(cv_predictions_ridge).interactive()
 
 # %%
 plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
@@ -1114,7 +1127,7 @@ named_predictions = multioutput_predictions.rename(
 )
 
 # %%
-plot_at_time = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
+plot_at_time = datetime.datetime(2021, 4, 19, 0, 0, tzinfo=datetime.timezone.utc)
 historical_timedelta = datetime.timedelta(hours=24 * 5)
 plot_horizon_forecast(
     targets,
@@ -1122,17 +1135,17 @@ plot_horizon_forecast(
     plot_at_time,
     historical_timedelta,
     target_column_name_pattern,
-)
+).skb.preview()
 
 # %%
-plot_at_time = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
+plot_at_time = datetime.datetime(2021, 4, 20, 0, 0, tzinfo=datetime.timezone.utc)
 plot_horizon_forecast(
     targets,
     named_predictions,
     plot_at_time,
     historical_timedelta,
     target_column_name_pattern,
-)
+).skb.preview()
 
 # %%
 from sklearn.metrics import r2_score
@@ -1208,8 +1221,9 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
 # TODO: Exercise using RandomForestRegressor
 from sklearn.ensemble import RandomForestRegressor
 
+
 multioutput_predictions_rf = features_with_dropped_cols.skb.apply(
-    RandomForestRegressor(min_samples_leaf=30, random_state=0, n_jobs=-1),
+    RandomForestRegressor(min_samples_leaf=5, random_state=0, n_jobs=-1),
     y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
 ).skb.set_name("random_forest")
 
@@ -1219,7 +1233,7 @@ named_predictions_rf = multioutput_predictions_rf.rename(
 )
 
 # %%
-plot_at_time = datetime.datetime(2025, 5, 24, 0, 0, tzinfo=datetime.timezone.utc)
+plot_at_time = datetime.datetime(2021, 4, 24, 0, 0, tzinfo=datetime.timezone.utc)
 historical_timedelta = datetime.timedelta(hours=24 * 5)
 plot_horizon_forecast(
     targets,
@@ -1227,17 +1241,17 @@ plot_horizon_forecast(
     plot_at_time,
     historical_timedelta,
     target_column_name_pattern,
-)
+).skb.preview()
 
 # %%
-plot_at_time = datetime.datetime(2025, 5, 25, 0, 0, tzinfo=datetime.timezone.utc)
+plot_at_time = datetime.datetime(2021, 4, 25, 0, 0, tzinfo=datetime.timezone.utc)
 plot_horizon_forecast(
     targets,
     named_predictions_rf,
     plot_at_time,
     historical_timedelta,
     target_column_name_pattern,
-)
+).skb.preview()
 
 # %%
 multioutput_cv_results_rf = multioutput_predictions_rf.skb.cross_validate(
@@ -1603,7 +1617,7 @@ plt.tight_layout()
 
 # %% [markdown]
 #
-# ## Reliability diagram for quantile regression
+# ## Reliability diagrams for quantile regression
 
 # %%
 plot_reliability_diagram(
@@ -1674,6 +1688,7 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
             strategy="quantile",
             subsample=200_000,
             encode="ordinal",
+            quantile_method="averaged_inverted_cdf",
             random_state=random_state,
         )
 
@@ -1716,3 +1731,39 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
 
     def predict(self, X):
         return self.predict_quantiles(X, self.quantile).ravel()
+
+
+# %%
+from sklearn.ensemble import HistGradientBoostingClassifier
+from threadpoolctl import threadpool_limits
+
+
+# with threadpool_limits(1):
+if True:
+    predictions_bqr = features_with_dropped_cols.skb.apply(
+        BinnedQuantileRegressor(
+            RandomForestClassifier(
+                n_jobs=-1, n_estimators=200, min_samples_leaf=5, random_state=0
+            ),
+            # HistGradientBoostingClassifier(random_state=0),
+            n_bins=30,
+        ),
+        y=target,
+    )
+
+# %%
+predictions_bqr
+
+# %%
+cv_results_bqr = predictions_bqr.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring={
+        "d2_pinball": make_scorer(d2_pinball_score, alpha=0.5),
+        "MAPE": make_scorer(mean_absolute_percentage_error),
+    },
+    return_pipeline=True,
+    verbose=1,
+    n_jobs=-1,
+)
+cv_results_bqr
+# %%

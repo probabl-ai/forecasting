@@ -402,6 +402,7 @@ document.write(`
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">polars.selectors</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">cs</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">altair</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">skrub</span>
 </pre></div>
@@ -474,7 +475,7 @@ document.write(`
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">plot_lorenz_curve</span><span class="p">(</span><span class="n">cv_predictions</span><span class="p">,</span> <span class="n">n_samples</span><span class="o">=</span><span class="mi">1_000</span><span class="p">):</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">plot_lorenz_curve</span><span class="p">(</span><span class="n">cv_predictions</span><span class="p">,</span> <span class="n">n_samples</span><span class="o">=</span><span class="mi">500</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Plot the Lorenz curve for a given cross-validation results containing</span>
 <span class="sd">    observed and predicted values.</span>
 
@@ -483,7 +484,7 @@ document.write(`
 <span class="sd">    cv_predictions : list of polars.DataFrame</span>
 <span class="sd">        A list of polars DataFrames, each containing the observed and predicted values</span>
 <span class="sd">        for a given fold. It is the output of the `collect_cv_predictions` function.</span>
-<span class="sd">    n_samples : int, default=1_000</span>
+<span class="sd">    n_samples : int, default=500</span>
 <span class="sd">        The number of samples to use to compute the Lorenz curve.</span>
 
 <span class="sd">    Returns</span>
@@ -908,7 +909,8 @@ document.write(`
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">plot_horizon_forecast</span><span class="p">(</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="nd">@skrub</span><span class="o">.</span><span class="n">deferred</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">plot_horizon_forecast</span><span class="p">(</span>
     <span class="n">targets</span><span class="p">,</span>
     <span class="n">named_predictions</span><span class="p">,</span>
     <span class="n">plot_at_time</span><span class="p">,</span>
@@ -935,25 +937,23 @@ document.write(`
 <span class="sd">    altair.Chart</span>
 <span class="sd">        A chart with the true target and the forecast values for different horizons.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">merged_data</span> <span class="o">=</span> <span class="n">targets</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cols</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">,</span> <span class="s2">&quot;load_mw&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">named_predictions</span><span class="p">],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span>
+    <span class="n">merged_data</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">targets</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;load_mw&quot;</span><span class="p">)),</span> <span class="n">named_predictions</span><span class="p">],</span>
+        <span class="n">how</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="n">start_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">-</span> <span class="n">historical_timedelta</span>
     <span class="n">end_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">+</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span>
-        <span class="n">hours</span><span class="o">=</span><span class="n">named_predictions</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">hours</span><span class="o">=</span><span class="n">named_predictions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
     <span class="p">)</span>
     <span class="n">true_values_past</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
         <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_between</span><span class="p">(</span><span class="n">start_time</span><span class="p">,</span> <span class="n">plot_at_time</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
     <span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">&quot;load_mw&quot;</span><span class="p">:</span> <span class="s2">&quot;Past true load&quot;</span><span class="p">})</span>
     <span class="n">true_values_future</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
-        <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_between</span><span class="p">(</span><span class="n">plot_at_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
+        <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_between</span><span class="p">(</span><span class="n">plot_at_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">)</span>
     <span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">&quot;load_mw&quot;</span><span class="p">:</span> <span class="s2">&quot;Future true load&quot;</span><span class="p">})</span>
     <span class="n">predicted_record</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">merged_data</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">select</span><span class="p">(</span>
-            <span class="n">cols</span><span class="o">=</span><span class="n">skrub</span><span class="o">.</span><span class="n">selectors</span><span class="o">.</span><span class="n">filter_names</span><span class="p">(</span><span class="nb">str</span><span class="o">.</span><span class="n">startswith</span><span class="p">,</span> <span class="s2">&quot;predict&quot;</span><span class="p">)</span>
-        <span class="p">)</span>
+        <span class="n">merged_data</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="s2">&quot;predict&quot;</span><span class="p">))</span>
         <span class="o">.</span><span class="n">row</span><span class="p">(</span><span class="n">by_predicate</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">plot_at_time</span><span class="p">,</span> <span class="n">named</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-        <span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
     <span class="p">)</span>
     <span class="n">forecast_values</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
         <span class="p">{</span>
@@ -965,15 +965,14 @@ document.write(`
         <span class="p">}</span>
         <span class="k">for</span> <span class="n">horizon</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">predicted_record</span><span class="p">))</span>
     <span class="p">)</span>
-
     <span class="n">true_values_past_chart</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">altair</span><span class="o">.</span><span class="n">Chart</span><span class="p">(</span><span class="n">true_values_past</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">())</span>
+        <span class="n">altair</span><span class="o">.</span><span class="n">Chart</span><span class="p">(</span><span class="n">true_values_past</span><span class="p">)</span>
         <span class="o">.</span><span class="n">transform_fold</span><span class="p">([</span><span class="s2">&quot;Past true load&quot;</span><span class="p">])</span>
         <span class="o">.</span><span class="n">mark_line</span><span class="p">(</span><span class="n">tooltip</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s2">&quot;prediction_time:T&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;Past true load:Q&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;key:N&quot;</span><span class="p">)</span>
     <span class="p">)</span>
     <span class="n">true_values_future_chart</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">altair</span><span class="o">.</span><span class="n">Chart</span><span class="p">(</span><span class="n">true_values_future</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">())</span>
+        <span class="n">altair</span><span class="o">.</span><span class="n">Chart</span><span class="p">(</span><span class="n">true_values_future</span><span class="p">)</span>
         <span class="o">.</span><span class="n">transform_fold</span><span class="p">([</span><span class="s2">&quot;Future true load&quot;</span><span class="p">])</span>
         <span class="o">.</span><span class="n">mark_line</span><span class="p">(</span><span class="n">tooltip</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="s2">&quot;prediction_time:T&quot;</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="s2">&quot;Future true load:Q&quot;</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s2">&quot;key:N&quot;</span><span class="p">)</span>
