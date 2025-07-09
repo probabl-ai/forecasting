@@ -1613,35 +1613,35 @@ scoring = {
 common_params = dict(
     loss="quantile", learning_rate=0.1, max_leaf_nodes=100, random_state=0
 )
-predictions_gbrt_05 = features_with_dropped_cols.skb.apply(
+predictions_hgbr_05 = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(**common_params, quantile=0.05),
     y=target,
 )
-predictions_gbrt_50 = features_with_dropped_cols.skb.apply(
+predictions_hgbr_50 = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(**common_params, quantile=0.5),
     y=target,
 )
-predictions_gbrt_95 = features_with_dropped_cols.skb.apply(
+predictions_hgbr_95 = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(**common_params, quantile=0.95),
     y=target,
 )
 
 # %%
-cv_results_05 = predictions_gbrt_05.skb.cross_validate(
+cv_results_hgbr_05 = predictions_hgbr_05.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
     return_pipeline=True,
     verbose=1,
     n_jobs=-1,
 )
-cv_results_50 = predictions_gbrt_50.skb.cross_validate(
+cv_results_hgbr_50 = predictions_hgbr_50.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
     return_pipeline=True,
     verbose=1,
     n_jobs=-1,
 )
-cv_results_95 = predictions_gbrt_95.skb.cross_validate(
+cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
     return_pipeline=True,
@@ -1650,17 +1650,17 @@ cv_results_95 = predictions_gbrt_95.skb.cross_validate(
 )
 
 # %%
-cv_results_05[[col for col in cv_results_05.columns if col.startswith("test_")]].mean(
+cv_results_hgbr_05[[col for col in cv_results_hgbr_05.columns if col.startswith("test_")]].mean(
     axis=0
 ).round(3)
 
 # %%
-cv_results_50[[col for col in cv_results_50.columns if col.startswith("test_")]].mean(
+cv_results_hgbr_50[[col for col in cv_results_hgbr_50.columns if col.startswith("test_")]].mean(
     axis=0
 ).round(3)
 
 # %%
-cv_results_95[[col for col in cv_results_95.columns if col.startswith("test_")]].mean(
+cv_results_hgbr_95[[col for col in cv_results_hgbr_95.columns if col.startswith("test_")]].mean(
     axis=0
 ).round(3)
 
@@ -1668,9 +1668,9 @@ cv_results_95[[col for col in cv_results_95.columns if col.startswith("test_")]]
 results = pl.concat(
     [
         targets.skb.select(cols=["prediction_time", target_column_name]).skb.eval(),
-        predictions_gbrt_05.rename({target_column_name: "quantile_05"}).skb.eval(),
-        predictions_gbrt_50.rename({target_column_name: "median"}).skb.eval(),
-        predictions_gbrt_95.rename({target_column_name: "quantile_95"}).skb.eval(),
+        predictions_hgbr_05.rename({target_column_name: "quantile_05"}).skb.eval(),
+        predictions_hgbr_50.rename({target_column_name: "median"}).skb.eval(),
+        predictions_hgbr_95.rename({target_column_name: "quantile_95"}).skb.eval(),
     ],
     how="horizontal",
 ).tail(24 * 7)
@@ -1698,18 +1698,18 @@ combined_chart = quantile_band_chart + median_chart
 combined_chart.interactive()
 
 # %%
-cv_predictions_05 = collect_cv_predictions(
-    cv_results_05["pipeline"], ts_cv_5, predictions_gbrt_05, prediction_time
+cv_predictions_hgbr_05 = collect_cv_predictions(
+    cv_results_hgbr_05["pipeline"], ts_cv_5, predictions_hgbr_05, prediction_time
 )
-cv_predictions_50 = collect_cv_predictions(
-    cv_results_50["pipeline"], ts_cv_5, predictions_gbrt_50, prediction_time
+cv_predictions_hgbr_50 = collect_cv_predictions(
+    cv_results_hgbr_50["pipeline"], ts_cv_5, predictions_hgbr_50, prediction_time
 )
-cv_predictions_95 = collect_cv_predictions(
-    cv_results_95["pipeline"], ts_cv_5, predictions_gbrt_95, prediction_time
+cv_predictions_hgbr_95 = collect_cv_predictions(
+    cv_results_hgbr_95["pipeline"], ts_cv_5, predictions_hgbr_95, prediction_time
 )
 
 # %%
-plot_residuals_vs_predicted(cv_predictions_05).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr_05).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions"
         " for quantile 0.05"
@@ -1717,14 +1717,14 @@ plot_residuals_vs_predicted(cv_predictions_05).interactive().properties(
 )
 
 # %%
-plot_residuals_vs_predicted(cv_predictions_50).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr_50).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions" " for median"
     )
 )
 
 # %%
-plot_residuals_vs_predicted(cv_predictions_95).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr_95).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions"
         " for quantile 0.95"
@@ -1732,9 +1732,9 @@ plot_residuals_vs_predicted(cv_predictions_95).interactive().properties(
 )
 
 # %%
-cv_predictions_05_concat = pl.concat(cv_predictions_05, how="vertical")
-cv_predictions_50_concat = pl.concat(cv_predictions_50, how="vertical")
-cv_predictions_95_concat = pl.concat(cv_predictions_95, how="vertical")
+cv_predictions_hgbr_05_concat = pl.concat(cv_predictions_hgbr_05, how="vertical")
+cv_predictions_hgbr_50_concat = pl.concat(cv_predictions_hgbr_50, how="vertical")
+cv_predictions_hgbr_95_concat = pl.concat(cv_predictions_hgbr_95, how="vertical")
 
 # %%
 import matplotlib.pyplot as plt
@@ -1745,24 +1745,24 @@ for kind in ["actual_vs_predicted", "residual_vs_predicted"]:
     fig, axs = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
 
     PredictionErrorDisplay.from_predictions(
-        y_true=cv_predictions_05_concat["load_mw"].to_numpy(),
-        y_pred=cv_predictions_05_concat["predicted_load_mw"].to_numpy(),
+        y_true=cv_predictions_hgbr_05_concat["load_mw"].to_numpy(),
+        y_pred=cv_predictions_hgbr_05_concat["predicted_load_mw"].to_numpy(),
         kind=kind,
         ax=axs[0],
     )
     axs[0].set_title("0.05 quantile regression")
 
     PredictionErrorDisplay.from_predictions(
-        y_true=cv_predictions_50_concat["load_mw"].to_numpy(),
-        y_pred=cv_predictions_50_concat["predicted_load_mw"].to_numpy(),
+        y_true=cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
+        y_pred=cv_predictions_hgbr_50_concat["predicted_load_mw"].to_numpy(),
         kind=kind,
         ax=axs[1],
     )
     axs[1].set_title("Median regression")
 
     PredictionErrorDisplay.from_predictions(
-        y_true=cv_predictions_95_concat["load_mw"].to_numpy(),
-        y_pred=cv_predictions_95_concat["predicted_load_mw"].to_numpy(),
+        y_true=cv_predictions_hgbr_95_concat["load_mw"].to_numpy(),
+        y_pred=cv_predictions_hgbr_95_concat["predicted_load_mw"].to_numpy(),
         kind=kind,
         ax=axs[2],
     )
@@ -1870,22 +1870,22 @@ def binned_coverage(y_true_folds, y_quantile_low, y_quantile_high, n_bins=10):
 
 # %%
 coverage(
-    cv_predictions_50_concat["load_mw"].to_numpy(),
-    cv_predictions_05_concat["predicted_load_mw"].to_numpy(),
-    cv_predictions_95_concat["predicted_load_mw"].to_numpy(),
+    cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
+    cv_predictions_hgbr_05_concat["predicted_load_mw"].to_numpy(),
+    cv_predictions_hgbr_95_concat["predicted_load_mw"].to_numpy(),
 )
 
 mean_width(
-    cv_predictions_50_concat["load_mw"].to_numpy(),
-    cv_predictions_05_concat["predicted_load_mw"].to_numpy(),
-    cv_predictions_95_concat["predicted_load_mw"].to_numpy(),
+    cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
+    cv_predictions_hgbr_05_concat["predicted_load_mw"].to_numpy(),
+    cv_predictions_hgbr_95_concat["predicted_load_mw"].to_numpy(),
 )
 
 # Compute binned coverage scores
 binned_coverage_results = binned_coverage(
-    [df["load_mw"].to_numpy() for df in cv_predictions_50],
-    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_05],
-    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_95],
+    [df["load_mw"].to_numpy() for df in cv_predictions_hgbr_50],
+    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_hgbr_05],
+    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_hgbr_95],
     n_bins=10,
 )
 
@@ -1895,30 +1895,6 @@ binned_coverage_results
 coverage_by_bin = binned_coverage_results.copy()
 coverage_by_bin["bin_label"] = coverage_by_bin.apply(
     lambda row: f"[{row.bin_left:.0f}, {row.bin_right:.0f}]", axis=1
-)
-# %% [markdown]
-#
-# ## Reliability diagram for quantile regression
-
-# %%
-plot_reliability_diagram(
-    cv_predictions_50, kind="quantile", quantile_level=0.50
-).interactive().properties(
-    title="Reliability diagram for quantile 0.50 from cross-validation predictions"
-)
-
-# %%
-plot_reliability_diagram(
-    cv_predictions_05, kind="quantile", quantile_level=0.05
-).interactive().properties(
-    title="Reliability diagram for quantile 0.05 from cross-validation predictions"
-)
-
-# %%
-plot_reliability_diagram(
-    cv_predictions_95, kind="quantile", quantile_level=0.95
-).interactive().properties(
-    title="Reliability diagram for quantile 0.95 from cross-validation predictions"
 )
 
 # %%
@@ -1933,6 +1909,31 @@ ax.legend()
 plt.suptitle("")  # Remove automatic suptitle from boxplot
 plt.xticks(rotation=45)
 plt.tight_layout()
+
+# %% [markdown]
+#
+# ## Reliability diagram for quantile regression
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_hgbr_50, kind="quantile", quantile_level=0.50
+).interactive().properties(
+    title="Reliability diagram for quantile 0.50 from cross-validation predictions"
+)
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_hgbr_05, kind="quantile", quantile_level=0.05
+).interactive().properties(
+    title="Reliability diagram for quantile 0.05 from cross-validation predictions"
+)
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_hgbr_95, kind="quantile", quantile_level=0.95
+).interactive().properties(
+    title="Reliability diagram for quantile 0.95 from cross-validation predictions"
+)
 
 # %% [markdown]
 #
