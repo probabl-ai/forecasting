@@ -906,7 +906,9 @@ plot_lorenz_curve(cv_predictions, n_samples=500).interactive()
 
 
 # %%
-def plot_reliability_diagram(cv_predictions, n_bins=10):
+def plot_reliability_diagram(
+    cv_predictions, kind="mean", quantile_level=0.5, n_bins=10
+):
     # min and max load over all predictions and observations for any folds:
     all_loads = pl.concat(
         [
@@ -948,13 +950,24 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
         max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
         fold_label = f"#{fold_idx} - {min_date} to {max_date}"
 
+        if kind == "mean":
+            y_name = "mean_load_mw"
+            agg_expr = pl.col("load_mw")
+        elif kind == "quantile":
+            y_name = "quantile_of_load_mw"
+            agg_expr = (
+                pl.col("load_mw").quantile(quantile_level)
+            )
+        else:
+            raise ValueError(f"Unknown kind: {kind}. Use 'mean' or 'quantile'.")
+
         mean_per_bins = (
             cv_predictions_i.group_by(
                 pl.col("predicted_load_mw").qcut(np.linspace(0, 1, n_bins))
             )
             .agg(
                 [
-                    pl.col("load_mw").mean().alias("mean_load_mw"),
+                    agg_expr.alias(y_name),
                     pl.col("predicted_load_mw").mean().alias("mean_predicted_load_mw"),
                 ]
             )
@@ -967,7 +980,7 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
             .mark_line(tooltip=True, point=True, opacity=0.8)
             .encode(
                 x=altair.X("mean_predicted_load_mw:Q", scale=scale),
-                y=altair.Y("mean_load_mw:Q", scale=scale),
+                y=altair.Y(f"{y_name}:Q", scale=scale),
                 color=altair.Color(
                     "fold_label:N",
                     legend=altair.Legend(title=None),
@@ -1687,11 +1700,18 @@ combined_chart = quantile_band_chart + median_chart
 combined_chart.interactive()
 
 # %%
-plot_residuals_vs_predicted(
-    collect_cv_predictions(
-        cv_results_05["pipeline"], ts_cv_5, predictions_gbrt_05, prediction_time
-    )
-).interactive().properties(
+cv_predictions_05 = collect_cv_predictions(
+    cv_results_05["pipeline"], ts_cv_5, predictions_gbrt_05, prediction_time
+)
+cv_predictions_50 = collect_cv_predictions(
+    cv_results_50["pipeline"], ts_cv_5, predictions_gbrt_50, prediction_time
+)
+cv_predictions_95 = collect_cv_predictions(
+    cv_results_95["pipeline"], ts_cv_5, predictions_gbrt_95, prediction_time
+)
+
+# %%
+plot_residuals_vs_predicted(cv_predictions_05).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions"
         " for quantile 0.05"
@@ -1699,27 +1719,24 @@ plot_residuals_vs_predicted(
 )
 
 # %%
-plot_residuals_vs_predicted(
-    collect_cv_predictions(
-        cv_results_50["pipeline"], ts_cv_5, predictions_gbrt_50, prediction_time
-    )
-).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_50).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions" " for median"
     )
 )
 
 # %%
-plot_residuals_vs_predicted(
-    collect_cv_predictions(
-        cv_results_95["pipeline"], ts_cv_5, predictions_gbrt_95, prediction_time
-    )
-).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_95).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions"
         " for quantile 0.95"
     )
 )
+
+# %%
+cv_predictions_05_concat = pl.concat(cv_predictions_05, how="vertical")
+cv_predictions_50_concat = pl.concat(cv_predictions_50, how="vertical")
+cv_predictions_95_concat = pl.concat(cv_predictions_95, how="vertical")
 
 # %%
 import matplotlib.pyplot as plt
@@ -1730,24 +1747,24 @@ for kind in ["actual_vs_predicted", "residual_vs_predicted"]:
     fig, axs = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
 
     PredictionErrorDisplay.from_predictions(
-        y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-        y_pred=predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        y_true=cv_predictions_05_concat["load_mw"].to_numpy(),
+        y_pred=cv_predictions_05_concat["predicted_load_mw"].to_numpy(),
         kind=kind,
         ax=axs[0],
     )
     axs[0].set_title("0.05 quantile regression")
 
     PredictionErrorDisplay.from_predictions(
-        y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-        y_pred=predictions_gbrt_50["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        y_true=cv_predictions_50_concat["load_mw"].to_numpy(),
+        y_pred=cv_predictions_50_concat["predicted_load_mw"].to_numpy(),
         kind=kind,
         ax=axs[1],
     )
     axs[1].set_title("Median regression")
 
     PredictionErrorDisplay.from_predictions(
-        y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-        y_pred=predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
+        y_true=cv_predictions_95_concat["load_mw"].to_numpy(),
+        y_pred=cv_predictions_95_concat["predicted_load_mw"].to_numpy(),
         kind=kind,
         ax=axs[2],
     )
@@ -1757,7 +1774,7 @@ for kind in ["actual_vs_predicted", "residual_vs_predicted"]:
 
 
 # %%
-def coverage_score(y_true, y_quantile_low, y_quantile_high):
+def coverage(y_true, y_quantile_low, y_quantile_high):
     y_true = np.asarray(y_true)
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
@@ -1768,28 +1785,155 @@ def coverage_score(y_true, y_quantile_low, y_quantile_high):
     )
 
 
-def width_score(y_true, y_quantile_low, y_quantile_high):
+def mean_width(y_true, y_quantile_low, y_quantile_high):
     y_true = np.asarray(y_true)
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
     return float(np.abs(y_quantile_high - y_quantile_low).mean().round(1))
 
 
+def binned_coverage(y_true_folds, y_quantile_low, y_quantile_high, n_bins=10):
+    """Compute coverage after binning true values using quantile-based binning.
+
+    Parameters
+    ----------
+    y_true_folds : list of numpy.ndarray
+        List of true target values, one array per CV fold
+    y_quantile_low : list of numpy.ndarray
+        List of lower quantile predictions, one array per CV fold
+    y_quantile_high : list of numpy.ndarray
+        List of upper quantile predictions, one array per CV fold
+    n_bins : int, default=10
+        Number of bins to create
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns: bin_left, bin_right, bin_center, fold_idx,
+        coverage, mean_width, n_samples
+    """
+    # Use all true values to define global bin boundaries
+    all_true_values = np.concatenate(y_true_folds)
+    df = pd.DataFrame({"bin_by": all_true_values})
+    df["bin"] = pd.qcut(df["bin_by"], q=n_bins, labels=False, duplicates="drop")
+
+    # Get bin boundaries for consistent binning across folds
+    bin_boundaries = []
+    for bin_idx in sorted(df["bin"].dropna().unique()):
+        bin_mask = df["bin"] == bin_idx
+        bin_values = df.loc[bin_mask, "bin_by"]
+        bin_boundaries.append((bin_values.min(), bin_values.max()))
+
+    results = []
+    n_folds = len(y_quantile_low)
+
+    for fold_idx in range(n_folds):
+        fold_true = y_true_folds[fold_idx]
+        fold_low = y_quantile_low[fold_idx]
+        fold_high = y_quantile_high[fold_idx]
+
+        # Assign each sample in this fold to a bin
+        fold_bins = (
+            np.digitize(fold_true, bins=[b[0] for b in bin_boundaries] + [np.inf]) - 1
+        )
+
+        for bin_idx, (bin_left, bin_right) in enumerate(bin_boundaries):
+            # Get samples from this fold that fall into this bin
+            bin_mask = fold_bins == bin_idx
+
+            if np.sum(bin_mask) == 0:
+                # No samples in this bin for this fold
+                continue
+
+            fold_bin_true = fold_true[bin_mask]
+            fold_bin_low = fold_low[bin_mask]
+            fold_bin_high = fold_high[bin_mask]
+
+            bin_center = (bin_left + bin_right) / 2
+            n_samples_in_bin = len(fold_bin_true)
+
+            coverage_score = coverage(fold_bin_true, fold_bin_low, fold_bin_high)
+            width = mean_width(fold_bin_true, fold_bin_low, fold_bin_high)
+
+            results.append(
+                {
+                    "bin_left": bin_left,
+                    "bin_right": bin_right,
+                    "bin_center": bin_center,
+                    "fold_idx": fold_idx,
+                    "coverage": coverage_score,
+                    "mean_width": width,
+                    "n_samples": n_samples_in_bin,
+                }
+            )
+
+    return pd.DataFrame(results)
+
+
 # %%
-coverage_score(
-    targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
+coverage(
+    cv_predictions_50_concat["load_mw"].to_numpy(),
+    cv_predictions_05_concat["predicted_load_mw"].to_numpy(),
+    cv_predictions_95_concat["predicted_load_mw"].to_numpy(),
+)
+
+mean_width(
+    cv_predictions_50_concat["load_mw"].to_numpy(),
+    cv_predictions_05_concat["predicted_load_mw"].to_numpy(),
+    cv_predictions_95_concat["predicted_load_mw"].to_numpy(),
+)
+
+# Compute binned coverage scores
+binned_coverage_results = binned_coverage(
+    [df["load_mw"].to_numpy() for df in cv_predictions_50],
+    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_05],
+    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_95],
+    n_bins=10,
+)
+
+binned_coverage_results
+
+# %%
+coverage_by_bin = binned_coverage_results.copy()
+coverage_by_bin["bin_label"] = coverage_by_bin.apply(
+    lambda row: f"[{row.bin_left:.0f}, {row.bin_right:.0f}]", axis=1
+)
+# %% [markdown]
+#
+# ## Reliability diagram for quantile regression
+
+# %%
+plot_reliability_diagram(
+    cv_predictions_50, kind="quantile", quantile_level=0.50
+).interactive().properties(
+    title="Reliability diagram for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
-width_score(
-    targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
-    predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
+plot_reliability_diagram(
+    cv_predictions_05, kind="quantile", quantile_level=0.05
+).interactive().properties(
+    title="Reliability diagram for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
+plot_reliability_diagram(
+    cv_predictions_95, kind="quantile", quantile_level=0.95
+).interactive().properties(
+    title="Reliability diagram for quantile 0.95 from cross-validation predictions"
+)
+
+ax = coverage_by_bin.boxplot(
+    column="coverage", by="bin_label", figsize=(12, 6), vert=False, whis=1000
+)
+ax.axvline(x=0.9, color="red", linestyle="--", label="Target coverage (0.9)")
+ax.set_xlabel("Load bins (MW)")
+ax.set_ylabel("Coverage")
+ax.set_title("Coverage Distribution by Load Bins")
+ax.legend()
+plt.suptitle("")  # Remove automatic suptitle from boxplot
+plt.xticks(rotation=45)
+plt.tight_layout()
 
 # %% [markdown]
 #
