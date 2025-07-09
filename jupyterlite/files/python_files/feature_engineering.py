@@ -59,6 +59,7 @@ import holidays
 import warnings
 
 from tutorial_helpers import (
+    binned_coverage,
     plot_lorenz_curve,
     plot_reliability_diagram,
     plot_residuals_vs_predicted,
@@ -1494,83 +1495,6 @@ def mean_width(y_true, y_quantile_low, y_quantile_high):
     y_quantile_high = np.asarray(y_quantile_high)
     return float(np.abs(y_quantile_high - y_quantile_low).mean().round(1))
 
-
-def binned_coverage(y_true_folds, y_quantile_low, y_quantile_high, n_bins=10):
-    """Compute coverage after binning true values using quantile-based binning.
-
-    Parameters
-    ----------
-    y_true_folds : list of numpy.ndarray
-        List of true target values, one array per CV fold
-    y_quantile_low : list of numpy.ndarray
-        List of lower quantile predictions, one array per CV fold
-    y_quantile_high : list of numpy.ndarray
-        List of upper quantile predictions, one array per CV fold
-    n_bins : int, default=10
-        Number of bins to create
-
-    Returns
-    -------
-    pandas.DataFrame
-        DataFrame with columns: bin_left, bin_right, bin_center, fold_idx,
-        coverage, mean_width, n_samples
-    """
-    # Use all true values to define global bin boundaries
-    all_true_values = np.concatenate(y_true_folds)
-    df = pd.DataFrame({"bin_by": all_true_values})
-    df["bin"] = pd.qcut(df["bin_by"], q=n_bins, labels=False, duplicates="drop")
-
-    # Get bin boundaries for consistent binning across folds
-    bin_boundaries = []
-    for bin_idx in sorted(df["bin"].dropna().unique()):
-        bin_mask = df["bin"] == bin_idx
-        bin_values = df.loc[bin_mask, "bin_by"]
-        bin_boundaries.append((bin_values.min(), bin_values.max()))
-
-    results = []
-    n_folds = len(y_quantile_low)
-
-    for fold_idx in range(n_folds):
-        fold_true = y_true_folds[fold_idx]
-        fold_low = y_quantile_low[fold_idx]
-        fold_high = y_quantile_high[fold_idx]
-
-        # Assign each sample in this fold to a bin
-        fold_bins = (
-            np.digitize(fold_true, bins=[b[0] for b in bin_boundaries] + [np.inf]) - 1
-        )
-
-        for bin_idx, (bin_left, bin_right) in enumerate(bin_boundaries):
-            # Get samples from this fold that fall into this bin
-            bin_mask = fold_bins == bin_idx
-
-            if np.sum(bin_mask) == 0:
-                # No samples in this bin for this fold
-                continue
-
-            fold_bin_true = fold_true[bin_mask]
-            fold_bin_low = fold_low[bin_mask]
-            fold_bin_high = fold_high[bin_mask]
-
-            bin_center = (bin_left + bin_right) / 2
-            n_samples_in_bin = len(fold_bin_true)
-
-            coverage_score = coverage(fold_bin_true, fold_bin_low, fold_bin_high)
-            width = mean_width(fold_bin_true, fold_bin_low, fold_bin_high)
-
-            results.append(
-                {
-                    "bin_left": bin_left,
-                    "bin_right": bin_right,
-                    "bin_center": bin_center,
-                    "fold_idx": fold_idx,
-                    "coverage": coverage_score,
-                    "mean_width": width,
-                    "n_samples": n_samples_in_bin,
-                }
-            )
-
-    return pd.DataFrame(results)
 
 
 # %%

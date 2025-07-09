@@ -401,6 +401,7 @@ document.write(`
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">polars.selectors</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">cs</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">altair</span>
@@ -938,22 +939,22 @@ document.write(`
 <span class="sd">        A chart with the true target and the forecast values for different horizons.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">merged_data</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span>
-        <span class="p">[</span><span class="n">targets</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;load_mw&quot;</span><span class="p">)),</span> <span class="n">named_predictions</span><span class="p">],</span>
+        <span class="p">[</span>
+            <span class="n">targets</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">),</span> <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;load_mw&quot;</span><span class="p">)),</span>
+            <span class="n">named_predictions</span><span class="p">,</span>
+        <span class="p">],</span>
         <span class="n">how</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="n">start_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">-</span> <span class="n">historical_timedelta</span>
-    <span class="n">end_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">+</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span>
-        <span class="n">hours</span><span class="o">=</span><span class="n">named_predictions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-    <span class="p">)</span>
+    <span class="n">end_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">+</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="n">named_predictions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
     <span class="n">true_values_past</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
         <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_between</span><span class="p">(</span><span class="n">start_time</span><span class="p">,</span> <span class="n">plot_at_time</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>
     <span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">&quot;load_mw&quot;</span><span class="p">:</span> <span class="s2">&quot;Past true load&quot;</span><span class="p">})</span>
     <span class="n">true_values_future</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
         <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_between</span><span class="p">(</span><span class="n">plot_at_time</span><span class="p">,</span> <span class="n">end_time</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="s2">&quot;right&quot;</span><span class="p">)</span>
     <span class="p">)</span><span class="o">.</span><span class="n">rename</span><span class="p">({</span><span class="s2">&quot;load_mw&quot;</span><span class="p">:</span> <span class="s2">&quot;Future true load&quot;</span><span class="p">})</span>
-    <span class="n">predicted_record</span> <span class="o">=</span> <span class="p">(</span>
-        <span class="n">merged_data</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="s2">&quot;predict&quot;</span><span class="p">))</span>
-        <span class="o">.</span><span class="n">row</span><span class="p">(</span><span class="n">by_predicate</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">plot_at_time</span><span class="p">,</span> <span class="n">named</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">predicted_record</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">cs</span><span class="o">.</span><span class="n">starts_with</span><span class="p">(</span><span class="s2">&quot;predict&quot;</span><span class="p">))</span><span class="o">.</span><span class="n">row</span><span class="p">(</span>
+        <span class="n">by_predicate</span><span class="o">=</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">plot_at_time</span><span class="p">,</span> <span class="n">named</span><span class="o">=</span><span class="kc">True</span>
     <span class="p">)</span>
     <span class="n">forecast_values</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
         <span class="p">{</span>
@@ -986,6 +987,144 @@ document.write(`
     <span class="k">return</span> <span class="p">(</span>
         <span class="n">true_values_past_chart</span> <span class="o">+</span> <span class="n">true_values_future_chart</span> <span class="o">+</span> <span class="n">forecast_values_chart</span>
     <span class="p">)</span><span class="o">.</span><span class="n">interactive</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">coverage</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_quantile_low</span><span class="p">,</span> <span class="n">y_quantile_high</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the coverage of the quantile predictions.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    y_true : numpy.ndarray</span>
+<span class="sd">        True target values.</span>
+<span class="sd">    y_quantile_low : numpy.ndarray</span>
+<span class="sd">        Lower quantile predictions.</span>
+<span class="sd">    y_quantile_high : numpy.ndarray</span>
+<span class="sd">        Upper quantile predictions.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        The coverage of the quantile predictions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">y_true</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y_true</span><span class="p">)</span>
+    <span class="n">y_quantile_low</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y_quantile_low</span><span class="p">)</span>
+    <span class="n">y_quantile_high</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y_quantile_high</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">y_true</span> <span class="o">&gt;=</span> <span class="n">y_quantile_low</span><span class="p">,</span> <span class="n">y_true</span> <span class="o">&lt;=</span> <span class="n">y_quantile_high</span><span class="p">)</span>
+        <span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+    <span class="p">)</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">mean_width</span><span class="p">(</span><span class="n">y_true</span><span class="p">,</span> <span class="n">y_quantile_low</span><span class="p">,</span> <span class="n">y_quantile_high</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute the mean width of the quantile predictions.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    y_true : numpy.ndarray</span>
+<span class="sd">        True target values.</span>
+<span class="sd">    y_quantile_low : numpy.ndarray</span>
+<span class="sd">        Lower quantile predictions.</span>
+<span class="sd">    y_quantile_high : numpy.ndarray</span>
+<span class="sd">        Upper quantile predictions.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    float</span>
+<span class="sd">        The mean width of the quantile predictions.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">y_true</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y_true</span><span class="p">)</span>
+    <span class="n">y_quantile_low</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y_quantile_low</span><span class="p">)</span>
+    <span class="n">y_quantile_high</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">y_quantile_high</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y_quantile_high</span> <span class="o">-</span> <span class="n">y_quantile_low</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">binned_coverage</span><span class="p">(</span><span class="n">y_true_folds</span><span class="p">,</span> <span class="n">y_quantile_low</span><span class="p">,</span> <span class="n">y_quantile_high</span><span class="p">,</span> <span class="n">n_bins</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Compute coverage after binning true values using quantile-based binning.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    y_true_folds : list of numpy.ndarray</span>
+<span class="sd">        List of true target values, one array per CV fold</span>
+<span class="sd">    y_quantile_low : list of numpy.ndarray</span>
+<span class="sd">        List of lower quantile predictions, one array per CV fold</span>
+<span class="sd">    y_quantile_high : list of numpy.ndarray</span>
+<span class="sd">        List of upper quantile predictions, one array per CV fold</span>
+<span class="sd">    n_bins : int, default=10</span>
+<span class="sd">        Number of bins to create</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    pandas.DataFrame</span>
+<span class="sd">        DataFrame with columns: bin_left, bin_right, bin_center, fold_idx,</span>
+<span class="sd">        coverage, mean_width, n_samples</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">all_true_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">y_true_folds</span><span class="p">)</span>
+    <span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({</span><span class="s2">&quot;bin_by&quot;</span><span class="p">:</span> <span class="n">all_true_values</span><span class="p">})</span>
+    <span class="n">df</span><span class="p">[</span><span class="s2">&quot;bin&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">qcut</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;bin_by&quot;</span><span class="p">],</span> <span class="n">q</span><span class="o">=</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">labels</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">duplicates</span><span class="o">=</span><span class="s2">&quot;drop&quot;</span><span class="p">)</span>
+
+    <span class="n">bin_boundaries</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">bin_idx</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">df</span><span class="p">[</span><span class="s2">&quot;bin&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">dropna</span><span class="p">()</span><span class="o">.</span><span class="n">unique</span><span class="p">()):</span>
+        <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">df</span><span class="p">[</span><span class="s2">&quot;bin&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="n">bin_idx</span>
+        <span class="n">bin_values</span> <span class="o">=</span> <span class="n">df</span><span class="o">.</span><span class="n">loc</span><span class="p">[</span><span class="n">bin_mask</span><span class="p">,</span> <span class="s2">&quot;bin_by&quot;</span><span class="p">]</span>
+        <span class="n">bin_boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">bin_values</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">bin_values</span><span class="o">.</span><span class="n">max</span><span class="p">()))</span>
+
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">n_folds</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">y_quantile_low</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">fold_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_folds</span><span class="p">):</span>
+        <span class="n">fold_true</span> <span class="o">=</span> <span class="n">y_true_folds</span><span class="p">[</span><span class="n">fold_idx</span><span class="p">]</span>
+        <span class="n">fold_low</span> <span class="o">=</span> <span class="n">y_quantile_low</span><span class="p">[</span><span class="n">fold_idx</span><span class="p">]</span>
+        <span class="n">fold_high</span> <span class="o">=</span> <span class="n">y_quantile_high</span><span class="p">[</span><span class="n">fold_idx</span><span class="p">]</span>
+
+        <span class="c1"># Assign each sample in this fold to a bin</span>
+        <span class="n">fold_bins</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">np</span><span class="o">.</span><span class="n">digitize</span><span class="p">(</span><span class="n">fold_true</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="p">[</span><span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">bin_boundaries</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">bin_idx</span><span class="p">,</span> <span class="p">(</span><span class="n">bin_left</span><span class="p">,</span> <span class="n">bin_right</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">bin_boundaries</span><span class="p">):</span>
+            <span class="c1"># Get samples from this fold that fall into this bin</span>
+            <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">fold_bins</span> <span class="o">==</span> <span class="n">bin_idx</span>
+
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c1"># No samples in this bin for this fold</span>
+                <span class="k">continue</span>
+
+            <span class="n">fold_bin_true</span> <span class="o">=</span> <span class="n">fold_true</span><span class="p">[</span><span class="n">bin_mask</span><span class="p">]</span>
+            <span class="n">fold_bin_low</span> <span class="o">=</span> <span class="n">fold_low</span><span class="p">[</span><span class="n">bin_mask</span><span class="p">]</span>
+            <span class="n">fold_bin_high</span> <span class="o">=</span> <span class="n">fold_high</span><span class="p">[</span><span class="n">bin_mask</span><span class="p">]</span>
+
+            <span class="n">bin_center</span> <span class="o">=</span> <span class="p">(</span><span class="n">bin_left</span> <span class="o">+</span> <span class="n">bin_right</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span>
+            <span class="n">n_samples_in_bin</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">fold_bin_true</span><span class="p">)</span>
+
+            <span class="n">coverage_score</span> <span class="o">=</span> <span class="n">coverage</span><span class="p">(</span><span class="n">fold_bin_true</span><span class="p">,</span> <span class="n">fold_bin_low</span><span class="p">,</span> <span class="n">fold_bin_high</span><span class="p">)</span>
+            <span class="n">width</span> <span class="o">=</span> <span class="n">mean_width</span><span class="p">(</span><span class="n">fold_bin_true</span><span class="p">,</span> <span class="n">fold_bin_low</span><span class="p">,</span> <span class="n">fold_bin_high</span><span class="p">)</span>
+
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;bin_left&quot;</span><span class="p">:</span> <span class="n">bin_left</span><span class="p">,</span>
+                    <span class="s2">&quot;bin_right&quot;</span><span class="p">:</span> <span class="n">bin_right</span><span class="p">,</span>
+                    <span class="s2">&quot;bin_center&quot;</span><span class="p">:</span> <span class="n">bin_center</span><span class="p">,</span>
+                    <span class="s2">&quot;fold_idx&quot;</span><span class="p">:</span> <span class="n">fold_idx</span><span class="p">,</span>
+                    <span class="s2">&quot;coverage&quot;</span><span class="p">:</span> <span class="n">coverage_score</span><span class="p">,</span>
+                    <span class="s2">&quot;mean_width&quot;</span><span class="p">:</span> <span class="n">width</span><span class="p">,</span>
+                    <span class="s2">&quot;n_samples&quot;</span><span class="p">:</span> <span class="n">n_samples_in_bin</span><span class="p">,</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>

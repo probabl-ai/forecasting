@@ -1,6 +1,7 @@
 import datetime
 
 import numpy as np
+import pandas as pd
 import polars as pl
 import polars.selectors as cs
 import altair
@@ -484,6 +485,7 @@ def plot_binned_residuals(cv_predictions, by="hour"):
         color="independent"
     )
 
+
 @skrub.deferred
 def plot_horizon_forecast(
     targets,
@@ -513,22 +515,22 @@ def plot_horizon_forecast(
         A chart with the true target and the forecast values for different horizons.
     """
     merged_data = pl.concat(
-        [targets.select(pl.col("prediction_time"), pl.col("load_mw")), named_predictions],
+        [
+            targets.select(pl.col("prediction_time"), pl.col("load_mw")),
+            named_predictions,
+        ],
         how="horizontal",
     )
     start_time = plot_at_time - historical_timedelta
-    end_time = plot_at_time + datetime.timedelta(
-        hours=named_predictions.shape[1]
-    )
+    end_time = plot_at_time + datetime.timedelta(hours=named_predictions.shape[1])
     true_values_past = merged_data.filter(
         pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
     ).rename({"load_mw": "Past true load"})
     true_values_future = merged_data.filter(
         pl.col("prediction_time").is_between(plot_at_time, end_time, closed="right")
     ).rename({"load_mw": "Future true load"})
-    predicted_record = (
-        merged_data.select(cs.starts_with("predict"))
-        .row(by_predicate=pl.col("prediction_time") == plot_at_time, named=True)
+    predicted_record = merged_data.select(cs.starts_with("predict")).row(
+        by_predicate=pl.col("prediction_time") == plot_at_time, named=True
     )
     forecast_values = pl.DataFrame(
         {
@@ -561,3 +563,129 @@ def plot_horizon_forecast(
     return (
         true_values_past_chart + true_values_future_chart + forecast_values_chart
     ).interactive()
+
+
+def coverage(y_true, y_quantile_low, y_quantile_high):
+    """Compute the coverage of the quantile predictions.
+
+    Parameters
+    ----------
+    y_true : numpy.ndarray
+        True target values.
+    y_quantile_low : numpy.ndarray
+        Lower quantile predictions.
+    y_quantile_high : numpy.ndarray
+        Upper quantile predictions.
+
+    Returns
+    -------
+    float
+        The coverage of the quantile predictions.
+    """
+    y_true = np.asarray(y_true)
+    y_quantile_low = np.asarray(y_quantile_low)
+    y_quantile_high = np.asarray(y_quantile_high)
+    return float(
+        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high)
+        .mean()
+        .round(4)
+    )
+
+
+def mean_width(y_true, y_quantile_low, y_quantile_high):
+    """Compute the mean width of the quantile predictions.
+
+    Parameters
+    ----------
+    y_true : numpy.ndarray
+        True target values.
+    y_quantile_low : numpy.ndarray
+        Lower quantile predictions.
+    y_quantile_high : numpy.ndarray
+        Upper quantile predictions.
+
+    Returns
+    -------
+    float
+        The mean width of the quantile predictions.
+    """
+    y_true = np.asarray(y_true)
+    y_quantile_low = np.asarray(y_quantile_low)
+    y_quantile_high = np.asarray(y_quantile_high)
+    return float(np.abs(y_quantile_high - y_quantile_low).mean().round(1))
+
+
+def binned_coverage(y_true_folds, y_quantile_low, y_quantile_high, n_bins=10):
+    """Compute coverage after binning true values using quantile-based binning.
+
+    Parameters
+    ----------
+    y_true_folds : list of numpy.ndarray
+        List of true target values, one array per CV fold
+    y_quantile_low : list of numpy.ndarray
+        List of lower quantile predictions, one array per CV fold
+    y_quantile_high : list of numpy.ndarray
+        List of upper quantile predictions, one array per CV fold
+    n_bins : int, default=10
+        Number of bins to create
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame with columns: bin_left, bin_right, bin_center, fold_idx,
+        coverage, mean_width, n_samples
+    """
+    all_true_values = np.concatenate(y_true_folds)
+    df = pd.DataFrame({"bin_by": all_true_values})
+    df["bin"] = pd.qcut(df["bin_by"], q=n_bins, labels=False, duplicates="drop")
+
+    bin_boundaries = []
+    for bin_idx in sorted(df["bin"].dropna().unique()):
+        bin_mask = df["bin"] == bin_idx
+        bin_values = df.loc[bin_mask, "bin_by"]
+        bin_boundaries.append((bin_values.min(), bin_values.max()))
+
+    results = []
+    n_folds = len(y_quantile_low)
+
+    for fold_idx in range(n_folds):
+        fold_true = y_true_folds[fold_idx]
+        fold_low = y_quantile_low[fold_idx]
+        fold_high = y_quantile_high[fold_idx]
+
+        # Assign each sample in this fold to a bin
+        fold_bins = (
+            np.digitize(fold_true, bins=[b[0] for b in bin_boundaries] + [np.inf]) - 1
+        )
+
+        for bin_idx, (bin_left, bin_right) in enumerate(bin_boundaries):
+            # Get samples from this fold that fall into this bin
+            bin_mask = fold_bins == bin_idx
+
+            if np.sum(bin_mask) == 0:
+                # No samples in this bin for this fold
+                continue
+
+            fold_bin_true = fold_true[bin_mask]
+            fold_bin_low = fold_low[bin_mask]
+            fold_bin_high = fold_high[bin_mask]
+
+            bin_center = (bin_left + bin_right) / 2
+            n_samples_in_bin = len(fold_bin_true)
+
+            coverage_score = coverage(fold_bin_true, fold_bin_low, fold_bin_high)
+            width = mean_width(fold_bin_true, fold_bin_low, fold_bin_high)
+
+            results.append(
+                {
+                    "bin_left": bin_left,
+                    "bin_right": bin_right,
+                    "bin_center": bin_center,
+                    "fold_idx": fold_idx,
+                    "coverage": coverage_score,
+                    "mean_width": width,
+                    "n_samples": n_samples_in_bin,
+                }
+            )
+
+    return pd.DataFrame(results)
