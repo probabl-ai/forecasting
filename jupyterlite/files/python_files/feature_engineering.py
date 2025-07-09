@@ -1606,7 +1606,7 @@ quantile_band_chart = (
         x="prediction_time:T",
         y="quantile_05:Q",
         y2="quantile_95:Q",
-        color=altair.value("green"),
+        color=altair.value("lightgreen"),
     )
 )
 
@@ -1643,5 +1643,3 @@ PredictionErrorDisplay.from_predictions(
 )
 axs[2].set_title("0.95 Quantile")
 _ = fig.suptitle("GBRT Predictions for different quantiles")
-
-# %%
