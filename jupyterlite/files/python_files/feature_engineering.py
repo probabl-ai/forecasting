@@ -950,6 +950,7 @@ plot_reliability_diagram(cv_predictions).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
 
+
 # %%
 def plot_residuals_vs_predicted(cv_predictions):
     """Plot residuals vs predicted values scatter plot for all CV folds."""
@@ -1644,15 +1645,33 @@ PredictionErrorDisplay.from_predictions(
 axs[2].set_title("0.95 Quantile")
 _ = fig.suptitle("GBRT Predictions for different quantiles")
 
+
 # %%
 def coverage_score(y_true, y_quantile_low, y_quantile_high):
     y_true = np.asarray(y_true)
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
-    return np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high).mean()
+    return float(
+        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high).mean()
+    )
+
+
+def width_score(y_true, y_quantile_low, y_quantile_high):
+    y_true = np.asarray(y_true)
+    y_quantile_low = np.asarray(y_quantile_low)
+    y_quantile_high = np.asarray(y_quantile_high)
+    return float(np.abs(y_quantile_high - y_quantile_low).mean())
+
 
 # %%
 coverage_score(
+    targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
+)
+
+# %%
+width_score(
     targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
     predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
     predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
