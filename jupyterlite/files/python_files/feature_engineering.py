@@ -1168,6 +1168,18 @@ fig.update_layout(margin=dict(l=200))
 # %% [markdown]
 #
 # ## Predicting multiple horizons with a multi-output model
+#
+# Usually, it is really common to predict values for multiple horizons at once. The most
+# naive approach is to train as many models as there are horizons. To achieve this,
+# scikit-learn provides a meta-estimator called `MultiOutputRegressor` that can be used
+# to train a single model that predicts multiple horizons at once.
+#
+# In short, we only need to provide multiple targets where each column corresponds to
+# an horizon and this meta-estimator will train an independent model for each column.
+# However, we could expect that the quality of the forecast might degrade as the horizon
+# increases.
+#
+# Let's train a gradient boosting regressor for each horizon.
 
 # %%
 from sklearn.multioutput import MultiOutputRegressor
@@ -1179,6 +1191,11 @@ multioutput_predictions = features_with_dropped_cols.skb.apply(
     y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
 ).skb.set_name("multioutput_hgbr")
 
+# %% [markdown]
+#
+# Now, let's just rename the columns for the predictions to make it easier to plot
+# the horizon forecast.
+
 # %%
 target_column_names = [target_column_name_pattern.format(horizon=h) for h in horizons]
 predicted_target_column_names = [
@@ -1187,6 +1204,11 @@ predicted_target_column_names = [
 named_predictions = multioutput_predictions.rename(
     {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
 )
+
+# %% [markdown]
+#
+# Let's plot the horizon forecast on a training data to check the validity of the
+# output.
 
 # %%
 plot_at_time = datetime.datetime(2021, 4, 19, 0, 0, tzinfo=datetime.timezone.utc)
@@ -1199,15 +1221,22 @@ plot_horizon_forecast(
     target_column_name_pattern,
 ).skb.preview()
 
-# %%
-plot_at_time = datetime.datetime(2021, 4, 20, 0, 0, tzinfo=datetime.timezone.utc)
-plot_horizon_forecast(
-    targets,
-    named_predictions,
-    plot_at_time,
-    historical_timedelta,
-    target_column_name_pattern,
-).skb.preview()
+# %% [markdown]
+#
+# On this curve, the red line corresponds to the observed values past to the the date
+# for which we would like to forecast. The orange line corresponds to the observed
+# values for the next 24 hours and the blue line corresponds to the predicted values
+# for the next 24 hours.
+#
+# Since we are using a strong model and very few training data to check the validity
+# we observe that our model perfectly fits the training data.
+#
+# So, we are now ready to assess the performance of this multi-output model and we need
+# to cross-validate it. Since we do not want to aggregate the metrics for the different
+# horizons, we need to create a scikit-learn scorer in which we set
+# `multioutput="raw_values"` to get the scores for each horizon.
+#
+# Passing this scorer to the `cross_validate` function returns all horizons scores.
 
 # %%
 from sklearn.metrics import r2_score
@@ -1236,10 +1265,20 @@ multioutput_cv_results = multioutput_predictions.skb.cross_validate(
     return_train_score=True,
     verbose=1,
     n_jobs=-1,
-).round(3)
+)
+
+# %% [markdown]
+#
+# One thing that we observe is that training such multi-output model is expensive. It is
+# expected since each horizon involves a different model and thus a training.
 
 # %%
-multioutput_cv_results
+multioutput_cv_results.round(3)
+
+# %% [markdown]
+#
+# Instead of reading the results in the table, we can plot the scores depending on the
+# type of data and the metric.
 
 # %%
 import itertools
@@ -1280,6 +1319,10 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
     display(chart)
 
 # %% [markdown]
+#
+# An interesting and unexpected observation is that the MAPE error on the test
+# data is first increases and then decreases once past the horizon 18h. We
+# would not necessarily expect this behaviour.
 #
 # ## Native multi-output handling using `RandomForestRegressor`
 #
@@ -1410,6 +1453,10 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
 # %% [markdown]
 #
 # ## Uncertainty quantification using quantile regression
+#
+# In this section, we show how one can use a gradient boosting but modify the loss
+# function to predict different quantiles and thus obtain an uncertainty quantification
+# of the predictions.
 
 # %%
 from sklearn.metrics import d2_pinball_score
