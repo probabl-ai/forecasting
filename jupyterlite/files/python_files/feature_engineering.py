@@ -58,6 +58,8 @@ from pathlib import Path
 import holidays
 import warnings
 
+from plotly.io import write_json, read_json  # noqa: F401
+
 from tutorial_helpers import (
     binned_coverage,
     plot_lorenz_curve,
@@ -818,19 +820,24 @@ plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(
-    cv=ts_cv_2,
-    scoring="r2",
-    n_iter=100,
-    fitted=True,
-    verbose=1,
-    n_jobs=-1,
-)
-# %%
-randomized_search_hgbr.results_.round(3)
+# randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(
+#     cv=ts_cv_2,
+#     scoring="r2",
+#     n_iter=100,
+#     fitted=True,
+#     verbose=1,
+#     n_jobs=-1,
+# )
+# # %%
+# randomized_search_hgbr.results_.round(3)
 
 # %%
-randomized_search_hgbr.plot_results().update_layout(margin=dict(l=150))
+# fig = randomized_search_hgbr.plot_results().update_layout(margin=dict(l=200))
+# write_json(fig, "parallel_coordinates_hgbr.json")
+
+# %%
+fig = read_json("parallel_coordinates_hgbr.json")
+fig.update_layout(margin=dict(l=200))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
@@ -1043,38 +1050,27 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 
 # %% [markdown]
 #
-# Now, you can perform a randomized search on the hyper-parameters of the model.
-# Use the `ts_cv_2` splitter defined earlier. This search is quite computationally
-# expensive, so feel free to reduce the number of iterations but doing at least 100
-# iterations is nice to have an overview of the impact of the hyper-parameters.
-# Use `plot_results` to show the parallel coordinates plot of the results.
+# Now, let's perform a randomized search on the hyper-parameters of the model. The code
+# to perform the search is shown below. Since it will be pretty computationally
+# expensive, we are reloading the results of the parallel coordinates plot.
 
 # %%
-# Write your code here.
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
+# randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
+#     cv=ts_cv_2,
+#     scoring="r2",
+#     n_iter=100,
+#     fitted=True,
+#     verbose=1,
+#     n_jobs=-1,
+# )
 
 # %%
-randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
-    cv=ts_cv_2,
-    scoring="r2",
-    n_iter=100,
-    fitted=True,
-    verbose=1,
-    n_jobs=-1,
-)
+# fig = randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
+# write_json(fig, "parallel_coordinates_ridge.json")
 
 # %%
-randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
+fig = read_json("parallel_coordinates_ridge.json")
+fig.update_layout(margin=dict(l=200))
 
 # %% [markdown]
 #
