@@ -955,9 +955,7 @@ def plot_reliability_diagram(
             agg_expr = pl.col("load_mw").mean()
         elif kind == "quantile":
             y_name = "quantile_of_load_mw"
-            agg_expr = (
-                pl.col("load_mw").quantile(quantile_level)
-            )
+            agg_expr = pl.col("load_mw").quantile(quantile_level)
         else:
             raise ValueError(f"Unknown kind: {kind}. Use 'mean' or 'quantile'.")
 
@@ -1218,7 +1216,7 @@ plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-randomized_search_ridge = hgbr_predictions.skb.get_randomized_search(
+randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(
     cv=ts_cv_2,
     scoring="r2",
     n_iter=100,
@@ -1227,10 +1225,10 @@ randomized_search_ridge = hgbr_predictions.skb.get_randomized_search(
     n_jobs=-1,
 )
 # %%
-randomized_search_ridge.results_.round(3)
+randomized_search_hgbr.results_.round(3)
 
 # %%
-randomized_search_ridge.plot_results().update_layout(margin=dict(l=150))
+randomized_search_hgbr.plot_results().update_layout(margin=dict(l=150))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
@@ -1257,24 +1255,24 @@ randomized_search_ridge.plot_results().update_layout(margin=dict(l=150))
 
 # %%
 # TODO: Exercise applying a linear model with some additional feature engineering
+from sklearn.feature_selection import SelectKBest, VarianceThreshold
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.kernel_approximation import Nystroem
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import SplineTransformer
 
-model = skrub.tabular_learner(
-    estimator=Ridge(
-        alpha=skrub.choose_float(1e-6, 1e6, log=True, name="alpha", default=1e-3)
-    )
-)
-model.steps.insert(
-    -1,
-    (
-        "nystroem",
-        Nystroem(
-            n_components=skrub.choose_int(
-                10, 200, log=True, name="n_components", default=150
-            )
-        ),
+model = make_pipeline(
+    SimpleImputer(add_indicator=True),
+    SplineTransformer(sparse_output=True),
+    VarianceThreshold(threshold=1e-6),
+    SelectKBest(k=skrub.choose_int(100, 1_000, log=True, name="n_selected_splines")),
+    Nystroem(
+        n_components=skrub.choose_int(
+            10, 200, log=True, name="n_components", default=150
+        )
     ),
+    Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
 )
 
 predictions_ridge = features_with_dropped_cols.skb.apply(model, y=target)
@@ -1298,6 +1296,33 @@ altair.Chart(
 ).encode(
     x="prediction_time:T", y="value:Q", color="key:N"
 ).interactive()
+
+# %%
+cv_results_ridge = predictions_ridge.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": make_scorer(mean_absolute_percentage_error),
+    },
+    return_train_score=True,
+    return_pipeline=True,
+    verbose=1,
+    n_jobs=-1,
+)
+
+
+# %%
+cv_predictions_ridge = collect_cv_predictions(
+    cv_results_ridge["pipeline"], ts_cv_5, predictions_ridge, prediction_time
+)
+
+# %%
+plot_lorenz_curve(cv_predictions_ridge, n_samples=500).interactive()
+
+# %%
+plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
+    title="Reliability diagram from cross-validation predictions"
+)
 
 # %%
 randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
@@ -1339,33 +1364,6 @@ randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
 
 # %%
 # nested_cv_results_ridge.round(3)
-
-# %%
-cv_results_ridge = predictions_ridge.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring={
-        "r2": get_scorer("r2"),
-        "mape": make_scorer(mean_absolute_percentage_error),
-    },
-    return_train_score=True,
-    return_pipeline=True,
-    verbose=1,
-    n_jobs=-1,
-)
-
-
-# %%
-cv_predictions_ridge = collect_cv_predictions(
-    cv_results_ridge["pipeline"], ts_cv_5, predictions_ridge, prediction_time
-)
-
-# %%
-plot_lorenz_curve(cv_predictions_ridge, n_samples=500).interactive()
-
-# %%
-plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
-    title="Reliability diagram from cross-validation predictions"
-)
 
 # %%
 from sklearn.multioutput import MultiOutputRegressor
