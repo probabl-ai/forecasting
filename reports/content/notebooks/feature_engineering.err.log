@@ -25,48 +25,37 @@ Traceback (most recent call last):
     raise CellExecutionError.from_cell_and_msg(cell, exec_reply_content)
 nbclient.exceptions.CellExecutionError: An error occurred while executing the following cell:
 ------------------
-import datetime
-import tzdata  # noqa: F401
-import pandas as pd
-from pyarrow.parquet import read_table
-
-import altair
-import numpy as np
-import polars as pl
-import skrub
-from pathlib import Path
-import holidays
-import warnings
-
-from tutorial_helpers import (
-    binned_coverage,
-    plot_lorenz_curve,
-    plot_reliability_diagram,
-    plot_residuals_vs_predicted,
-    plot_binned_residuals,
-    plot_horizon_forecast,
-)
-
-# Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
-warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
+fig = read_json("parallel_coordinates_hgbr.json")
+fig.update_layout(margin=dict(l=200))
 ------------------
 
 
 [31m---------------------------------------------------------------------------[39m
-[31mModuleNotFoundError[39m                       Traceback (most recent call last)
-[36mCell[39m[36m [39m[32mIn[2][39m[32m, line 14[39m
-[32m     11[39m [38;5;28;01mimport[39;00m[38;5;250m [39m[34;01mholidays[39;00m
-[32m     12[39m [38;5;28;01mimport[39;00m[38;5;250m [39m[34;01mwarnings[39;00m
-[32m---> [39m[32m14[39m [38;5;28;01mfrom[39;00m[38;5;250m [39m[34;01mtutorial_helpers[39;00m[38;5;250m [39m[38;5;28;01mimport[39;00m (
-[32m     15[39m     binned_coverage,
-[32m     16[39m     plot_lorenz_curve,
-[32m     17[39m     plot_reliability_diagram,
-[32m     18[39m     plot_residuals_vs_predicted,
-[32m     19[39m     plot_binned_residuals,
-[32m     20[39m     plot_horizon_forecast,
-[32m     21[39m )
-[32m     23[39m [38;5;66;03m# Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.[39;00m
-[32m     24[39m warnings.filterwarnings([33m"[39m[33mignore[39m[33m"[39m, category=[38;5;167;01mUserWarning[39;00m, module=[33m"[39m[33mpkg_resources[39m[33m"[39m)
+[31mFileNotFoundError[39m                         Traceback (most recent call last)
+[36mCell[39m[36m [39m[32mIn[38][39m[32m, line 1[39m
+[32m----> [39m[32m1[39m fig = [43mread_json[49m[43m([49m[33;43m"[39;49m[33;43mparallel_coordinates_hgbr.json[39;49m[33;43m"[39;49m[43m)[49m
+[32m      2[39m fig.update_layout(margin=[38;5;28mdict[39m(l=[32m200[39m))
 
-[31mModuleNotFoundError[39m: No module named 'tutorial_helpers'
+[36mFile [39m[32m~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/site-packages/plotly/io/_json.py:463[39m, in [36mread_json[39m[34m(file, output_type, skip_invalid, engine)[39m
+[32m    460[39m [38;5;66;03m# Read file contents into JSON string[39;00m
+[32m    461[39m [38;5;66;03m# -----------------------------------[39;00m
+[32m    462[39m [38;5;28;01mif[39;00m path [38;5;129;01mis[39;00m [38;5;129;01mnot[39;00m [38;5;28;01mNone[39;00m:
+[32m--> [39m[32m463[39m     json_str = [43mpath[49m[43m.[49m[43mread_text[49m[43m([49m[43m)[49m
+[32m    464[39m [38;5;28;01melse[39;00m:
+[32m    465[39m     json_str = file.read()
+
+[36mFile [39m[32m~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/pathlib.py:1027[39m, in [36mPath.read_text[39m[34m(self, encoding, errors)[39m
+[32m   1023[39m [38;5;250m[39m[33;03m"""[39;00m
+[32m   1024[39m [33;03mOpen the file in text mode, read it, and close the file.[39;00m
+[32m   1025[39m [33;03m"""[39;00m
+[32m   1026[39m encoding = io.text_encoding(encoding)
+[32m-> [39m[32m1027[39m [38;5;28;01mwith[39;00m [38;5;28;43mself[39;49m[43m.[49m[43mopen[49m[43m([49m[43mmode[49m[43m=[49m[33;43m'[39;49m[33;43mr[39;49m[33;43m'[39;49m[43m,[49m[43m [49m[43mencoding[49m[43m=[49m[43mencoding[49m[43m,[49m[43m [49m[43merrors[49m[43m=[49m[43merrors[49m[43m)[49m [38;5;28;01mas[39;00m f:
+[32m   1028[39m     [38;5;28;01mreturn[39;00m f.read()
+
+[36mFile [39m[32m~/work/forecasting/forecasting/.pixi/envs/doc/lib/python3.12/pathlib.py:1013[39m, in [36mPath.open[39m[34m(self, mode, buffering, encoding, errors, newline)[39m
+[32m   1011[39m [38;5;28;01mif[39;00m [33m"[39m[33mb[39m[33m"[39m [38;5;129;01mnot[39;00m [38;5;129;01min[39;00m mode:
+[32m   1012[39m     encoding = io.text_encoding(encoding)
+[32m-> [39m[32m1013[39m [38;5;28;01mreturn[39;00m [43mio[49m[43m.[49m[43mopen[49m[43m([49m[38;5;28;43mself[39;49m[43m,[49m[43m [49m[43mmode[49m[43m,[49m[43m [49m[43mbuffering[49m[43m,[49m[43m [49m[43mencoding[49m[43m,[49m[43m [49m[43merrors[49m[43m,[49m[43m [49m[43mnewline[49m[43m)[49m
+
+[31mFileNotFoundError[39m: [Errno 2] No such file or directory: 'parallel_coordinates_hgbr.json'
 

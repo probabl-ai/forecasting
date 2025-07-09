@@ -58,6 +58,8 @@ from pathlib import Path
 import holidays
 import warnings
 
+from plotly.io import write_json, read_json  # noqa: F401
+
 from tutorial_helpers import (
     binned_coverage,
     plot_lorenz_curve,
@@ -818,19 +820,24 @@ plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(
-    cv=ts_cv_2,
-    scoring="r2",
-    n_iter=100,
-    fitted=True,
-    verbose=1,
-    n_jobs=-1,
-)
-# %%
-randomized_search_hgbr.results_.round(3)
+# randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(
+#     cv=ts_cv_2,
+#     scoring="r2",
+#     n_iter=100,
+#     fitted=True,
+#     verbose=1,
+#     n_jobs=-1,
+# )
+# # %%
+# randomized_search_hgbr.results_.round(3)
 
 # %%
-randomized_search_hgbr.plot_results().update_layout(margin=dict(l=150))
+# fig = randomized_search_hgbr.plot_results().update_layout(margin=dict(l=200))
+# write_json(fig, "parallel_coordinates_hgbr.json")
+
+# %%
+fig = read_json("parallel_coordinates_hgbr.json")
+fig.update_layout(margin=dict(l=200))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
@@ -1048,23 +1055,20 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 # expensive, we are reloading the results of the parallel coordinates plot.
 
 # %%
-randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
-    cv=ts_cv_2,
-    scoring="r2",
-    n_iter=100,
-    fitted=True,
-    verbose=1,
-    n_jobs=-1,
-)
+# randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
+#     cv=ts_cv_2,
+#     scoring="r2",
+#     n_iter=100,
+#     fitted=True,
+#     verbose=1,
+#     n_jobs=-1,
+# )
 
 # %%
-# from plotly.io import write_json
-
 # fig = randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
 # write_json(fig, "parallel_coordinates_ridge.json")
 
 # %%
-from plotly.io import read_json
 fig = read_json("parallel_coordinates_ridge.json")
 fig.update_layout(margin=dict(l=200))
 
