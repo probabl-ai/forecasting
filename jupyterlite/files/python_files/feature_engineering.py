@@ -697,6 +697,21 @@ altair.Chart(
 # Furthermore, we want to assess the uncertainty of this estimate of the
 # generalization performance via time-based cross-validation, also known as
 # backtesting.
+#
+# scikit-learn provides a `TimeSeriesSplit` splitter providing a convenient way to
+# split temporal data: in the different folds, the training data always precedes the
+# test data. It implies that the size of the training data is getting larger as the
+# fold index increases. The scikit-learn utility allows to define a couple of
+# parameters to control the size of the training and test data and as well as a gap
+# between the training and test data to potentially avoid leakage if our model relies
+# on lagged features.
+#
+# In the example below, we define that the training data should be at most 2 years
+# worth of data and the test data should be 24 weeks long. We also define a gap of
+# 1 week between the training.
+#
+# Let's check those statistics by iterating over the different folds provided by the
+# splitter.
 
 # %%
 from sklearn.model_selection import TimeSeriesSplit
@@ -723,6 +738,14 @@ for fold_idx, (train_idx, test_idx) in enumerate(
     print(f"Test time range: {test_datetimes[0, 0]} to " f"{test_datetimes[-1, 0]} ")
     print()
 
+# %% [markdown]
+#
+# Once the cross-validation strategy is defined, we pass it to the `cross_validate`
+# function provided by `skrub` to compute the cross-validated scores. Here, we define
+# the mean absolute percentage error that is interpretable. However, this metric is
+# not a proper scoring rule. We therefore look at the R2 score and the Tweedie deviance
+# score.
+
 # %%
 from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_scorer
 from sklearn.metrics import d2_tweedie_score
@@ -743,6 +766,12 @@ hgbr_cv_results = hgbr_predictions.skb.cross_validate(
 )
 hgbr_cv_results.round(3)
 
+# %% [markdown]
+#
+# TODO: comment the results obtained via cross-validation.
+#
+# We further analyze our cross-validated model by collecting the predictions on each
+# split.
 
 # %%
 def collect_cv_predictions(
@@ -787,14 +816,55 @@ hgbr_cv_predictions = collect_cv_predictions(
 )
 hgbr_cv_predictions[0]
 
+# %% [markdown]
+#
+# The first curve is called the Lorenz curve. It shows on the x-axis the fraction of
+# observations sorted by predicted values and on the y-axis the cumulative observed
+# load proportion.
+
 # %%
 plot_lorenz_curve(hgbr_cv_predictions).interactive()
+
+# %% [markdown]
+#
+# The diagonal on the plot corresponds to a model predicting a constant value that is
+# therefore not an informative model. The oracle model corresponds to the "perfect"
+# model that would provide the an output identical to the observed values. Thus, the
+# ranking of such hypothetical model is the best possible ranking. However, you should
+# note that the oracle model is not the line passing through the right-hand corner of
+# the plot. Instead, this curvature is defined by the distribution of the observations.
+# Indeed, more the observations are composed of small values and a couple of large
+# values, the more the oracle model is closer to the right-hand corner of the plot.
+#
+# A true model is navigating between the diagonal and the oracle model. The area between
+# the diagonal and the Lorenz curve of a model is called the Gini index.
+#
+# For our model, we observe that each oracle model is not far from the diagonal. It
+# means that the observed values do not contain a couple of large values with high
+# variability. Therefore, it informs us that the complexity of our problem at hand is
+# not too high. Looking at the Lorenz curve of each model, we observe that it is quite
+# close to the oracle model. Therefore, the gradient boosting regressor is
+# discriminative for our task.
+#
+# Then, we have a look at the reliability diagram. This diagram shows on the x-axis the
+# mean predicted load and on the y-axis the mean observed load.
 
 # %%
 plot_reliability_diagram(hgbr_cv_predictions).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
 
+# %% [markdown]
+#
+# The diagonal on the reliability diagram corresponds to the best possible model: for
+# a level of predicted load that fall into a bin, then the mean observed load is also
+# in the same bin. If the line is above the diagonal, it means that our model is
+# predicted a value too low in comparison to the observed values. If the line is below
+# the diagonal, it means that our model is predicted a value too high in comparison to
+# the observed values.
+#
+# For our cross-validated model, we observe that each reliability curve is close to the
+# diagonal. We only observe a mis-calibration for the extremum values.
 
 # %%
 plot_residuals_vs_predicted(hgbr_cv_predictions).interactive().properties(
@@ -1107,7 +1177,7 @@ multioutput_predictions = features_with_dropped_cols.skb.apply(
         estimator=HistGradientBoostingRegressor(random_state=0), n_jobs=-1
     ),
     y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
-).skb.set_name("multioutput_gbdt")
+).skb.set_name("multioutput_hgbr")
 
 # %%
 target_column_names = [target_column_name_pattern.format(horizon=h) for h in horizons]
@@ -1209,15 +1279,50 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
 
     display(chart)
 
+# %% [markdown]
+#
+# ## Native multi-output handling using `RandomForestRegressor`
+#
+# In the previous section, we showed how to wrap a `HistGradientBoostingRegressor`
+# in a `MultiOutputRegressor` to predict multiple horizons. With such a strategy, it
+# means that we trained independent `HistGradientBoostingRegressor`, one for each
+# horizon.
+#
+# `RandomForestRegressor` natively supports multi-output regression: instead of
+# independently training a model per horizon, it will train a joint model that
+# predicts all horizons at once.
+#
+# Repeat the previous analysis using a `RandomForestRegressor`. Fix the parameter
+# `min_samples_leaf` to 5.
+#
+# Once you created the model, plot the horizon forecast for a given date and time.
+# In addition, compute the cross-validated predictions and plot the R2 and MAPE
+# scores for each horizon.
+#
+# Does this model perform better or worse than the previous model?
+
 # %%
-# TODO: Exercise using RandomForestRegressor
 from sklearn.ensemble import RandomForestRegressor
 
+# %%
+# Write your code here.
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
+# %%
 multioutput_predictions_rf = features_with_dropped_cols.skb.apply(
     RandomForestRegressor(min_samples_leaf=5, random_state=0, n_jobs=-1),
     y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
-).skb.set_name("random_forest")
+).skb.set_name("multioutput_rf")
 
 # %%
 named_predictions_rf = multioutput_predictions_rf.rename(
@@ -1294,6 +1399,17 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
     )
 
     display(chart)
+
+# %% [markdown]
+#
+# We observe that the performance of the `RandomForestRegressor` is not better in terms
+# of scores or computational cost. The trend of the scores along the horizon is also
+# different from the `HistGradientBoostingRegressor`: the scores worsen as the horizon
+# increases.
+
+# %% [markdown]
+#
+# ## Uncertainty quantification using quantile regression
 
 # %%
 from sklearn.metrics import d2_pinball_score
