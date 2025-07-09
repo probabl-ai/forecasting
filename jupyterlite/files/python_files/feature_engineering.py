@@ -696,10 +696,10 @@ ts_cv_5 = TimeSeriesSplit(
     n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap
 )
 
-for cv_idx, (train_idx, test_idx) in enumerate(
+for fold_idx, (train_idx, test_idx) in enumerate(
     ts_cv_5.split(prediction_time.skb.eval())
 ):
-    print(f"CV iteration #{cv_idx}")
+    print(f"CV iteration #{fold_idx}")
     train_datetimes = prediction_time.skb.eval()[train_idx]
     test_datetimes = prediction_time.skb.eval()[test_idx]
     print(
@@ -815,14 +815,14 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
     """Plot the Lorenz curve for a given true and predicted values."""
 
     results = []
-    for cv_idx, predictions in enumerate(cv_predictions):
+    for fold_idx, predictions in enumerate(cv_predictions):
         results.append(
             lorenz_curve(
                 observed_value=predictions["load_mw"],
                 predicted_value=predictions["predicted_load_mw"],
                 n_samples=n_samples,
             ).with_columns(
-                pl.lit(cv_idx).alias("cv_idx"),
+                pl.lit(fold_idx).alias("fold_idx"),
                 pl.lit("Model").alias("model"),
             )
         )
@@ -833,7 +833,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
                 predicted_value=predictions["load_mw"],
                 n_samples=n_samples,
             ).with_columns(
-                pl.lit(cv_idx).alias("cv_idx"),
+                pl.lit(fold_idx).alias("fold_idx"),
                 pl.lit("Oracle").alias("model"),
             )
         )
@@ -871,7 +871,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
             color=altair.Color(
                 "model_label:N", legend=altair.Legend(title="Models"), sort=None
             ),
-            detail="cv_idx:N",
+            detail="fold_idx:N",
         )
     )
 
@@ -941,11 +941,11 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
     )
 
     # Add lines for each CV fold with date labels
-    for i, cv_predictions_i in enumerate(cv_predictions):
+    for fold_idx, cv_predictions_i in enumerate(cv_predictions):
         # Get date range for this CV fold
         min_date = cv_predictions_i["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
-        fold_label = f"#{i+1} - {min_date} to {max_date}"
+        fold_label = f"#{fold_idx} - {min_date} to {max_date}"
 
         mean_per_bins = (
             cv_predictions_i.group_by(
@@ -958,7 +958,7 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
                 ]
             )
             .sort("predicted_load_mw")
-            .with_columns(pl.lit(fold_label).alias("fold"))
+            .with_columns(pl.lit(fold_label).alias("fold_label"))
         )
 
         chart += (
@@ -968,10 +968,10 @@ def plot_reliability_diagram(cv_predictions, n_bins=10):
                 x=altair.X("mean_predicted_load_mw:Q", scale=scale),
                 y=altair.Y("mean_load_mw:Q", scale=scale),
                 color=altair.Color(
-                    "fold:N",
+                    "fold_label:N",
                     legend=altair.Legend(title=None),
                 ),
-                detail=altair.Detail("fold:N"),
+                detail=altair.Detail("fold_label:N"),
             )
         )
     return chart.resolve_scale(color="independent")
@@ -987,6 +987,9 @@ def plot_residuals_vs_predicted(cv_predictions):
     """Plot residuals vs predicted values scatter plot for all CV folds."""
     all_scatter_plots = []
 
+    x_title = "Predicted Load (MW)"
+    y_title = "Residual load (MW): predicted - actual"
+
     for i, cv_prediction in enumerate(cv_predictions):
         # Get date range for this CV fold
         min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
@@ -996,7 +999,7 @@ def plot_residuals_vs_predicted(cv_predictions):
         # Calculate residuals
         residuals_data = cv_prediction.with_columns(
             [(pl.col("predicted_load_mw") - pl.col("load_mw")).alias("residual")]
-        ).with_columns([pl.lit(fold_label).alias("fold")])
+        ).with_columns([pl.lit(fold_label).alias("fold_label")])
 
         # Create scatter plot for this CV fold
         scatter_plot = (
@@ -1005,17 +1008,17 @@ def plot_residuals_vs_predicted(cv_predictions):
             .encode(
                 x=altair.X(
                     "predicted_load_mw:Q",
-                    title="Predicted Load (MW)",
+                    title=x_title,
                     scale=altair.Scale(zero=False),
                 ),
-                y=altair.Y("residual:Q", title="Residual (MW)"),
-                color=altair.Color("fold:N", legend=None),
+                y=altair.Y("residual:Q", title=y_title),
+                color=altair.Color("fold_label:N", legend=None),
                 tooltip=[
                     "prediction_time:T",
                     "load_mw:Q",
                     "predicted_load_mw:Q",
                     "residual:Q",
-                    "fold:N",
+                    "fold_label:N",
                 ],
             )
         )
@@ -1041,8 +1044,8 @@ def plot_residuals_vs_predicted(cv_predictions):
         )
         .mark_line(strokeDash=[5, 5], opacity=0.8, color="black")
         .encode(
-            x=altair.X("predicted_load_mw:Q", title="Predicted Load (MW)"),
-            y=altair.Y("perfect_residual:Q", title="Residual (MW)"),
+            x=altair.X("predicted_load_mw:Q", title=x_title),
+            y=altair.Y("perfect_residual:Q", title=y_title),
             color=altair.Color(
                 "label:N",
                 scale=altair.Scale(range=["black"]),
@@ -1050,7 +1053,6 @@ def plot_residuals_vs_predicted(cv_predictions):
             ),
         )
     )
-
     # Combine all scatter plots
     combined_scatter = all_scatter_plots[0]
     for plot in all_scatter_plots[1:]:
@@ -1109,7 +1111,7 @@ def plot_binned_residuals(cv_predictions, by="hour"):
                 ]
             )
             .sort(time_column)
-            .with_columns(pl.lit(fold_label).alias("fold"))
+            .with_columns(pl.lit(fold_label).alias("fold_label"))
         )
 
         # Store time range for perfect line (use the first CV fold)
@@ -1141,8 +1143,8 @@ def plot_binned_residuals(cv_predictions, by="hour"):
             .encode(
                 x=altair.X(f"{time_column}:O", title=x_title),
                 y=altair.Y("mean_residual:Q", title="Mean residual (MW)"),
-                color=altair.Color("fold:N", legend=None),
-                detail="fold:N",
+                color=altair.Color("fold_label:N", legend=None),
+                detail="fold_label:N",
             )
         )
 
@@ -1202,7 +1204,7 @@ plot_binned_residuals(cv_predictions, by="month").interactive().properties(
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-randomized_search = hgbr_predictions.skb.get_randomized_search(
+randomized_search_ridge = hgbr_predictions.skb.get_randomized_search(
     cv=ts_cv_2,
     scoring="r2",
     n_iter=100,
@@ -1211,10 +1213,10 @@ randomized_search = hgbr_predictions.skb.get_randomized_search(
     n_jobs=-1,
 )
 # %%
-randomized_search.results_.round(3)
+randomized_search_ridge.results_.round(3)
 
 # %%
-randomized_search.plot_results().update_layout(margin=dict(l=150))
+randomized_search_ridge.plot_results().update_layout(margin=dict(l=150))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
@@ -1231,27 +1233,33 @@ randomized_search.plot_results().update_layout(margin=dict(l=150))
 # nested_cv_results
 
 # %%
-# for outer_cv_idx in range(len(nested_cv_results)):
+# for outer_fold_idx in range(len(nested_cv_results)):
 #     print(
-#         nested_cv_results.loc[outer_cv_idx, "pipeline"]
+#         nested_cv_results.loc[outer_fold_idx, "pipeline"]
 #         .results_.loc[0]
 #         .round(3)
 #         .to_dict()
 #     )
 
 # %%
-# TODO: Exercise applying a a linear model with some additional feature engineering
+# TODO: Exercise applying a linear model with some additional feature engineering
 from sklearn.linear_model import Ridge
 from sklearn.kernel_approximation import Nystroem
 
 model = skrub.tabular_learner(
-    estimator=Ridge(alpha=skrub.choose_float(1e-6, 1e6, log=True, default=1e-3))
+    estimator=Ridge(
+        alpha=skrub.choose_float(1e-6, 1e6, log=True, name="alpha", default=1e-3)
+    )
 )
 model.steps.insert(
     -1,
     (
         "nystroem",
-        Nystroem(n_components=skrub.choose_int(10, 200, log=True, default=150)),
+        Nystroem(
+            n_components=skrub.choose_int(
+                10, 200, log=True, name="n_components", default=150
+            )
+        ),
     ),
 )
 
@@ -1278,10 +1286,7 @@ altair.Chart(
 ).interactive()
 
 # %%
-ts_cv_2 = TimeSeriesSplit(
-    n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
-)
-randomized_search = predictions_ridge.skb.get_randomized_search(
+randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
     cv=ts_cv_2,
     scoring="r2",
     n_iter=100,
@@ -1291,27 +1296,53 @@ randomized_search = predictions_ridge.skb.get_randomized_search(
 )
 
 # %%
-randomized_search.plot_results().update_layout(margin=dict(l=200))
+randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
+
+# %% [markdown]
+#
+# We observe that the default values of the hyper-parameters are in the optimal
+# region explored by the randomized search. This is a good sign that the model
+# is well-specified and that the hyper-parameters are not too sensitive to
+# small changes of those values.
+#
+# We could further assess the stability of those optimal hyper-parameters by
+# running a nested cross-validation, where we would perform a randomized search
+# for each fold of the outer cross-validation loop as below but this is
+# computationally expensive.
+
+# # %%
+# nested_cv_results_ridge = skrub.cross_validate(
+#     environment=predictions_ridge.skb.get_data(),
+#     pipeline=randomized_search_ridge,
+#     cv=ts_cv_5,
+#     scoring={
+#         "r2": get_scorer("r2"),
+#         "mape": make_scorer(mean_absolute_percentage_error),
+#     },
+#     n_jobs=-1,
+#     return_pipeline=True,
+# ).round(3)
+
+# # %%
+# nested_cv_results_ridge.round(3)
 
 # %%
-nested_cv_results = skrub.cross_validate(
-    environment=predictions_ridge.skb.get_data(),
-    pipeline=randomized_search,
+cv_results_ridge = predictions_ridge.skb.cross_validate(
     cv=ts_cv_5,
     scoring={
         "r2": get_scorer("r2"),
         "mape": make_scorer(mean_absolute_percentage_error),
     },
-    n_jobs=-1,
+    return_train_score=True,
     return_pipeline=True,
-).round(3)
+    verbose=1,
+    n_jobs=-1,
+)
 
-# %%
-nested_cv_results.round(3)
 
 # %%
 cv_predictions_ridge = collect_cv_predictions(
-    nested_cv_results["pipeline"], ts_cv_5, predictions_ridge, prediction_time
+    cv_results_ridge["pipeline"], ts_cv_5, predictions_ridge, prediction_time
 )
 
 # %%
