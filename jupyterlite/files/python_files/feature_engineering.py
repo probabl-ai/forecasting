@@ -716,7 +716,7 @@ from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_sco
 from sklearn.metrics import d2_tweedie_score
 
 
-cv_results = hgbr_predictions.skb.cross_validate(
+hgbr_cv_results = hgbr_predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring={
         "mape": make_scorer(mean_absolute_percentage_error),
@@ -729,7 +729,7 @@ cv_results = hgbr_predictions.skb.cross_validate(
     verbose=1,
     n_jobs=-1,
 )
-cv_results.round(3)
+hgbr_cv_results.round(3)
 
 
 # %%
@@ -764,10 +764,10 @@ def collect_cv_predictions(pipelines, cv_splitter, predictions, prediction_time)
 
 
 # %%
-cv_predictions = collect_cv_predictions(
-    cv_results["pipeline"], ts_cv_5, hgbr_predictions, prediction_time
+hgbr_cv_predictions = collect_cv_predictions(
+    hgbr_cv_results["pipeline"], ts_cv_5, hgbr_predictions, prediction_time
 )
-cv_predictions[0]
+hgbr_cv_predictions[0]
 
 # %%
 
@@ -902,7 +902,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
     return model_chart + diagonal_chart
 
 
-plot_lorenz_curve(cv_predictions, n_samples=500).interactive()
+plot_lorenz_curve(hgbr_cv_predictions, n_samples=500).interactive()
 
 
 # %%
@@ -991,7 +991,7 @@ def plot_reliability_diagram(
     return chart.resolve_scale(color="independent")
 
 
-plot_reliability_diagram(cv_predictions).interactive().properties(
+plot_reliability_diagram(hgbr_cv_predictions).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
 
@@ -1076,7 +1076,7 @@ def plot_residuals_vs_predicted(cv_predictions):
     return (combined_scatter + perfect_line).resolve_scale(color="independent")
 
 
-plot_residuals_vs_predicted(cv_predictions).interactive().properties(
+plot_residuals_vs_predicted(hgbr_cv_predictions).interactive().properties(
     title="Residuals vs Predicted Values from cross-validation predictions"
 )
 
@@ -1204,13 +1204,13 @@ def plot_binned_residuals(cv_predictions, by="hour"):
     )
 
 
-plot_binned_residuals(cv_predictions, by="hour").interactive().properties(
+plot_binned_residuals(hgbr_cv_predictions, by="hour").interactive().properties(
     title="Residuals by hour of the day from cross-validation predictions"
 )
 
 
 # %%
-plot_binned_residuals(cv_predictions, by="month").interactive().properties(
+plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
     title="Residuals by hour of the day from cross-validation predictions"
 )
 
