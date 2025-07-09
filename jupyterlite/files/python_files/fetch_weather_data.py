@@ -58,6 +58,7 @@ m
 # Meteo Historical Forecast API, which provides historical weather data for
 # free (with rate limits).
 
+
 # %%
 def download_weather_data(city):
     session = requests_cache.CachedSession(".cache", expire_after=3600)
@@ -109,6 +110,7 @@ def download_weather_data(city):
     hourly_data["soil_moisture_1_to_3cm"] = hourly_soil_moisture_1_to_3cm
     hourly_data["relative_humidity_2m"] = hourly_relative_humidity_2m
     return pd.DataFrame(data=hourly_data)
+
 
 # %% [markdown]
 #
