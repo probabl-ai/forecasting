@@ -823,7 +823,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
                 n_samples=n_samples,
             ).with_columns(
                 pl.lit(cv_idx).alias("cv_idx"),
-                pl.lit("model").alias("model"),
+                pl.lit("Model").alias("model"),
             )
         )
 
@@ -834,7 +834,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
                 n_samples=n_samples,
             ).with_columns(
                 pl.lit(cv_idx).alias("cv_idx"),
-                pl.lit("oracle").alias("model"),
+                pl.lit("Oracle").alias("model"),
             )
         )
 
@@ -854,7 +854,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
     )
 
     results = results.join(gini_stats, on="model").with_columns(
-        pl.format("{} ({} +/- {})", "model", "gini_mean", "gini_std_dev").alias(
+        pl.format("{} (Gini: {} +/- {})", "model", "gini_mean", "gini_std_dev").alias(
             "model_label"
         )
     )
@@ -881,7 +881,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=1_000):
                 {
                     "cum_population": [0, 1],
                     "cum_observed": [0, 1],
-                    "model_label": "Non-informative model",
+                    "model_label": "Non-informative model (Gini = 0.0)",
                 }
             )
         )
