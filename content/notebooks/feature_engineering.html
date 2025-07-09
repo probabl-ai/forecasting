@@ -1321,32 +1321,28 @@ backtesting.</p>
 <div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">ts_cv_2</span> <span class="o">=</span> <span class="n">TimeSeriesSplit</span><span class="p">(</span>
     <span class="n">n_splits</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">test_size</span><span class="o">=</span><span class="n">test_size</span><span class="p">,</span> <span class="n">max_train_size</span><span class="o">=</span><span class="n">max_train_size</span><span class="p">,</span> <span class="n">gap</span><span class="o">=</span><span class="mi">24</span>
 <span class="p">)</span>
-<span class="c1"># randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(</span>
-<span class="c1">#     cv=ts_cv_2,</span>
-<span class="c1">#     scoring=&quot;r2&quot;,</span>
-<span class="c1">#     n_iter=100,</span>
-<span class="c1">#     fitted=True,</span>
-<span class="c1">#     verbose=1,</span>
-<span class="c1">#     n_jobs=-1,</span>
-<span class="c1"># )</span>
-<span class="c1"># # %%</span>
-<span class="c1"># randomized_search_hgbr.results_.round(3)</span>
+<span class="n">randomized_search_hgbr</span> <span class="o">=</span> <span class="n">hgbr_predictions</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">get_randomized_search</span><span class="p">(</span>
+    <span class="n">cv</span><span class="o">=</span><span class="n">ts_cv_2</span><span class="p">,</span>
+    <span class="n">scoring</span><span class="o">=</span><span class="s2">&quot;r2&quot;</span><span class="p">,</span>
+    <span class="n">n_iter</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+    <span class="n">fitted</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">n_jobs</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># fig = randomized_search_hgbr.plot_results().update_layout(margin=dict(l=200))</span>
-<span class="c1"># write_json(fig, &quot;parallel_coordinates_hgbr.json&quot;)</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">randomized_search_hgbr</span><span class="o">.</span><span class="n">results_</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 </div>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
-<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">fig</span> <span class="o">=</span> <span class="n">read_json</span><span class="p">(</span><span class="s2">&quot;parallel_coordinates_hgbr.json&quot;</span><span class="p">)</span>
-<span class="n">fig</span><span class="o">.</span><span class="n">update_layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">l</span><span class="o">=</span><span class="mi">200</span><span class="p">))</span>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">randomized_search_hgbr</span><span class="o">.</span><span class="n">plot_results</span><span class="p">()</span><span class="o">.</span><span class="n">update_layout</span><span class="p">(</span><span class="n">margin</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">l</span><span class="o">=</span><span class="mi">150</span><span class="p">))</span>
 </pre></div>
 </div>
 </div>
