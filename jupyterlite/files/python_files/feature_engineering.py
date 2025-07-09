@@ -1653,7 +1653,7 @@ def coverage_score(y_true, y_quantile_low, y_quantile_high):
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
     return float(
-        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high).mean()
+        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high).mean().round(4)
     )
 
 
@@ -1661,7 +1661,7 @@ def width_score(y_true, y_quantile_low, y_quantile_high):
     y_true = np.asarray(y_true)
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
-    return float(np.abs(y_quantile_high - y_quantile_low).mean())
+    return float(np.abs(y_quantile_high - y_quantile_low).mean().round(1))
 
 
 # %%
