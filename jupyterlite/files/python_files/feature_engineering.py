@@ -328,6 +328,37 @@ altair.Chart(electricity_lagged.tail(100).skb.eval()).transform_fold(
 ).mark_line(tooltip=True).encode(x="time:T", y="load_mw:Q", color="key:N").interactive()
 
 # %% [markdown]
+#
+# ## Remark lagged features engineering and system lag
+#
+# When working with historical data, we often have access to all the past
+# measurements in the dataset. However, when we want to use the lagged features
+# in a forecasting model, we need to be careful about the length of the
+# **system lag**: the time between a timestamped measurement is made in the
+# real world and the time the record is made available to the downstream
+# application (in our case, a deployed predictive pipeline).
+#
+# System lag is rarely explicitly represented in the data sources even if such
+# delay can be as large as several hours or even days and can sometimes be
+# irregular. For instance, if there is a human intervention in the data
+# recording process, holidays and weekends can punctually add significant
+# delay.
+#
+# If the system lag is larger than the maximum feature engineering lag we want
+# to use in our feature engineering, the resulting features will have missing
+# values when deployed. More importantly, if the system lag is not handled
+# explicitly, those resulting missing values will only be present in the
+# features engineered for the deployed system but not present in the features
+# engineered to train and backtest the system before deployment.
+#
+# This structural discrepancy will degrade the performance of the deployed
+# model compared to the performance estimated from backtesting on the
+# historical data.
+#
+# We will set this problem aside for now but discuss it again in a later
+# section of this tutorial.
+
+# %% [markdown]
 # ## Investigating outliers in the lagged features
 #
 # Let's use the `skrub.TableReport` tool to look at the plots of the marginal
