@@ -1556,30 +1556,39 @@ predictions_gbrt_95 = features_with_dropped_cols.skb.apply(
 cv_results_05 = predictions_gbrt_05.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
+    return_pipeline=True,
     verbose=1,
     n_jobs=-1,
 )
 cv_results_50 = predictions_gbrt_50.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
+    return_pipeline=True,
     verbose=1,
     n_jobs=-1,
 )
 cv_results_95 = predictions_gbrt_95.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
+    return_pipeline=True,
     verbose=1,
     n_jobs=-1,
 )
 
 # %%
-cv_results_05.mean(axis=0).round(3)
+cv_results_05[[col for col in cv_results_05.columns if col.startswith("test_")]].mean(
+    axis=0
+).round(3)
 
 # %%
-cv_results_50.mean(axis=0).round(3)
+cv_results_50[[col for col in cv_results_50.columns if col.startswith("test_")]].mean(
+    axis=0
+).round(3)
 
 # %%
-cv_results_95.mean(axis=0).round(3)
+cv_results_95[[col for col in cv_results_95.columns if col.startswith("test_")]].mean(
+    axis=0
+).round(3)
 
 # %%
 results = pl.concat(
@@ -1615,6 +1624,41 @@ combined_chart = quantile_band_chart + median_chart
 combined_chart.interactive()
 
 # %%
+plot_residuals_vs_predicted(
+    collect_cv_predictions(
+        cv_results_05["pipeline"], ts_cv_5, predictions_gbrt_05, prediction_time
+    )
+).interactive().properties(
+    title=(
+        "Residuals vs Predicted Values from cross-validation predictions"
+        " for quantile 0.05"
+    )
+)
+
+# %%
+plot_residuals_vs_predicted(
+    collect_cv_predictions(
+        cv_results_50["pipeline"], ts_cv_5, predictions_gbrt_50, prediction_time
+    )
+).interactive().properties(
+    title=(
+        "Residuals vs Predicted Values from cross-validation predictions" " for median"
+    )
+)
+
+# %%
+plot_residuals_vs_predicted(
+    collect_cv_predictions(
+        cv_results_95["pipeline"], ts_cv_5, predictions_gbrt_95, prediction_time
+    )
+).interactive().properties(
+    title=(
+        "Residuals vs Predicted Values from cross-validation predictions"
+        " for quantile 0.95"
+    )
+)
+
+# %%
 import matplotlib.pyplot as plt
 from sklearn.metrics import PredictionErrorDisplay
 
@@ -1646,6 +1690,8 @@ for kind in ["actual_vs_predicted", "residual_vs_predicted"]:
     )
     axs[2].set_title("0.95 quantile regression")
 
+    fig.suptitle(f"{kind} for GBRT minimzing different quantile losses")
+
 
 # %%
 def coverage_score(y_true, y_quantile_low, y_quantile_high):
@@ -1653,7 +1699,9 @@ def coverage_score(y_true, y_quantile_low, y_quantile_high):
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
     return float(
-        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high).mean().round(4)
+        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high)
+        .mean()
+        .round(4)
     )
 
 
