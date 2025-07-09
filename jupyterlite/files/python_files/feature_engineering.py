@@ -687,10 +687,10 @@ from sklearn.metrics import d2_tweedie_score
 cv_results = hgbr_predictions.skb.cross_validate(
     cv=ts_cv_5,
     scoring={
+        "mape": make_scorer(mean_absolute_percentage_error),
         "r2": get_scorer("r2"),
-        "d2_poisson": make_scorer(mean_absolute_percentage_error),
-        "d2_gamma": make_scorer(d2_tweedie_score, power=1.0),
-        "mape": make_scorer(d2_tweedie_score, power=2.0),
+        "d2_poisson": make_scorer(d2_tweedie_score, power=1.0),
+        "d2_gamma": make_scorer(d2_tweedie_score, power=2.0),
     },
     return_train_score=True,
     return_pipeline=True,
@@ -1522,5 +1522,126 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
     )
 
     display(chart)
+
+# %%
+from sklearn.metrics import mean_pinball_loss
+
+scoring = {
+    "r2": get_scorer("r2"),
+    "mape": make_scorer(mean_absolute_percentage_error),
+    "mean_pinball_05_loss": make_scorer(mean_pinball_loss, alpha=0.05),
+    "mean_pinball_50_loss": make_scorer(mean_pinball_loss, alpha=0.5),
+    "mean_pinball_95_loss": make_scorer(mean_pinball_loss, alpha=0.95),
+}
+
+# %%
+common_params = dict(
+    loss="quantile", learning_rate=0.1, max_leaf_nodes=100, random_state=0
+)
+predictions_gbrt_05 = features_with_dropped_cols.skb.apply(
+    HistGradientBoostingRegressor(**common_params, quantile=0.05),
+    y=target,
+)
+predictions_gbrt_50 = features_with_dropped_cols.skb.apply(
+    HistGradientBoostingRegressor(**common_params, quantile=0.5),
+    y=target,
+)
+predictions_gbrt_95 = features_with_dropped_cols.skb.apply(
+    HistGradientBoostingRegressor(**common_params, quantile=0.95),
+    y=target,
+)
+
+# %%
+cv_results_05 = predictions_gbrt_05.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    verbose=1,
+    n_jobs=-1,
+)
+cv_results_50 = predictions_gbrt_50.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    verbose=1,
+    n_jobs=-1,
+)
+cv_results_95 = predictions_gbrt_95.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    verbose=1,
+    n_jobs=-1,
+)
+
+# %%
+cv_results_05.mean(axis=0).round(3)
+
+# %%
+cv_results_50.mean(axis=0).round(3)
+
+# %%
+cv_results_95.mean(axis=0).round(3)
+
+# %%
+results = pl.concat(
+    [
+        targets.skb.select(cols=["prediction_time", target_column_name]).skb.eval(),
+        predictions_gbrt_05.rename({target_column_name: "quantile_05"}).skb.eval(),
+        predictions_gbrt_50.rename({target_column_name: "median"}).skb.eval(),
+        predictions_gbrt_95.rename({target_column_name: "quantile_95"}).skb.eval(),
+    ],
+    how="horizontal",
+).tail(24 * 7)
+
+# %%
+median_chart = (
+    altair.Chart(results)
+    .transform_fold([target_column_name, "median"])
+    .mark_line(tooltip=True)
+    .encode(x="prediction_time:T", y="value:Q", color="key:N")
+)
+
+quantile_band_chart = (
+    altair.Chart(results)
+    .mark_area(opacity=0.4, tooltip=True)
+    .encode(
+        x="prediction_time:T",
+        y="quantile_05:Q",
+        y2="quantile_95:Q",
+        color=altair.value("green"),
+    )
+)
+
+combined_chart = quantile_band_chart + median_chart
+combined_chart.interactive()
+
+# %%
+import matplotlib.pyplot as plt
+from sklearn.metrics import PredictionErrorDisplay
+
+fig, axs = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
+
+PredictionErrorDisplay.from_predictions(
+    y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    y_pred=predictions_gbrt_05["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    kind="actual_vs_predicted",
+    ax=axs[0],
+)
+axs[0].set_title("0.05 Quantile")
+
+PredictionErrorDisplay.from_predictions(
+    y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    y_pred=predictions_gbrt_50["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    kind="actual_vs_predicted",
+    ax=axs[1],
+)
+axs[1].set_title("Median")
+
+PredictionErrorDisplay.from_predictions(
+    y_true=targets["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    y_pred=predictions_gbrt_95["load_mw_horizon_24h"].skb.eval().to_numpy(),
+    kind="actual_vs_predicted",
+    ax=axs[2],
+)
+axs[2].set_title("0.95 Quantile")
+_ = fig.suptitle("GBRT Predictions for different quantiles")
 
 # %%
