@@ -689,3 +689,39 @@ def binned_coverage(y_true_folds, y_quantile_low, y_quantile_high, n_bins=10):
             )
 
     return pd.DataFrame(results)
+
+
+def collect_cv_predictions(
+    pipelines,
+    cv_splitter,
+    predictions,
+    prediction_time,
+):
+    index_generator = cv_splitter.split(prediction_time.skb.eval())
+
+    def splitter(X, y, index_generator):
+        """Workaround to transform a scikit-learn splitter into a function understood
+        by `skrub.train_test_split`."""
+        train_idx, test_idx = next(index_generator)
+        return X[train_idx], X[test_idx], y[train_idx], y[test_idx]
+
+    results = []
+
+    for (_, test_idx), pipeline in zip(
+        cv_splitter.split(prediction_time.skb.eval()), pipelines
+    ):
+        split = predictions.skb.train_test_split(
+            predictions.skb.get_data(),
+            splitter=splitter,
+            index_generator=index_generator,
+        )
+        results.append(
+            pl.DataFrame(
+                {
+                    "prediction_time": prediction_time.skb.eval()[test_idx],
+                    "load_mw": split["y_test"],
+                    "predicted_load_mw": pipeline.predict(split["test"]),
+                }
+            )
+        )
+    return results

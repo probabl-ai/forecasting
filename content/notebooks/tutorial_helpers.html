@@ -1129,6 +1129,46 @@ document.write(`
 </div>
 </div>
 </div>
+<div class="cell docutils container">
+<div class="cell_input docutils container">
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">collect_cv_predictions</span><span class="p">(</span>
+    <span class="n">pipelines</span><span class="p">,</span>
+    <span class="n">cv_splitter</span><span class="p">,</span>
+    <span class="n">predictions</span><span class="p">,</span>
+    <span class="n">prediction_time</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="n">index_generator</span> <span class="o">=</span> <span class="n">cv_splitter</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">prediction_time</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">())</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">splitter</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">index_generator</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Workaround to transform a scikit-learn splitter into a function understood</span>
+<span class="sd">        by `skrub.train_test_split`.&quot;&quot;&quot;</span>
+        <span class="n">train_idx</span><span class="p">,</span> <span class="n">test_idx</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">index_generator</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">X</span><span class="p">[</span><span class="n">train_idx</span><span class="p">],</span> <span class="n">X</span><span class="p">[</span><span class="n">test_idx</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">train_idx</span><span class="p">],</span> <span class="n">y</span><span class="p">[</span><span class="n">test_idx</span><span class="p">]</span>
+
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">_</span><span class="p">,</span> <span class="n">test_idx</span><span class="p">),</span> <span class="n">pipeline</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span>
+        <span class="n">cv_splitter</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">prediction_time</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">()),</span> <span class="n">pipelines</span>
+    <span class="p">):</span>
+        <span class="n">split</span> <span class="o">=</span> <span class="n">predictions</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">train_test_split</span><span class="p">(</span>
+            <span class="n">predictions</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">get_data</span><span class="p">(),</span>
+            <span class="n">splitter</span><span class="o">=</span><span class="n">splitter</span><span class="p">,</span>
+            <span class="n">index_generator</span><span class="o">=</span><span class="n">index_generator</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;prediction_time&quot;</span><span class="p">:</span> <span class="n">prediction_time</span><span class="o">.</span><span class="n">skb</span><span class="o">.</span><span class="n">eval</span><span class="p">()[</span><span class="n">test_idx</span><span class="p">],</span>
+                    <span class="s2">&quot;load_mw&quot;</span><span class="p">:</span> <span class="n">split</span><span class="p">[</span><span class="s2">&quot;y_test&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;predicted_load_mw&quot;</span><span class="p">:</span> <span class="n">pipeline</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">split</span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]),</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">results</span>
+</pre></div>
+</div>
+</div>
+</div>
 
     <script type="text/x-thebe-config">
     {
