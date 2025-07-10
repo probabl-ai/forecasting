@@ -206,13 +206,21 @@ def plot_reliability_diagram(
     all_loads = pl.concat(all_loads["load_mw", "predicted_load_mw"])
     min_load, max_load = all_loads.min(), all_loads.max()
     scale = altair.Scale(domain=[min_load, max_load])
+    if kind == "mean":
+        y_name = "mean_load_mw"
+        agg_expr = pl.col("load_mw").mean()
+    elif kind == "quantile":
+        y_name = "quantile_of_load_mw"
+        agg_expr = pl.col("load_mw").quantile(quantile_level)
+    else:
+        raise ValueError(f"Unknown kind: {kind}. Use 'mean' or 'quantile'.")
 
     chart = (
         altair.Chart(
             pl.DataFrame(
                 {
                     "mean_predicted_load_mw": [min_load, max_load],
-                    "mean_load_mw": [min_load, max_load],
+                    y_name: [min_load, max_load],
                     "label": ["Perfect"] * 2,
                 }
             )
@@ -220,7 +228,7 @@ def plot_reliability_diagram(
         .mark_line(tooltip=True, opacity=0.8, strokeDash=[5, 5])
         .encode(
             x=altair.X("mean_predicted_load_mw:Q", scale=scale),
-            y=altair.Y("mean_load_mw:Q", scale=scale),
+            y=altair.Y(f"{y_name}:Q", scale=scale),
             color=altair.Color(
                 "label:N",
                 scale=altair.Scale(range=["black"]),
@@ -233,15 +241,6 @@ def plot_reliability_diagram(
         min_date = cv_predictions_i["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
         fold_label = f"#{fold_idx} - {min_date} to {max_date}"
-
-        if kind == "mean":
-            y_name = "mean_load_mw"
-            agg_expr = pl.col("load_mw").mean()
-        elif kind == "quantile":
-            y_name = "quantile_of_load_mw"
-            agg_expr = pl.col("load_mw").quantile(quantile_level)
-        else:
-            raise ValueError(f"Unknown kind: {kind}. Use 'mean' or 'quantile'.")
 
         mean_per_bins = (
             cv_predictions_i.group_by(
