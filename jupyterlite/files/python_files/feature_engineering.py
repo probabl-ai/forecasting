@@ -267,26 +267,44 @@ def load_electricity_load_data(time, data_source_folder):
         on="time",
     )
 
-
-electricity = load_electricity_load_data(time, data_source_folder)
-electricity
-
-# %%
-electricity.filter(pl.col("load_mw").is_null())
+# %% [markdown]
+#
+# Let's load the data and check if there are missing values since we will use
+# this data as the target variable for our forecasting model.
 
 # %%
+electricity_raw = load_electricity_load_data(time, data_source_folder)
+electricity_raw.filter(pl.col("load_mw").is_null())
 
-electricity.filter(
+# %% [markdown]
+#
+# So apparently there a few missing measurements. Let's use linear
+# interpolation to fill those missing values.
+
+# %%
+electricity_raw.filter(
     (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
     & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
 ).skb.eval().plot.line(x="time:T", y="load_mw:Q")
 
 # %%
-electricity = electricity.with_columns([pl.col("load_mw").interpolate()])
+electricity = electricity_raw.with_columns([pl.col("load_mw").interpolate()])
 electricity.filter(
     (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
     & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
 ).skb.eval().plot.line(x="time:T", y="load_mw:Q")
+
+# %% [markdown]
+#
+# **Remark**: interpolating missing values in the target column that we will
+# use to train and evaluate our models can bias the learning problem and make
+# our cross-validation metrics misrepresent the performance of the deployed
+# predictive system.
+#
+# A potentially better approach would be to keep the missing values in the
+# dataset and use a sample_weight mask to keep a contiguous dataset while
+# ignoring the time periods with missing values when training or evaluating the
+# model.
 
 # %% [markdown]
 #
