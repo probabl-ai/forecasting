@@ -16,9 +16,10 @@
 # %%
 import warnings
 
-import skrub
 import altair
 import cloudpickle
+import pyarrow  # noqa: F401
+import skrub
 from plotly.io import write_json, read_json  # noqa: F401
 
 from tutorial_helpers import (

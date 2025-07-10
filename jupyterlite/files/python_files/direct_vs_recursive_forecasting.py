@@ -33,6 +33,7 @@
 # with lagged feature engineering.
 
 # %%
+from time import perf_counter
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -120,7 +121,6 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import SplineTransformer, PolynomialFeatures
 from sklearn.kernel_approximation import Nystroem
 from mlforecast.lag_transforms import (
-    Combine,
     RollingMax,
     RollingMin,
     RollingMean,
@@ -139,10 +139,16 @@ threadpoolctl.threadpool_limits(limits=1, user_api="openmp")
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="sklearn")
 
 
+# MLForecast can train multiple models in parallel, each model can be a
+# pipeline of transformers and a regressor. However we focus on a single
+# HistGradientBoostingRegressor model to make sure that this notebook runs
+# quickly enough. Feel free to uncomment the other models to compare their
+# performance if you have enough time and memory available.
+#
+# Spoiler alert: the HistGradientBoostingRegressor model is the most accurate.
+
 mlf = MLForecast(
     models=[
-        # Ridge(alpha=1e-6),
-        # make_pipeline(SplineTransformer(), Ridge(alpha=1e-6)),
         # make_pipeline(
         #     SplineTransformer(sparse_output=True, n_knots=10),
         #     PolynomialFeatures(degree=2, include_bias=False, interaction_only=True),
@@ -185,42 +191,119 @@ schema = dict(
 # %%
 mlf.preprocess(data_train, **schema)
 
+# %% [markdown]
+#
+# ## Recursive or auto-regressive forecasting
+
+# %%
+tic = perf_counter()
+mlf.fit(data_train, **schema)  # recursive forecasting by default in mlforecast
+print(f"Recursive forecasting training time: {perf_counter() - tic:.1f} seconds")
+
 # %%
 PREDICTION_HORIZON = SEGMENT_LENGTH * 2
+
+
+def collect_predictions(mlf, data_test, test_offset=0):
+    """Collect predictions from the MLForecast object."""
+    all_predictions = []
+    UPDATE_CHUNK_SIZE = 5
+    while test_offset < len(data_test):
+
+        new_predictions = mlf.predict(PREDICTION_HORIZON)
+        new_predictions["horizon"] = np.arange(new_predictions.shape[0]) + 1
+        new_predictions = new_predictions.merge(
+            data_test, on=["time", "series_id"], how="left"
+        )
+        all_predictions.append(new_predictions)
+
+        # Update the forecaster with the new observations
+        mlf.update(data_test.iloc[test_offset : test_offset + UPDATE_CHUNK_SIZE])
+        test_offset += UPDATE_CHUNK_SIZE
+
+    return all_predictions
+
+
+tic = perf_counter()
+all_recursive_predictions = collect_predictions(mlf, data_test)
+print(f"Recursive forecasting prediction time: {perf_counter() - tic:.1f} seconds")
+
+# %% [markdown]
+#
+# ## Direct forecasting
+#
+# Let's pass `max_horizon` to force modeling for direct forecasting.
+
 # %%
-# %%time
-# mlf.fit(data_train, max_horizon=PREDICTION_HORIZON, **schema) # direct forecasting
-mlf.fit(data_train, **schema)  # recursive forecasting
+tic = perf_counter()
+mlf.fit(data_train, max_horizon=PREDICTION_HORIZON, **schema)
+print(f"Direct forecasting training time: {perf_counter() - tic:.1f} seconds")
+
+# %%
+tic = perf_counter()
+all_direct_predictions = collect_predictions(mlf, data_test)
+print(f"Direct forecasting prediction time: {perf_counter() - tic:.1f} seconds")
+
+# %% [markdown]
+#
+# ## Quantitative comparison
 
 
 # %%
-# %%time
-test_offset = 0
-
-all_predictions = []
-UPDATE_CHUNK_SIZE = 5
-while test_offset < len(data_test):
-
-    new_predictions = mlf.predict(PREDICTION_HORIZON)
-    all_predictions.append(new_predictions)
-
-    # Update the forecaster with the new observations
-    mlf.update(data_test.iloc[test_offset : test_offset + UPDATE_CHUNK_SIZE])
-    test_offset += UPDATE_CHUNK_SIZE
-
-
-# %%
-nrows = 12
-fig, axes = plt.subplots(nrows=nrows, figsize=(15, 5 * nrows))
-for row_idx, predictions in enumerate(all_predictions):
-    merged_data = data_test.copy()
-    merged_data = merged_data.merge(predictions, on=["time", "series_id"], how="left")
-
-    merged_data.drop(["series_id"], axis=1).iloc[: SEGMENT_LENGTH * 3].plot(
-        x="time", ax=axes[row_idx]
+def score_predictions(all_predictions, model_name):
+    """Compute the mean absolute error of the predictions."""
+    all_predictions = pd.concat(all_predictions)
+    all_predictions["absolute_error"] = np.abs(
+        all_predictions["y"] - all_predictions[model_name]
     )
-    axes[row_idx].set_ylim(-1.2, 1.2)
+    return all_predictions.dropna().groupby("horizon")
 
-    if row_idx >= nrows - 1:
-        break
+
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+score_predictions(
+    all_recursive_predictions, "HistGradientBoostingRegressor"
+).mean().reset_index().plot(x="horizon", y="absolute_error", label="recursive", ax=ax)
+score_predictions(
+    all_direct_predictions, "HistGradientBoostingRegressor"
+).mean().reset_index().plot(x="horizon", y="absolute_error", label="direct ", ax=ax)
+_ = ax.set(ylabel="MAE")
+
+# %% [markdown]
+#
+# ## Qualitative comparison
+
+
 # %%
+def plot_some_predictions(all_predictions, data_test, model_name, nrows=12, title=None):
+
+    fig, axes = plt.subplots(nrows=nrows, figsize=(15, 5 * nrows))
+    for row_idx, predictions in enumerate(all_predictions):
+        predictions = predictions.drop("y", axis=1)
+        merged_data = data_test.copy()
+        merged_data = merged_data.merge(
+            predictions, on=["time", "series_id"], how="left"
+        )
+        merged_data.drop(["series_id"], axis=1).iloc[: SEGMENT_LENGTH * 3].plot(
+            x="time", y=["y", model_name], ax=axes[row_idx]
+        )
+        axes[row_idx].set_title(title)
+        axes[row_idx].set_ylim(-1.2, 1.2)
+
+        if row_idx >= nrows - 1:
+            break
+
+
+# %%
+plot_some_predictions(
+    all_recursive_predictions,
+    data_test,
+    "HistGradientBoostingRegressor",
+    title="recursive",
+)
+
+# %%
+plot_some_predictions(
+    all_direct_predictions, data_test, "HistGradientBoostingRegressor", title="direct"
+)

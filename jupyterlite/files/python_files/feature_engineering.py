@@ -573,15 +573,14 @@ targets
 # %%
 import cloudpickle
 
-if not Path("feature_engineering_pipeline.pkl").exists():
-    with open("feature_engineering_pipeline.pkl", "wb") as f:
-        cloudpickle.dump(
-            {
-                "features": features,
-                "targets": targets,
-                "prediction_time": prediction_time,
-                "horizons": horizons,
-                "target_column_name_pattern": target_column_name_pattern,
-            },
-            f,
-        )
+with open("feature_engineering_pipeline.pkl", "wb") as f:
+    cloudpickle.dump(
+        {
+            "features": features,
+            "targets": targets,
+            "prediction_time": prediction_time,
+            "horizons": horizons,
+            "target_column_name_pattern": target_column_name_pattern,
+        },
+        f,
+    )

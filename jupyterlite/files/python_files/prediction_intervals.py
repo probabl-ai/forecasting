@@ -16,10 +16,11 @@
 # %%
 import warnings
 
-import polars as pl
 import altair
 import cloudpickle
 import numpy as np
+import pyarrow  # noqa: F401
+import polars as pl
 
 from tutorial_helpers import (
     binned_coverage,
@@ -107,66 +108,10 @@ predictions_hgbr_95 = features.skb.apply(
 
 # %% [markdown]
 #
-# Now, let's make a plot of the predictions for each model and thus we need to gather
-# all the predictions in a single dataframe.
-
-# %%
-results = pl.concat(
-    [
-        targets.skb.select(cols=["prediction_time", target_column_name]).skb.preview(),
-        predictions_hgbr_05.rename({target_column_name: "quantile_05"}).skb.preview(),
-        predictions_hgbr_50.rename({target_column_name: "median"}).skb.preview(),
-        predictions_hgbr_95.rename({target_column_name: "quantile_95"}).skb.preview(),
-    ],
-    how="horizontal",
-).tail(24 * 7)
-
-# %% [markdown]
-#
-# Now, we plot the observed values and the predicted median with a line. In addition,
-# we plot the 5th and 95th percentiles as a shaded area. It means that between those
-# two bounds, we expect to find 90% of the observed values.
-#
-# We plot this information on a portion of the training data to observe the uncertainty
-# quantification of the predictions.
-
-# %%
-median_chart = (
-    altair.Chart(results)
-    .transform_fold([target_column_name, "median"])
-    .mark_line(tooltip=True)
-    .encode(x="prediction_time:T", y="value:Q", color="key:N")
-)
-
-# Add a column for the band legend
-results_with_band = results.with_columns(pl.lit("90% interval").alias("band_type"))
-
-quantile_band_chart = (
-    altair.Chart(results_with_band)
-    .mark_area(opacity=0.4, tooltip=True)
-    .encode(
-        x="prediction_time:T",
-        y="quantile_05:Q",
-        y2="quantile_95:Q",
-        color=altair.Color("band_type:N", scale=altair.Scale(range=["lightgreen"])),
-    )
-)
-
-combined_chart = quantile_band_chart + median_chart
-combined_chart.resolve_scale(color="independent").interactive()
-
-# %% [markdown]
-#
-# While we should expend this plot on the test data and on several portions of the
-# dataset, we observe a potential interesting pattern: during the week days, the
-# 5th percentile is further from the median than during the weekend. However, for the
-# 95th percentile, the opposite is observed.
-#
 # ### Evaluation via cross-validation
 #
 # We evaluate the performance of the quantile regressors via cross-validation.
 
-# %%
 # %%
 from sklearn.model_selection import TimeSeriesSplit
 
@@ -201,6 +146,78 @@ cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
     n_jobs=-1,
 )
 
+# %% [markdown]
+#
+# Let's first collect all the cross-validated predictions to make further inspection.
+
+# %%
+cv_predictions_hgbr_05 = collect_cv_predictions(
+    cv_results_hgbr_05["pipeline"], ts_cv_5, predictions_hgbr_05, prediction_time
+)
+cv_predictions_hgbr_50 = collect_cv_predictions(
+    cv_results_hgbr_50["pipeline"], ts_cv_5, predictions_hgbr_50, prediction_time
+)
+cv_predictions_hgbr_95 = collect_cv_predictions(
+    cv_results_hgbr_95["pipeline"], ts_cv_5, predictions_hgbr_95, prediction_time
+)
+
+# %% [markdown]
+#
+# Now, let's make a plot of the predictions for each model and thus we need to gather
+# all the predictions in a single dataframe.
+
+# %%
+results = pl.concat(
+    [
+        cv_predictions_hgbr_05[0].rename({"predicted_load_mw": "predicted_load_mw_05"}),
+        cv_predictions_hgbr_50[0].select("predicted_load_mw").rename(
+            {"predicted_load_mw": "predicted_load_mw_50"}
+        ),
+        cv_predictions_hgbr_95[0].select("predicted_load_mw").rename(
+            {"predicted_load_mw": "predicted_load_mw_95"}
+        ),
+    ],
+    how="horizontal",
+).tail(24 * 10)
+
+# %% [markdown]
+#
+# Now, we plot the observed values and the predicted median with a line. In addition,
+# we plot the 5th and 95th percentiles as a shaded area. It means that between those
+# two bounds, we expect to find 90% of the observed values.
+#
+# We plot this information on a portion of the test data from the first fold of the
+# cross-validation.
+
+# %%
+median_chart = (
+    altair.Chart(results)
+    .transform_fold(["load_mw", "predicted_load_mw_50"])
+    .mark_line(tooltip=True)
+    .encode(x="prediction_time:T", y="value:Q", color="key:N")
+)
+
+# Add a column for the band legend
+results_with_band = results.with_columns(pl.lit("90% interval").alias("band_type"))
+
+quantile_band_chart = (
+    altair.Chart(results_with_band)
+    .mark_area(opacity=0.4, tooltip=True)
+    .encode(
+        x="prediction_time:T",
+        y="predicted_load_mw_05:Q",
+        y2="predicted_load_mw_95:Q",
+        color=altair.Color("band_type:N", scale=altair.Scale(range=["lightgreen"])),
+    )
+)
+
+combined_chart = quantile_band_chart + median_chart
+combined_chart.resolve_scale(color="independent").interactive()
+
+# %% [markdown]
+#
+# Now, we can inspect the cross-validated metrics for each model.
+
 # %%
 cv_results_hgbr_05[
     [col for col in cv_results_hgbr_05.columns if col.startswith("test_")]
@@ -225,17 +242,6 @@ cv_results_hgbr_95[
 #
 # Now, let's collect the cross-validated predictions and plot the residual vs predicted
 # values for the different models.
-
-# %%
-cv_predictions_hgbr_05 = collect_cv_predictions(
-    cv_results_hgbr_05["pipeline"], ts_cv_5, predictions_hgbr_05, prediction_time
-)
-cv_predictions_hgbr_50 = collect_cv_predictions(
-    cv_results_hgbr_50["pipeline"], ts_cv_5, predictions_hgbr_50, prediction_time
-)
-cv_predictions_hgbr_95 = collect_cv_predictions(
-    cv_results_hgbr_95["pipeline"], ts_cv_5, predictions_hgbr_95, prediction_time
-)
 
 # %%
 plot_residuals_vs_predicted(cv_predictions_hgbr_05).interactive().properties(

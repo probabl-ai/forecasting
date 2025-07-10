@@ -19,6 +19,7 @@ import warnings
 
 import altair
 import cloudpickle
+import pyarrow  # noqa: F401
 
 from tutorial_helpers import plot_horizon_forecast
 
