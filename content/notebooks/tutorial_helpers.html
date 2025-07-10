@@ -915,8 +915,8 @@ document.write(`
     <span class="n">targets</span><span class="p">,</span>
     <span class="n">named_predictions</span><span class="p">,</span>
     <span class="n">plot_at_time</span><span class="p">,</span>
-    <span class="n">historical_timedelta</span><span class="p">,</span>
     <span class="n">target_column_name_pattern</span><span class="p">,</span>
+    <span class="n">past_hours</span><span class="o">=</span><span class="mi">7</span> <span class="o">*</span> <span class="mi">24</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Plot the true target and the forecast values for different horizons.</span>
 
@@ -928,10 +928,10 @@ document.write(`
 <span class="sd">        A DataFrame containing the predicted values.</span>
 <span class="sd">    plot_at_time : datetime.datetime</span>
 <span class="sd">        The time at which to plot the forecast.</span>
-<span class="sd">    historical_timedelta : datetime.timedelta</span>
-<span class="sd">        The historical timedelta to use for the plot.</span>
 <span class="sd">    target_column_name_pattern : str</span>
 <span class="sd">        The pattern to use for the target column names.</span>
+<span class="sd">    past_hours : int, default=7 * 24</span>
+<span class="sd">        The number of past hours to include in the plot.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -945,7 +945,7 @@ document.write(`
         <span class="p">],</span>
         <span class="n">how</span><span class="o">=</span><span class="s2">&quot;horizontal&quot;</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="n">start_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">-</span> <span class="n">historical_timedelta</span>
+    <span class="n">start_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">-</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="n">past_hours</span><span class="p">)</span>
     <span class="n">end_time</span> <span class="o">=</span> <span class="n">plot_at_time</span> <span class="o">+</span> <span class="n">datetime</span><span class="o">.</span><span class="n">timedelta</span><span class="p">(</span><span class="n">hours</span><span class="o">=</span><span class="n">named_predictions</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
     <span class="n">true_values_past</span> <span class="o">=</span> <span class="n">merged_data</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span>
         <span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;prediction_time&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">is_between</span><span class="p">(</span><span class="n">start_time</span><span class="p">,</span> <span class="n">plot_at_time</span><span class="p">,</span> <span class="n">closed</span><span class="o">=</span><span class="s2">&quot;both&quot;</span><span class="p">)</span>

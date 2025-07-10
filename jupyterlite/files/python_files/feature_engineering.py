@@ -267,6 +267,7 @@ def load_electricity_load_data(time, data_source_folder):
         on="time",
     )
 
+
 # %% [markdown]
 #
 # Let's load the data and check if there are missing values since we will use
@@ -1195,12 +1196,10 @@ named_predictions = multioutput_predictions.rename(
 
 # %%
 plot_at_time = datetime.datetime(2021, 4, 19, 0, 0, tzinfo=datetime.timezone.utc)
-historical_timedelta = datetime.timedelta(hours=24 * 5)
 plot_horizon_forecast(
     targets,
     named_predictions,
     plot_at_time,
-    historical_timedelta,
     target_column_name_pattern,
 ).skb.preview()
 
@@ -1283,7 +1282,7 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
     chart = (
         altair.Chart(
             data_long,
-            title=f"{dataset_type.title()} {metric_name.upper()} Scores by Horizon",
+            title=f"{dataset_type.title()} {metric_name.upper()} scores by horizon",
         )
         .mark_boxplot(extent="min-max")
         .encode(
@@ -1357,12 +1356,10 @@ named_predictions_rf = multioutput_predictions_rf.rename(
 
 # %%
 plot_at_time = datetime.datetime(2021, 4, 24, 0, 0, tzinfo=datetime.timezone.utc)
-historical_timedelta = datetime.timedelta(hours=24 * 5)
 plot_horizon_forecast(
     targets,
     named_predictions_rf,
     plot_at_time,
-    historical_timedelta,
     target_column_name_pattern,
 ).skb.preview()
 
@@ -1384,7 +1381,9 @@ from IPython.display import display
 
 for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "test"]):
     columns = multioutput_cv_results_rf.columns[
-        multioutput_cv_results.columns.str.startswith(f"{dataset_type}_{metric_name}")
+        multioutput_cv_results_rf.columns.str.startswith(
+            f"{dataset_type}_{metric_name}"
+        )
     ]
     data_to_plot = multioutput_cv_results_rf[columns]
     data_to_plot.columns = [

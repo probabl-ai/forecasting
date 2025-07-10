@@ -491,8 +491,8 @@ def plot_horizon_forecast(
     targets,
     named_predictions,
     plot_at_time,
-    historical_timedelta,
     target_column_name_pattern,
+    past_hours=7 * 24,
 ):
     """Plot the true target and the forecast values for different horizons.
 
@@ -504,10 +504,10 @@ def plot_horizon_forecast(
         A DataFrame containing the predicted values.
     plot_at_time : datetime.datetime
         The time at which to plot the forecast.
-    historical_timedelta : datetime.timedelta
-        The historical timedelta to use for the plot.
     target_column_name_pattern : str
         The pattern to use for the target column names.
+    past_hours : int, default=7 * 24
+        The number of past hours to include in the plot.
 
     Returns
     -------
@@ -521,7 +521,7 @@ def plot_horizon_forecast(
         ],
         how="horizontal",
     )
-    start_time = plot_at_time - historical_timedelta
+    start_time = plot_at_time - datetime.timedelta(hours=past_hours)
     end_time = plot_at_time + datetime.timedelta(hours=named_predictions.shape[1])
     true_values_past = merged_data.filter(
         pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
