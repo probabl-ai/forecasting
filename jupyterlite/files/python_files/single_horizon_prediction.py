@@ -473,11 +473,11 @@ predictions_ridge
 
 # %% [markdown]
 #
-# Now that you defined the predictive model, let's make a similar analysis than earlier.
-# Let's evaluate the performance of the model using cross-validation. Use the
-# time-based cross-validation splitter `ts_cv_5` defined earlier. Make sure to compute
-# the R2 score and the mean absolute percentage error. Return the training scores as
-# well as the fitted pipeline such that we can make additional analysis.
+# Now that you defined the predictive model, let's evaluate the performance of
+# the model using cross-validation. Use the time-based cross-validation
+# splitter `ts_cv_5` defined earlier. Make sure to compute the R2 score and the
+# mean absolute percentage error. Return the training scores as well as the
+# fitted pipeline such that we can make additional analysis.
 
 # %%
 # Write your code here.
