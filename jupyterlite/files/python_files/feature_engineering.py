@@ -325,7 +325,7 @@ electricity_lagged = electricity.with_columns(
 electricity_lagged
 
 # %%
-altair.Chart(electricity_lagged.tail(100).skb.eval()).transform_fold(
+altair.Chart(electricity_lagged.tail(100).skb.preview()).transform_fold(
     [
         "load_mw",
         "load_mw_lag_1h",
@@ -1492,10 +1492,10 @@ cv_results_hgbr_95[
 # %%
 results = pl.concat(
     [
-        targets.skb.select(cols=["prediction_time", target_column_name]).skb.eval(),
-        predictions_hgbr_05.rename({target_column_name: "quantile_05"}).skb.eval(),
-        predictions_hgbr_50.rename({target_column_name: "median"}).skb.eval(),
-        predictions_hgbr_95.rename({target_column_name: "quantile_95"}).skb.eval(),
+        targets.skb.select(cols=["prediction_time", target_column_name]).skb.preview(),
+        predictions_hgbr_05.rename({target_column_name: "quantile_05"}).skb.preview(),
+        predictions_hgbr_50.rename({target_column_name: "median"}).skb.preview(),
+        predictions_hgbr_95.rename({target_column_name: "quantile_95"}).skb.preview(),
     ],
     how="horizontal",
 ).tail(24 * 7)
