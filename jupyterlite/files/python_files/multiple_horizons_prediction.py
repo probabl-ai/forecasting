@@ -220,7 +220,7 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
 # predicts all horizons at once.
 #
 # Repeat the previous analysis using a `RandomForestRegressor`. Fix the parameter
-# `min_samples_leaf` to 5.
+# `min_samples_leaf` to 30 to limit the depth.
 #
 # Once you created the model, plot the horizon forecast for a given date and time.
 # In addition, compute the cross-validated predictions and plot the R2 and MAPE
@@ -247,7 +247,7 @@ from sklearn.ensemble import RandomForestRegressor
 
 # %%
 multioutput_predictions_rf = features.skb.apply(
-    RandomForestRegressor(min_samples_leaf=5, random_state=0, n_jobs=-1),
+    RandomForestRegressor(min_samples_leaf=30, random_state=0, n_jobs=-1),
     y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
 )
 
