@@ -48,8 +48,6 @@ target_column_name_pattern = feature_engineering_pipeline["target_column_name_pa
 
 # %% [markdown]
 #
-# # Single horizon predictive modeling
-#
 # For now, let's focus on the last horizon (24 hours) to train a model
 # predicting the electricity load at the next 24 hours.
 # %%
