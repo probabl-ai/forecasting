@@ -20,6 +20,7 @@ import altair
 import cloudpickle
 import pyarrow  # noqa: F401
 import skrub
+import tzdata  # noqa: F401
 from plotly.io import write_json, read_json  # noqa: F401
 
 from tutorial_helpers import (

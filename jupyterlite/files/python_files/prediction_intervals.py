@@ -21,6 +21,7 @@ import cloudpickle
 import numpy as np
 import pyarrow  # noqa: F401
 import polars as pl
+import tzdata  # noqa: F401
 
 from tutorial_helpers import (
     binned_coverage,

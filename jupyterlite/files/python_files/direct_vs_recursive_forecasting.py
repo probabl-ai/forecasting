@@ -37,6 +37,7 @@ from time import perf_counter
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import tzdata  # noqa: F401
 
 SEGMENT_LENGTH = 30
 
