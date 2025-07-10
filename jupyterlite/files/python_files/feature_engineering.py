@@ -1429,6 +1429,12 @@ for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "te
 # In this section, we show how one can use a gradient boosting but modify the loss
 # function to predict different quantiles and thus obtain an uncertainty quantification
 # of the predictions.
+#
+# In terms of evaluation, we reuse the R2 and MAPE scores. However, they are not helpful
+# to assess the reliability of quantile models. For this purpose, we use a derivate of
+# the metric minimize by those models: the pinball loss. We use the D2 score that is
+# easier to interpret since the best possible score is bounded by 1 and a score of 0
+# corresponds to constant predictions at the target quantile.
 
 # %%
 from sklearn.metrics import d2_pinball_score
@@ -1440,6 +1446,14 @@ scoring = {
     "d2_pinball_50": make_scorer(d2_pinball_score, alpha=0.50),
     "d2_pinball_95": make_scorer(d2_pinball_score, alpha=0.95),
 }
+
+# %% [markdown]
+#
+# We know define three different models:
+#
+# - a model predicting the 5th percentile of the load
+# - a model predicting the median of the load
+# - a model predicting the 95th percentile of the load
 
 # %%
 common_params = dict(
@@ -1457,6 +1471,10 @@ predictions_hgbr_95 = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(**common_params, quantile=0.95),
     y=target,
 )
+
+# %% [markdown]
+#
+# Finally, we cross-validate each models and compute the above scores.
 
 # %%
 cv_results_hgbr_05 = predictions_hgbr_05.skb.cross_validate(
@@ -1481,6 +1499,10 @@ cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
     n_jobs=-1,
 )
 
+# %% [markdown]
+#
+# Let's now show the test scores for each model.
+
 # %%
 cv_results_hgbr_05[
     [col for col in cv_results_hgbr_05.columns if col.startswith("test_")]
@@ -1496,6 +1518,16 @@ cv_results_hgbr_95[
     [col for col in cv_results_hgbr_95.columns if col.startswith("test_")]
 ].mean(axis=0).round(3)
 
+# %% [markdown]
+#
+# Focusing on the different D2 scores, we observe that each model minimize the D2 score
+# associated to the target quantile that we set. For instance, the model predicting the
+# 5th percentile obtained the highest D2 pinball score with `alpha=0.05`. It is expected
+# but a confirmation of what loss each model minimizes.
+#
+# Now, let's make a plot of the predictions for each model. Let's first gather all
+# the predictions in a single dataframe.
+
 # %%
 results = pl.concat(
     [
@@ -1507,6 +1539,12 @@ results = pl.concat(
     how="horizontal",
 ).tail(24 * 7)
 
+# %% [markdown]
+#
+# Now, we plot the observed values and the predicted median with a line. In addition,
+# we plot the 5th and 95th percentiles as a shaded area. It means that between those
+# two bounds, we expect to find 90% of the observed values.
+
 # %%
 median_chart = (
     altair.Chart(results)
@@ -1515,19 +1553,22 @@ median_chart = (
     .encode(x="prediction_time:T", y="value:Q", color="key:N")
 )
 
+# Add a column for the band legend
+results_with_band = results.with_columns(pl.lit("90% interval").alias("band_type"))
+
 quantile_band_chart = (
-    altair.Chart(results)
+    altair.Chart(results_with_band)
     .mark_area(opacity=0.4, tooltip=True)
     .encode(
         x="prediction_time:T",
         y="quantile_05:Q",
         y2="quantile_95:Q",
-        color=altair.value("lightgreen"),
+        color=altair.Color("band_type:N", scale=altair.Scale(range=["lightgreen"])),
     )
 )
 
 combined_chart = quantile_band_chart + median_chart
-combined_chart.interactive()
+combined_chart.resolve_scale(color="independent").interactive()
 
 # %%
 cv_predictions_hgbr_05 = collect_cv_predictions(
