@@ -67,7 +67,7 @@ import holidays
 # We wrap the resulting polars dataframe in a `skrub` expression to benefit
 # from the built-in `skrub.TableReport` display in the notebook. Using the
 # `skrub` expression system will also be useful for other reasons: all
-# operations in this notebook chain operations chained together in a directed
+# operations in this notebook are chained together in a directed
 # acyclic graph that is automatically tracked by `skrub`. This allows us to
 # extract the resulting pipeline and apply it to new data later on, exactly
 # like a trained scikit-learn pipeline. The main difference is that we do so
@@ -115,9 +115,7 @@ time
 # Let's now load the data records for the time range defined above.
 #
 # To avoid network issues when running this notebook, the necessary data files
-# have already been downloaded and saved in the `datasets` folder. See the
-# README.md file for instructions to download the data manually if you want to
-# re-run this notebook with more recent data.
+# have already been downloaded and saved in the `datasets` folder. 
 
 # %%
 data_source_folder = skrub.var("data_source_folder", "../datasets")
@@ -349,9 +347,9 @@ altair.Chart(electricity_lagged.tail(100).skb.preview()).transform_fold(
 # When working with historical data, we often have access to all the past
 # measurements in the dataset. However, when we want to use the lagged features
 # in a forecasting model, we need to be careful about the length of the
-# **system lag**: the time between a timestamped measurement is made in the
-# real world and the time the record is made available to the downstream
-# application (in our case, a deployed predictive pipeline).
+# **system lag**. The system lag is the timelaps between the moment a timestamped 
+# measurement is made in the real world and the moment where the record is made 
+# available to the downstream application (in our case, a deployed predictive pipeline).
 #
 # System lag is rarely explicitly represented in the data sources even if such
 # delay can be as large as several hours or even days and can sometimes be
@@ -386,8 +384,8 @@ TableReport(electricity_lagged.skb.eval())
 
 # %% [markdown]
 #
-# Let's extract the dates where the inter-quartile range of the load is
-# greater than 15,000 MW.
+# Let's extract the dates where the inter-quartile range of the load on 7 days is
+# greater than 15,000 MW, to investigate the outliers hightlighted by the TableReport.
 
 # %%
 electricity_lagged.filter(pl.col("load_mw_iqr_7d") > 15_000)[

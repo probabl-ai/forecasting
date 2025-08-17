@@ -167,7 +167,7 @@ hgbr_pipeline.describe_params()
 #
 # In the example below, we define that the training data should be at most 2 years
 # worth of data and the test data should be 24 weeks long. We also define a gap of
-# 1 week between the training.
+# 1 week between the training and the testing sets.
 #
 # Let's check those statistics by iterating over the different folds provided by the
 # splitter.
@@ -206,7 +206,7 @@ for fold_idx, (train_idx, test_idx) in enumerate(
 # target variable such as electricity load forecasting.
 #
 # We can also look at the R2 score and the Poisson and Gamma deviance which are
-# all strictly proper scoring rules for estimation of E[y|X]: in the large
+# all strictly proper scoring rules for estimation of $E[y|X]$: in the large
 # sample limit, minimizers of those metrics all identify the conditional
 # expectation of the target variable given the features for strictly positive
 # target variables. All those metrics follow the higher is better convention,
@@ -214,15 +214,16 @@ for fold_idx, (train_idx, test_idx) in enumerate(
 # predicts the mean of the target variable for all observations, irrespective
 # of the features.
 #
-# No that in general, a deviance score of 1.0 is not reachable since it
+# Know that in general, a deviance score of 1.0 is not reachable since it
 # corresponds to a model that always predicts the target value exactly
 # for all observations. In practice, because there is always a fraction of the
 # variability in the target variable that is not explained by the information
-# available to construct the features.
+# available to construct the features, this perfect prediction is impossible.
 
 # %%
-from sklearn.metrics import make_scorer, mean_absolute_percentage_error, get_scorer
-from sklearn.metrics import d2_tweedie_score
+from sklearn.metrics import (
+    make_scorer, mean_absolute_percentage_error, get_scorer, d2_tweedie_score
+)
 
 
 hgbr_cv_results = hgbr_predictions.skb.cross_validate(
@@ -310,7 +311,7 @@ plot_lorenz_curve(hgbr_cv_predictions).interactive()
 # A true model is navigating between the diagonal and the oracle model. The area between
 # the diagonal and the Lorenz curve of a model is called the Gini index.
 #
-# For our model, we observe that each oracle model is not far from the diagonal. It
+# For our usecase, we observe that each oracle model is not far from the diagonal. It
 # means that the observed values do not contain a couple of large values with high
 # variability. Therefore, it informs us that the complexity of our problem at hand is
 # not too high. Looking at the Lorenz curve of each model, we observe that it is quite
