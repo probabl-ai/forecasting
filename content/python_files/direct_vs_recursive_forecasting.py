@@ -23,9 +23,9 @@
 # segments:
 #
 # - Segment type "a" has a prefix centered around 0 with low variance and a
-#   suffix centered around 1.
+#   suffix centered around 1 with low variance.
 # - Segment type "b" has a prefix centered around 0 with high variance and a
-#   suffix centered around -1.
+#   suffix centered around -1 with low variance.
 #
 # Segment of type "a" and "b" are independently sampled, meaning that is not
 # possible to forecast beyond the length of the segments. However, it should be

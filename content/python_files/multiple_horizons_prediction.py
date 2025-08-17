@@ -44,7 +44,7 @@ target_column_name_pattern = feature_engineering_pipeline["target_column_name_pa
 #
 # ## Predicting multiple horizons with a grid of single output models
 #
-# Usually, it is really common to predict values for multiple horizons at once. The most
+# It is really common to predict values for multiple horizons at once. The most
 # naive approach is to train as many models as there are horizons. To achieve this,
 # scikit-learn provides a meta-estimator called `MultiOutputRegressor` that can be used
 # to train a single model that predicts multiple horizons at once.
