@@ -13,7 +13,8 @@ notebook = ">=7.4.3,<8"
 jupyterlab = ">=4.4.3,<5"
 jupytext = ">=1.17.2,<2"
 scikit-learn = ">=1.7.0,<2"
-polars = "==1.24.0" # same as latest compatible emscripten build
+skrub = ">=0.6.2,<1"
+polars = "==1.24.0"
 matplotlib-base = ">=3.10.3,<4"
 pyarrow = ">=20.0.0,<21"
 holidays = ">=0.75,<0.76"
@@ -30,7 +31,6 @@ plotly = ">=6.2.0,<7"
 cloudpickle = ">=3.0.0,<3.1"
 
 [pypi-dependencies]
-skrub = { git = "https://github.com/skrub-data/skrub", rev = "771f3870a23438211faefb0e54132781256acc0a" }
 openmeteo-requests = ">=1.5.0, <2"
 requests-cache = ">=1.2.1, <2"
 retry-requests = ">=2.0.0, <3"
