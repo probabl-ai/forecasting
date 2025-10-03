@@ -698,7 +698,7 @@ def collect_cv_predictions(
 ):
     index_generator = cv_splitter.split(prediction_time.skb.eval())
 
-    def splitter(X, y, index_generator):
+    def split_func(X, y, index_generator):
         """Workaround to transform a scikit-learn splitter into a function understood
         by `skrub.train_test_split`."""
         train_idx, test_idx = next(index_generator)
@@ -711,7 +711,7 @@ def collect_cv_predictions(
     ):
         split = predictions.skb.train_test_split(
             predictions.skb.get_data(),
-            splitter=splitter,
+            split_func=split_func,
             index_generator=index_generator,
         )
         results.append(
