@@ -5,13 +5,11 @@
 # ## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when
-# running jupyterlite). We need the development version of skrub to be able to
-# use the skrub expressions.
+# running jupyterlite).
 
 # %%
 # %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
-# %pip install -q https://pypi.anaconda.org/ogrisel/simple/skrub/0.6.dev0/skrub-0.6.dev0-py3-none-any.whl
-# %pip install -q altair holidays plotly nbformat
+# %pip install -q skrub altair holidays plotly nbformat
 
 # %%
 import warnings
@@ -128,21 +126,21 @@ ts_cv_5 = TimeSeriesSplit(
 cv_results_hgbr_05 = predictions_hgbr_05.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
-    return_pipeline=True,
+    return_learner=True,
     verbose=1,
     n_jobs=-1,
 )
 cv_results_hgbr_50 = predictions_hgbr_50.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
-    return_pipeline=True,
+    return_learner=True,
     verbose=1,
     n_jobs=-1,
 )
 cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
     cv=ts_cv_5,
     scoring=scoring,
-    return_pipeline=True,
+    return_learner=True,
     verbose=1,
     n_jobs=-1,
 )
@@ -153,13 +151,13 @@ cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
 
 # %%
 cv_predictions_hgbr_05 = collect_cv_predictions(
-    cv_results_hgbr_05["pipeline"], ts_cv_5, predictions_hgbr_05, prediction_time
+    cv_results_hgbr_05["learner"], ts_cv_5, predictions_hgbr_05, prediction_time
 )
 cv_predictions_hgbr_50 = collect_cv_predictions(
-    cv_results_hgbr_50["pipeline"], ts_cv_5, predictions_hgbr_50, prediction_time
+    cv_results_hgbr_50["learner"], ts_cv_5, predictions_hgbr_50, prediction_time
 )
 cv_predictions_hgbr_95 = collect_cv_predictions(
-    cv_results_hgbr_95["pipeline"], ts_cv_5, predictions_hgbr_95, prediction_time
+    cv_results_hgbr_95["learner"], ts_cv_5, predictions_hgbr_95, prediction_time
 )
 
 # %% [markdown]

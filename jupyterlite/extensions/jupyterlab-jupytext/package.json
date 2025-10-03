@@ -1,6 +1,6 @@
 {
   "name": "jupyterlab-jupytext",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "Save Jupyter Notebooks as Scripts or Markdown files that work well with version control & external text editors",
   "keywords": [
     "jupyter",
@@ -64,7 +64,7 @@
       }
     },
     "_build": {
-      "load": "static/remoteEntry.81bd703f793b75fda8b9.js",
+      "load": "static/remoteEntry.2b43451adb3ba4eefa98.js",
       "extension": "./extension"
     }
   },
@@ -91,6 +91,6 @@
     "@jupyterlab/builder": "^4.3.3",
     "npm-run-all": "^4.1.5",
     "rimraf": "^6.0.1",
-    "typescript": "~5.8.2"
+    "typescript": "~5.9.2"
   }
 }
