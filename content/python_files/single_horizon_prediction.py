@@ -5,8 +5,7 @@
 # ## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when
-# running jupyterlite). We need the development version of skrub to be able to
-# use the skrub expressions.
+# running jupyterlite).
 
 # %%
 # %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
@@ -356,7 +355,7 @@ plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-# randomized_search_hgbr = hgbr_predictions.skb.get_randomized_search(
+# randomized_search_hgbr = hgbr_predictions.skb.make_randomized_search(
 #     cv=ts_cv_2,
 #     scoring="r2",
 #     n_iter=100,
@@ -364,7 +363,8 @@ ts_cv_2 = TimeSeriesSplit(
 #     verbose=1,
 #     n_jobs=-1,
 # )
-# # %%
+
+# %%
 # randomized_search_hgbr.results_.round(3)
 
 # %%
@@ -377,26 +377,26 @@ fig.update_layout(margin=dict(l=200))
 
 # %%
 # nested_cv_results = skrub.cross_validate(
-#     environment=predictions.skb.get_data(),
-#     pipeline=randomized_search,
+#     environment=hgbr_predictions.skb.get_data(),
+#     learner=randomized_search_hgbr,
 #     cv=ts_cv_5,
 #     scoring={
 #         "r2": get_scorer("r2"),
 #         "mape": make_scorer(mean_absolute_percentage_error),
 #     },
 #     n_jobs=-1,
-#     return_pipeline=True,
+#     return_learner=True,
 # ).round(3)
 # nested_cv_results
 
 # %%
 # for outer_fold_idx in range(len(nested_cv_results)):
 #     print(
-#         nested_cv_results.loc[outer_fold_idx, "pipeline"]
-#         .results_.loc[0]
+#         nested_cv_results.loc[outer_fold_idx, "learner"]
+#         .results_.loc[:, "mean_test_score"]
 #         .round(3)
 #         .to_dict()
-#     )
+#    )
 
 # %% [markdown]
 #
@@ -501,7 +501,7 @@ cv_results_ridge = predictions_ridge.skb.cross_validate(
         "mape": make_scorer(mean_absolute_percentage_error),
     },
     return_train_score=True,
-    return_pipeline=True,
+    return_learner=True,
     verbose=1,
     n_jobs=-1,
 )
@@ -533,7 +533,7 @@ cv_results_ridge.round(3)
 
 # %%
 cv_predictions_ridge = collect_cv_predictions(
-    cv_results_ridge["pipeline"], ts_cv_5, predictions_ridge, prediction_time
+    cv_results_ridge["learner"], ts_cv_5, predictions_ridge, prediction_time
 )
 
 # %%
@@ -578,7 +578,7 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 # expensive, we are reloading the results of the parallel coordinates plot.
 
 # %%
-# randomized_search_ridge = predictions_ridge.skb.get_randomized_search(
+# randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
 #     cv=ts_cv_2,
 #     scoring="r2",
 #     n_iter=100,
@@ -610,14 +610,14 @@ fig.update_layout(margin=dict(l=200))
 # %%
 # nested_cv_results_ridge = skrub.cross_validate(
 #     environment=predictions_ridge.skb.get_data(),
-#     pipeline=randomized_search_ridge,
+#     learner=randomized_search_ridge,
 #     cv=ts_cv_5,
 #     scoring={
 #         "r2": get_scorer("r2"),
 #         "mape": make_scorer(mean_absolute_percentage_error),
 #     },
 #     n_jobs=-1,
-#     return_pipeline=True,
+#     return_learner=True,
 # ).round(3)
 
 # %%

@@ -5,13 +5,11 @@
 # ## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when
-# running jupyterlite). We need the development version of skrub to be able to
-# use the skrub expressions.
+# running jupyterlite).
 
 # %%
 # %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
-# %pip install -q https://pypi.anaconda.org/ogrisel/simple/skrub/0.6.dev0/skrub-0.6.dev0-py3-none-any.whl
-# %pip install -q altair holidays plotly nbformat
+# %pip install -q skrub altair holidays plotly nbformat
 
 # %%
 import datetime
