@@ -112,11 +112,21 @@ time
 #
 # Let's now load the data records for the time range defined above.
 #
-# To avoid network issues when running this notebook, the necessary data files
-# have already been downloaded and saved in the `datasets` folder. 
+# When running locally, we can use `skrub.datasets.fetch_electricity_usage`
+# to download the raw files if needed. We keep a fallback to the repository's
+# bundled `datasets` folder for offline runs and JupyterLite.
 
 # %%
-data_source_folder = skrub.var("data_source_folder", "../datasets")
+def resolve_data_source_folder():
+    try:
+        from skrub.datasets import fetch_electricity_usage
+
+        return str(fetch_electricity_usage())
+    except Exception:
+        return "../datasets"
+
+
+data_source_folder = skrub.var("data_source_folder", resolve_data_source_folder())
 
 for data_file in sorted(Path(data_source_folder.skb.eval()).iterdir()):
     print(data_file)
@@ -147,15 +157,26 @@ city_names = skrub.var(
 
 @skrub.deferred
 def load_weather_data(time, city_names, data_source_folder):
-    """Load and horizontal stack historical weather forecast data for each city."""
+    """Load and horizontal stack historical weather data for each city."""
     all_city_weather = time
+    data_source_folder = Path(data_source_folder)
+
     for city_name in city_names:
-        all_city_weather = all_city_weather.join(
-            pl.from_arrow(
-                read_table(f"{data_source_folder}/weather_{city_name}.parquet")
+        parquet_path = data_source_folder / f"weather_{city_name}.parquet"
+        if parquet_path.exists():
+            city_weather = pl.from_arrow(read_table(parquet_path)).with_columns(
+                pl.col("time").dt.cast_time_unit("us")
             )
-            .with_columns([pl.col("time").dt.cast_time_unit("us")])
-            .rename(lambda x: x if x == "time" else "weather_" + x + "_" + city_name),
+        else:
+
+            raise FileNotFoundError(
+                f"Could not find weather data for {city_name!r} in {data_source_folder}."
+            )
+
+        all_city_weather = all_city_weather.join(
+            city_weather.rename(
+                lambda x: x if x == "time" else "weather_" + x + "_" + city_name
+            ),
             on="time",
         )
     return all_city_weather
@@ -378,8 +399,7 @@ altair.Chart(electricity_lagged.tail(100).skb.preview()).transform_fold(
 # %%
 from skrub import TableReport
 
-TableReport(electricity_lagged.skb.eval())
-
+TableReport(electricity_lagged.skb.eval(), max_plot_columns=0).open()
 # %% [markdown]
 #
 # Let's extract the dates where the inter-quartile range of the load on 7 days is
