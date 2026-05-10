@@ -46,19 +46,16 @@ target_column_name_pattern = feature_engineering_pipeline["target_column_name_pa
 #
 # ## Predicting multiple horizons with direct forecasting
 #
-# Instead of fitting a single multi-output estimator, we will follow a direct
-# forecasting strategy: one model per horizon.
-#
-# This is closer to the approach used in the reference `skore` example. It
-# makes the analysis easier to interpret because each model is trained against a
-# single target: the load at a given horizon.
+# Instead of fitting a single multi-output estimator, we will fit one model
+# for each horizon.
 #
 # We start by defining a couple of small helpers to:
 #
 # - build a direct forecasting data op for a given estimator and horizon;
 # - evaluate all horizons with the same cross-validation procedure;
 # - rebuild a wide prediction table so that we can still visualize the full
-#   forecast curve at a given timestamp.
+#   forecast curve at a given timestamp. (is there a better way to do this
+#   perhaps, currently it is slow)
 
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
@@ -87,10 +84,10 @@ prediction_timestamps = pd.to_datetime(to_numpy_1d(prediction_time.skb.eval()), 
 
 
 class DateBasedSplitter(BaseCrossValidator):
-    def __init__(self, prediction_timestamps, min_train_days=365 * 2, test_length_days=24 * 7, gap_days=7):
+    def __init__(self, prediction_timestamps, min_train_days=365 * 2, test_length_hours=24 * 7, gap_days=7):
         self.prediction_timestamps = pd.Series(prediction_timestamps)
         self.min_train_days = min_train_days
-        self.test_length_days = test_length_days
+        self.test_length_hours = test_length_hours
         self.gap_days = gap_days
 
     def split(self, X=None, y=None, groups=None):
@@ -100,13 +97,13 @@ class DateBasedSplitter(BaseCrossValidator):
         test_starts = pd.date_range(
             start=first_test_start,
             end=self.prediction_timestamps.max(),
-            freq=pd.Timedelta(days=self.test_length_days),
+            freq=pd.Timedelta(hours=self.test_length_hours),
             inclusive="left",
         )
 
         for test_start in test_starts:
             train_end = test_start - pd.Timedelta(days=self.gap_days)
-            test_end = test_start + pd.Timedelta(days=self.test_length_days)
+            test_end = test_start + pd.Timedelta(hours=self.test_length_hours)
 
             train_idx = np.flatnonzero(self.prediction_timestamps < train_end)
             test_idx = np.flatnonzero(
@@ -250,7 +247,7 @@ plot_horizon_forecast(
 # cross-validation.
 #
 # Instead of splitting by row counts, we use a splitter based on the actual
-# timestamps. This mirrors the logic of the `skore` example more closely.
+# timestamps.
 
 # %%
 ts_cv_5 = DateBasedSplitter(prediction_timestamps)
@@ -263,8 +260,8 @@ hgbr_cv_results_by_horizon, hgbr_cv_scores = cross_validate_direct_predictions(
 
 # %% [markdown]
 #
-# This direct strategy is also expensive, but the cost is now explicit: we are
-# really training one model per horizon.
+# This direct strategy is also expensive, and quite long, 
+# perhaps there is a way to make it more parallelised?
 
 # %%
 hgbr_cv_scores.round(3)
@@ -283,9 +280,6 @@ plot_scores_by_horizon(
 )
 
 # %% [markdown]
-#
-# The resulting curves now answer a cleaner question: how does direct
-# forecasting performance evolve as the prediction horizon grows?
 #
 # ## Direct forecasting with `RandomForestRegressor`
 #
@@ -338,6 +332,3 @@ plot_scores_by_horizon(
 
 # %% [markdown]
 #
-# This comparison is now aligned with the direct-forecasting framing used above:
-# both model families are evaluated one horizon at a time, with the same
-# date-based validation protocol.
