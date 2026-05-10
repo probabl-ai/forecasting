@@ -62,13 +62,13 @@ from tabicl.forecast import plot_forecast
 # We create a daily series that mixes a linear trend, a weekly seasonality,
 # an annual seasonality, and Gaussian noise.
 #
-# This makes the task intuitive: the model should extrapolate trend and recurring
+# This defined the modelling task: the model should extrapolate trend and recurring
 # patterns into the future.
 #
 # The parameters that define the synthetic scenario are declared with
-# :func:`skrub.var` so that the recipe is explicit and easy to modify.
-# This is a small but useful DataOps pattern: important assumptions become named
-# inputs instead of hidden constants inside the data-generation code.
+# :func:`skrub.var` so that the recipe easy to modify.
+# This is a small but useful DataOps pattern: important assumptions can
+# be explicitly set instead of being hidden inside the data-generation code.
 # %%
 random_seed = skrub.var("random_seed", 0)
 n_timesteps = skrub.var("n_timesteps", 365 * 2)
@@ -150,7 +150,7 @@ TableReport(synthetic_series.skb.eval())
 # The forecast API consumes an in-memory pandas DataFrame, so we evaluate the
 # `skrub` expression graph at this boundary.
 #
-# This is the main division of responsibilities in this example:
+# This allows us to set the main uses as:
 #
 # - `skrub` helps declare and inspect the tabular data workflow,
 # - TabICL handles the forecasting model itself.
