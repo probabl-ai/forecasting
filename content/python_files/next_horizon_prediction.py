@@ -1,25 +1,35 @@
 # %% [markdown]
 #
-# # Single horizon predictive modeling
+# # Next horizon predictive modeling
 #
-# ## Environment setup
+## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when
 # running jupyterlite).
 
 # %%
-# %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
-# %pip install -q skrub altair holidays plotly nbformat
+# %pip install -q skrub altair holidays plotly nbformat polars
 
 # %%
 import warnings
 
 import altair
+import numpy as np
 import cloudpickle
 import pyarrow  # noqa: F401
 import skrub
 import tzdata  # noqa: F401
 from plotly.io import write_json, read_json  # noqa: F401
+import polars as pl
+
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+from time_range import time_range
+from load_electricity_and_resample import load_electricity_load_data, resample
+from make_X_y import get_X_y
+from add_features import add_features, fetch_city_weather
+
+
 
 from tutorial_helpers import (
     plot_lorenz_curve,
@@ -33,118 +43,117 @@ from tutorial_helpers import (
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
-
-# %%
-with open("feature_engineering_pipeline.pkl", "rb") as f:
-    feature_engineering_pipeline = cloudpickle.load(f)
-
-
-features = feature_engineering_pipeline["features"]
-targets = feature_engineering_pipeline["targets"]
-prediction_time = feature_engineering_pipeline["prediction_time"]
-horizons = feature_engineering_pipeline["horizons"]
-target_column_name_pattern = feature_engineering_pipeline["target_column_name_pattern"]
-
 # %% [markdown]
 #
 # For now, let's focus on the last horizon (24 hours) to train a model
 # predicting the electricity load at the next 24 hours.
 
 # %%
-horizon_of_interest = horizons[-1]  # Focus on the 24-hour horizon
-target_column_name = target_column_name_pattern.format(horizon=horizon_of_interest)
-predicted_target_column_name = "predicted_" + target_column_name
-target = targets[target_column_name].skb.mark_as_y()
-target
+TIME_HORIZON = 1 # Focus on next step prediction
+load_electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
+    "load_electricity_load_data"
+)().skb.apply_func(resample)
 
-# %% [markdown]
-#
-# Let's define our first single output prediction pipeline. This pipeline
-# chains our previous feature engineering steps with a `skrub.DropCols` step to
-# drop some columns that we do not want to use as features, and a
-# `HistGradientBoostingRegressor` model from scikit-learn.
-#
-# The `skrub.choose_from`, `skrub.choose_float`, and `skrub.choose_int`
-# functions are used to define hyperparameters that can be tuned via
-# cross-validated randomized search.
+range_start = skrub.var("start", "2021-03-23")
+range_end = skrub.var("end", "2025-05-31")
 
-# %%
-from sklearn.ensemble import HistGradientBoostingRegressor
-import skrub.selectors as s
+prediction_time = skrub.deferred(time_range)(range_start, range_end)
+X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, TIME_HORIZON)
 
-
-features_with_dropped_cols = features.skb.apply(
-    skrub.DropCols(
-        cols=skrub.choose_from(
-            {
-                "none": s.glob(""),  # No column has an empty name.
-                "load": s.glob("load_*"),
-                "rolling_load": s.glob("load_mw_rolling_*"),
-                "weather": s.glob("weather_*"),
-                "temperature": s.glob("weather_temperature_*"),
-                "moisture": s.glob("weather_moisture_*"),
-                "cloud_cover": s.glob("weather_cloud_cover_*"),
-                "calendar": s.glob("cal_*"),
-                "holiday": s.glob("cal_is_holiday*"),
-                "future_1h": s.glob("*_future_1h"),
-                "future_24h": s.glob("*_future_24h"),
-                "non_paris_weather": s.glob("weather_*") & ~s.glob("weather_*_paris_*"),
-            },
-            name="dropped_cols",
-        )
+temperature_only = skrub.choose_bool(name="temperature_only", default=True)
+cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
+city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
+    "city_weather_fetcher"
     )
-)
-
-hgbr_predictions = features_with_dropped_cols.skb.apply(
-    HistGradientBoostingRegressor(
-        random_state=0,
-        loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
-        learning_rate=skrub.choose_float(
-            0.01, 1, default=0.1, log=True, name="learning_rate"
-        ),
-        max_leaf_nodes=skrub.choose_int(
-            3, 300, default=30, log=True, name="max_leaf_nodes"
-        ),
-    ),
-    y=target,
-)
-hgbr_predictions
 
 # %% [markdown]
 #
-# The `predictions` expression captures the whole expression graph that
-# includes the feature engineering steps, the target variable, and the model
-# training step.
+# ## Cross-validation splitter
 #
-# In particular, the input data keys for the full pipeline can be
-# inspected as follows:
+# The first thing we need to do in our pipeline now that we have X and y is to
+# define how they are split into training and testing sets. So now we define a
+# time-based cross-validation splitter.
+#
+# We do not use the scikit-learn TimeSeries split because it is based on
+# positional indices but here we do not have a regular grid because of dropping
+# rows with missing ground truth. Also it is arguably easier to check the code
+# for splitting based on actual dates and a datetime column than based on
+# positional indices. Finally, the splitter here is a simple example of
+# something that needs to be done frequently, because forecasting problems
+# often have specific setups for when splits happen (to mimick the actual setup
+# of the deployed system, for example, on the first Tuesday of every month make
+# a prediction for every day of the following month, ...) that require a custom
+# datetime-based splitter.
+#
+# When we want an actual value to inspect, experiment with or debug, we can
+# always call .skb.preview(). It gives us the output of the pipeline for the
+# preview example data we set on the variables. Getting it is cheap because it
+# is precomputed eagerly when we define the dataop so it is readily available.
+# Here for example we grab the value of X (a dataframe) and we can use it to
+# test our splitter and debug it.
 
 # %%
-hgbr_predictions.skb.get_data().keys()
+%%writefile train_test_split.py
+import polars as pl
+import datetime
+from dateutil.relativedelta import relativedelta
 
-# %% [markdown]
-#
-# Furthermore, the hyper-parameters of the full pipeline can be retrieved as
-# follows:
+TRAIN_TEST_GAP_DAYS = 7
+TEST_BLOCKS = 3
+
+def _split_indices(X, test_start_date, test_end_date):
+    train = (
+        X.with_row_index()
+        .filter(
+            pl.col("prediction_time") < test_start_date - datetime.timedelta(days=TRAIN_TEST_GAP_DAYS)
+        )["index"]
+        .to_numpy()
+    )
+    test = (
+        X.with_row_index()
+        .filter(
+            (pl.col("prediction_time") >= test_start_date)
+            & (pl.col("prediction_time") < test_end_date)
+        )["index"]
+        .to_numpy()
+    )
+    return train, test
+    
+class TimeSeriesSplitter:
+    def split(self, X, y=None, groups=None, blocks=TEST_BLOCKS):
+        min_train_days = 365 * 2  # Initial train period: 2 years
+        min_date = X["prediction_time"].min()
+        max_date = X["prediction_time"].max()
+
+        # Start test windows after train period + gap
+        start_date = min_date + datetime.timedelta(days=min_train_days + TRAIN_TEST_GAP_DAYS)
+        
+        test_start_dates = []
+        current_test_start = start_date
+
+        while current_test_start < max_date:
+            test_start_dates.append(current_test_start)
+            # advance by 3 months (quarter)
+            # Using relativedelta for correct month arithmetic:
+            current_test_start = current_test_start + relativedelta(months=blocks)
+
+        for test_start in test_start_dates:
+            test_end = test_start + relativedelta(months=blocks)  
+            train, test = _split_indices(X, test_start, test_end)
+            if len(train) and len(test):
+                yield train, test
+
+    def get_n_splits(self, X, y=None, groups=None):
+        return len(list(self.split(X, y)))
 
 # %%
-hgbr_pipeline = hgbr_predictions.skb.make_learner()
-hgbr_pipeline.describe_params()
+from train_test_split import TimeSeriesSplitter
+
+X = X_y["X"].skb.mark_as_X(cv=TimeSeriesSplitter())
+y = X_y["y"].skb.mark_as_y()
+
 
 # %% [markdown]
-#
-# When running this notebook locally, you can also interactively inspect all
-# the steps of the DAG using the following (once uncommented):
-
-# %%
-# hgbr_predictions.skb.full_report()
-
-# %% [markdown]
-#
-# Since we passed input values to all the upstream `skrub` variables, `skrub`
-# automatically evaluates the whole expression graph graph (train and predict
-# on the same data) so that we can interactively check that everything will
-# work as expected.
 #
 # ## Assessing the model performance via cross-validation
 #
@@ -156,117 +165,115 @@ hgbr_pipeline.describe_params()
 # generalization performance via time-based cross-validation, also known as
 # backtesting.
 #
-# scikit-learn provides a `TimeSeriesSplit` splitter providing a convenient way to
-# split temporal data: in the different folds, the training data always precedes the
-# test data. It implies that the size of the training data is getting larger as the
-# fold index increases. The scikit-learn utility allows to define a couple of
-# parameters to control the size of the training and test data and as well as a gap
-# between the training and test data to potentially avoid leakage if our model relies
-# on lagged features.
-#
-# In the example below, we define that the training data should be at most 2 years
-# worth of data and the test data should be 24 weeks long. We also define a gap of
-# 1 week between the training and the testing sets.
-#
 # Let's check those statistics by iterating over the different folds provided by the
-# splitter.
+# splitter..
 
 # %%
-from sklearn.model_selection import TimeSeriesSplit
+%%writefile preprocessing.py
+
+import numpy as np
+import polars as pl
+import skrub
+
+def log_transform_maybe(y_true, use_log_transform):
+    return y_true.log() if use_log_transform else y_true
 
 
-max_train_size = 2 * 52 * 24 * 7  # max ~2 years of training data
-test_size = 24 * 7 * 24  # 24 weeks of test data
-gap = 7 * 24  # 1 week gap between train and test sets
-ts_cv_5 = TimeSeriesSplit(
-    n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap
-)
+def exp_transform_maybe(estimator_output, use_log_transform):
+    if not use_log_transform:
+        return estimator_output
+    if isinstance(estimator_output, np.ndarray):
+        return np.exp(estimator_output)
+    if isinstance(estimator_output, pl.Series):
+        return estimator_output.exp()
+    # in 'fit' mode, the output of the final estimator will be the fitted
+    # estimator itself.
+    return estimator_output
 
-for fold_idx, (train_idx, test_idx) in enumerate(
-    ts_cv_5.split(prediction_time.skb.eval())
-):
-    print(f"CV iteration #{fold_idx}")
-    train_datetimes = prediction_time.skb.eval()[train_idx]
-    test_datetimes = prediction_time.skb.eval()[test_idx]
-    print(
-        f"Train: {train_datetimes.shape[0]} rows, "
-        f"Test: {test_datetimes.shape[0]} rows"
+# %%
+from preprocessing import log_transform_maybe, exp_transform_maybe
+
+def apply_predictor(X, y, horizon):
+    return (
+        X.skb.apply_func(
+            add_features,
+            horizon=horizon,
+            load_electricity_load_history=load_electricity_load_history,
+            cities=cities,
+            temperature_only=temperature_only,
+            city_weather_fetcher=city_weather_fetcher
+        )
+        .skb.set_name(f"feat_{horizon}h")
+        .skb.drop(["prediction_time", "target_time"])
+        .skb.apply(regressor, y=y.skb.apply_func(log_transform_maybe, use_log_transform))
+        .skb.apply_func(exp_transform_maybe, use_log_transform)
+        .skb.set_name(f"pred_{horizon}h")
     )
-    print(f"Train time range: {train_datetimes[0, 0]} to " f"{train_datetimes[-1, 0]} ")
-    print(f"Test time range: {test_datetimes[0, 0]} to " f"{test_datetimes[-1, 0]} ")
-    print()
+
+loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
+
+regressor = HistGradientBoostingRegressor(
+    random_state=0,
+    loss=loss,
+    learning_rate=skrub.choose_float(
+        0.01, 0.7, default=0.1, log=True, name="learning_rate"
+    ),
+    max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
+)
+
+# If the log is squared_error, we want to try with and without log-transforming the targets.
+# Otherwise no log-transform.
+
+use_log_transform = loss.match(
+    {"squared_error": skrub.choose_bool(name="use_log_transform", default=True)},
+    default=False,
+)
+
+pred = apply_predictor(X, y, TIME_HORIZON).skb.with_scoring(
+    "neg_mean_absolute_percentage_error"
+)
+pred
+
+# %%
+
+pred.skb.cross_validate()
 
 # %% [markdown]
 #
-# Once the cross-validation strategy is defined, we pass it to the
-# `cross_validate` function provided by `skrub` to compute the cross-validated
-# scores. Here, we compute the mean absolute percentage error that is easily
-# interpretable and customary for regression tasks with a strictly positive
-# target variable such as electricity load forecasting.
-#
-# We can also look at the R2 score and the Poisson and Gamma deviance which are
-# all strictly proper scoring rules for estimation of $E[y|X]$: in the large
-# sample limit, minimizers of those metrics all identify the conditional
-# expectation of the target variable given the features for strictly positive
-# target variables. All those metrics follow the higher is better convention,
-# 1.0 is the maximum reachable score and 0.0 is the score of a model that
-# predicts the mean of the target variable for all observations, irrespective
-# of the features.
-#
-# Know that in general, a deviance score of 1.0 is not reachable since it
-# corresponds to a model that always predicts the target value exactly
-# for all observations. In practice, because there is always a fraction of the
-# variability in the target variable that is not explained by the information
-# available to construct the features, this perfect prediction is impossible.
+# For further inspection of predictions, we will collect the cross-validated
+# prediction into a dataframe. To easily inspect the output of the pipeline and
+# debug our cross-validation loop, we perform one train/test split to have an
+# example to work with.
 
 # %%
-from sklearn.metrics import (
-    make_scorer, mean_absolute_percentage_error, get_scorer, d2_tweedie_score
-)
+split = pred.skb.train_test_split()
+split["X_test"]
 
+# %% 
+split["y_test"]
 
-hgbr_cv_results = hgbr_predictions.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring={
-        "mape": make_scorer(mean_absolute_percentage_error),
-        "r2": get_scorer("r2"),
-        "d2_poisson": make_scorer(d2_tweedie_score, power=1.0),
-        "d2_gamma": make_scorer(d2_tweedie_score, power=2.0),
-    },
-    return_train_score=True,
-    return_learner=True,
-    verbose=1,
-    n_jobs=-1,
-)
-hgbr_cv_results.round(3)
+# %%
+hgbr_cv_predictions = pred.skb.make_learner().fit(split["train"]).predict(split["test"])
 
 # %% [markdown]
 #
-# Those results show very good performance of the model: less than 3% of mean
-# absolute percentage error (MAPE) on the test folds. Similarly, all the
-# deviance scores are close to 1.0.
-#
-# We observe a bit of variability in the scores across the different folds: in
-# particular the test performance on the first fold seems to be worse than the
-# other folds. This is likely due to the fact that the first fold contains
-# training data from 2021 and 2022 and the test data mostly from 2023.
-#
-# The invasion in Ukraine and a sharp drop in nuclear electricity production
-# due to safety problems strongly impacted the distribution of the electricity
-# prices in 2022, with unprecedented high prices, which can in turn cause a
-# shift in the electricity load demand. This could explain a higher than usual
-# distribution shift between the train and test folds of the first CV
-# iteration.
-#
-# We can further refine the analysis of the performance of our model by
-# collecting the predictions on each cross-validation split.
-
+# Now we can collect predictions for all splits and plot them.
 
 # %%
-hgbr_cv_predictions = collect_cv_predictions(
-    hgbr_cv_results["learner"], ts_cv_5, hgbr_predictions, prediction_time
-)
-hgbr_cv_predictions[0]
+cv_predictions = [
+        split["X_test"].with_columns(
+            split["y_test"],
+            **{
+                f"pred_{TIME_HORIZON}h": pred.skb.make_learner()
+                .fit(split["train"])
+                .predict(split["test"]),
+                "split": i,
+            },
+        )
+        for i, split in enumerate(pred.skb.iter_cv_splits())
+        ]
+cv_predictions[0]
+
 
 # %% [markdown]
 #
@@ -276,9 +283,9 @@ hgbr_cv_predictions[0]
 
 # %%
 altair.Chart(
-    hgbr_cv_predictions[0].tail(24 * 7)
+    pl.concat(cv_predictions).tail(100)
 ).transform_fold(
-    ["load_mw", "predicted_load_mw"],
+    ["1h", "pred_1h"],
 ).mark_line(
     tooltip=True
 ).encode(
@@ -294,7 +301,7 @@ altair.Chart(
 # load proportion.
 
 # %%
-plot_lorenz_curve(hgbr_cv_predictions).interactive()
+plot_lorenz_curve(cv_predictions[4:], TIME_HORIZON).interactive()
 
 # %% [markdown]
 #
@@ -321,7 +328,7 @@ plot_lorenz_curve(hgbr_cv_predictions).interactive()
 # mean predicted load and on the y-axis the mean observed load.
 
 # %%
-plot_reliability_diagram(hgbr_cv_predictions).interactive().properties(
+plot_reliability_diagram(cv_predictions, TIME_HORIZON).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
 
@@ -338,66 +345,20 @@ plot_reliability_diagram(hgbr_cv_predictions).interactive().properties(
 # diagonal. We only observe a mis-calibration for the extremum values.
 
 # %%
-plot_residuals_vs_predicted(hgbr_cv_predictions).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions, TIME_HORIZON).interactive().properties(
     title="Residuals vs Predicted Values from cross-validation predictions"
-)
+) 
 
 # %%
-plot_binned_residuals(hgbr_cv_predictions, by="hour").interactive().properties(
+plot_binned_residuals(cv_predictions, TIME_HORIZON, by="hour").interactive().properties(
     title="Residuals by hour of the day from cross-validation predictions"
 )
 
 # %%
-plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
+
+plot_binned_residuals(cv_predictions, TIME_HORIZON, by="month").interactive().properties(
     title="Residuals by hour of the day from cross-validation predictions"
 )
-
-# %%
-ts_cv_2 = TimeSeriesSplit(
-    n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
-)
-# randomized_search_hgbr = hgbr_predictions.skb.make_randomized_search(
-#     cv=ts_cv_2,
-#     scoring="r2",
-#     n_iter=100,
-#     fitted=True,
-#     verbose=1,
-#     n_jobs=-1,
-# )
-
-# %%
-# randomized_search_hgbr.results_.round(3)
-
-# %%
-# fig = randomized_search_hgbr.plot_results().update_layout(margin=dict(l=200))
-# write_json(fig, "parallel_coordinates_hgbr.json")
-
-# %%
-fig = read_json("parallel_coordinates_hgbr.json")
-fig.update_layout(margin=dict(l=200))
-
-# %%
-# nested_cv_results = skrub.cross_validate(
-#     environment=hgbr_predictions.skb.get_data(),
-#     learner=randomized_search_hgbr,
-#     cv=ts_cv_5,
-#     scoring={
-#         "r2": get_scorer("r2"),
-#         "mape": make_scorer(mean_absolute_percentage_error),
-#     },
-#     n_jobs=-1,
-#     return_learner=True,
-# ).round(3)
-# nested_cv_results
-
-# %%
-# for outer_fold_idx in range(len(nested_cv_results)):
-#     print(
-#         nested_cv_results.loc[outer_fold_idx, "learner"]
-#         .results_.loc[:, "mean_test_score"]
-#         .round(3)
-#         .to_dict()
-#    )
 
 # %% [markdown]
 #

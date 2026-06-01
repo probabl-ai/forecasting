@@ -3,27 +3,30 @@
 #
 # The purpose of this notebook is to demonstrate how to use `skrub` and
 # `polars` to perform feature engineering for electricity load forecasting.
-#
-# We will build a set of features (and targets) from different data sources:
-#
+
+# We build a pipeline that for a given prediction time, predicts the future
+# electricity load. We start by doing it for 1 horizon, then we extend to
+# predicting multiple horizons in the same pipeline.
+# This means that for each prediction time, it outputs predicted loads 
+# for 1 or several horizons.
+
+# Features (and targets) from different data sources are used:
+
 # - Historical weather data for 10 medium to large urban areas in France;
-# - Holidays and standard calendar features for France;
-# - Historical electricity load data for the whole of France.
-#
+# - Historical electricity load data for the whole of France;
+# - Holidays and standard calendar features for France.
+
 # All these data sources cover a time range from March 23, 2021 to May 31,
 # 2025.
-#
-# Since our maximum forecasting horizon is 24 hours, we consider that the
-# future weather data is known at a chosen prediction time. Similarly, the
-# holidays and calendar features are known at prediction time for any point in
-# the future.
-#
-# Therefore, exogenous features derived from the weather and calendar data can
-# be used to engineer "future covariates". Since the load data is our
-# prediction target, we will can also use it to engineer "past covariates" such
-# as lagged features and rolling aggregations. The future values of the load
-# data (with respect to the prediction time) are used as targets for the
-# forecasting model.
+
+# Exogenous features derived from the weather and calendar data can
+# be used to engineer "future covariates". Since the load data is our prediction target, 
+# we can also use it to engineer  "past covariates" such as lagged features and rolling 
+# aggregations. 
+
+# The future values of the load data (with respect to the prediction time) are 
+# used as targets for the forecasting model. 
+
 #
 # ## Environment setup
 #
@@ -31,8 +34,7 @@
 # running jupyterlite).
 
 # %%
-# %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
-# %pip install -q skrub altair holidays plotly nbformat
+# %pip install -q skrub altair holidays plotly nbformat polars pydot graphviz
 
 # %% [markdown]
 #
@@ -45,13 +47,12 @@
  # %%
 import tzdata  # noqa: F401
 import pandas as pd
+import datetime
 from pyarrow.parquet import read_table
 
 import altair
 import polars as pl
 import skrub
-from pathlib import Path
-import holidays
 
 
 # %% [markdown]
@@ -83,26 +84,44 @@ historical_data_end_time = skrub.var(
 
 
 # %%
-@skrub.deferred
-def build_historical_time_range(
-    historical_data_start_time,
-    historical_data_end_time,
-    time_interval="1h",
-    time_zone="UTC",
-):
-    """Define an historical time range shared by all data sources."""
+%%writefile time_range.py
+import datetime
+import polars as pl
+
+def time_range(start, end=None):
+    """
+    Build a 1-hour-spaced datetime range from start to end.
+
+    Times are truncated to the nearest full hour.
+
+    If end is None, we get a time range containing only the start time.
+    """
+    if end is None:
+        end = start
+    if isinstance(start, str):
+        start = datetime.datetime.fromisoformat(start)
+    if isinstance(end, str):
+        end = datetime.datetime.fromisoformat(end)
     return pl.DataFrame().with_columns(
         pl.datetime_range(
-            start=historical_data_start_time,
-            end=historical_data_end_time,
-            time_zone=time_zone,
-            interval=time_interval,
-        ).alias("time"),
+            start=start,
+            end=end,
+            time_zone="UTC",
+            interval="1h",
+        )
+        .dt.truncate("1h")
+        .alias("time"),
+        allow_object=True,
     )
 
+# %%
+from time_range import time_range
 
-time = build_historical_time_range(historical_data_start_time, historical_data_end_time)
-time
+range_start = skrub.var("start", "2021-03-23")
+range_end = skrub.var("end", "2025-05-31")
+
+prediction_time = skrub.deferred(time_range)(range_start, range_end)
+prediction_time
 
 # %% [markdown]
 #
@@ -112,83 +131,394 @@ time
 #
 # Let's now load the data records for the time range defined above.
 #
-# When running locally, we can use `skrub.datasets.fetch_electricity_usage`
-# to download the raw files if needed. We keep a fallback to the repository's
-# bundled `datasets` folder for offline runs and JupyterLite.
+# To avoid network issues when running this notebook, the necessary data files
+# have already been downloaded and saved in the `datasets` folder. 
 
 # %%
-def resolve_data_source_folder():
-    try:
-        from skrub.datasets import fetch_electricity_usage
-
-        return str(fetch_electricity_usage())
-    except Exception:
-        return "../datasets"
+%%writefile data_paths.py
+from pathlib import Path
+def data_dir():
+    return Path(".").resolve().parent / "datasets"
 
 
-data_source_folder = skrub.var("data_source_folder", resolve_data_source_folder())
+def results_dir():
+    out = Path(".").resolve() / "results"
+    out.mkdir(exist_ok=True)
+    return out
 
-for data_file in sorted(Path(data_source_folder.skb.eval()).iterdir()):
+# %%
+
+from data_paths import data_dir
+for data_file in sorted(data_dir().iterdir()):
     print(data_file)
 
 # %% [markdown]
 #
-# We define a list of 10 medium to large urban areas to approximately cover
-# most regions in France with a slight focus on most populated regions that are
-# likely to drive electricity demand.
+## Electricity load data
+#
+# Finally we load the electricity load data. This data will both be used as a
+# target variable but also to craft the data pipeline. We build a pipeline that 
+# for a given prediction time, predicts the future electricity load. 
+# We start by doing it for 1 horizon, then we extend to
+# predicting multiple horizons in the same pipeline.
+#
+# The historical data is sampled irregularly, sometimes every hour, sometimes
+# every 15 min, and with missing rows. We define a function to resample it on a
+# regular 1h-spaced grid.
+#
+# As this will serve as the basis for our lagged features, we add a buffer of
+# empty rows beyond the range of our data. We do not have the actual load for
+# those rows, but lagged loads can be defined for them and joined onto the
+# feature set we are building.
+#
+# %%
+%%writefile load_electricity_and_resample.py
+import polars as pl
+import datetime
+
+from data_paths import data_dir
+from time_range import time_range
+
+def load_electricity_load_data(data_dir=data_dir):
+    """Load and aggregate historical load data from the raw CSV files."""
+    return (
+        pl.read_csv(data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
+        .drop_nulls()
+        .select(
+            pl.col("Time (UTC)")
+            .str.split(by=" - ")
+            .list.first()
+            .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
+            .alias("time"),
+            pl.col("Actual Total Load [MW] - BZN|FR").alias("load_mw"),
+        )
+    )
+
+def resample(load_electricity_load_data):
+    """
+    Resample the load history on a regular time grid to have exactly 1 row every hour.
+
+    Parts where sampling was finer (eg every 15 minutes) are averaged over 1h
+    intervals, and if some hours are missing a corresponding row is inserted
+    containing explicit NULL values (rather than a missing row).
+
+    We add an extra empty 48h at the end to receive lags that can be used to
+    predict beyond the range of the available data.
+    """
+    averaged = load_electricity_load_data.group_by(pl.col("time").dt.truncate("1h")).agg(
+        pl.col("load_mw").mean()
+    )
+    all_times = averaged["time"]
+    return time_range(
+        all_times.min().strftime("%Y-%m-%d"), (all_times.max() + datetime.timedelta(hours=48)).strftime("%Y-%m-%d")
+    ).join(averaged, on="time", how="left", maintain_order="left")
 
 # %%
-city_names = skrub.var(
-    "city_names",
-    [
-        "paris",
-        "lyon",
-        "marseille",
-        "toulouse",
-        "lille",
-        "limoges",
-        "nantes",
-        "strasbourg",
-        "brest",
-        "bayonne",
-    ],
-)
+
+from load_electricity_and_resample import load_electricity_load_data
+
+raw_load_electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
+    "load_electricity_load_data"
+)()
+raw_load_electricity_load_history
+
+# %%
+from load_electricity_and_resample import resample
+
+load_electricity_load_history = raw_load_electricity_load_history.skb.apply_func(resample)
+load_electricity_load_history
+
+# %% [markdown]
+#
+## Building the training dataset
+# The prediction time range we built above is the input query to our system.
+# For each row, it outputs a prediction.
+#
+# We use it to build the ground truth y, by shifting the historical load by the
+# horizon. To account for missing data in the ground truth, we restrict the data to
+# timestamps for which we have a ground truth. At inference, when making a
+# prediction we keep all the query timestamps.
+#
+# This function is almost the same for handling single or multiple horizons so
+# we anticipate a little bit the need for multiple horizons and make it general
+# enough to accomodate both.
 
 
-@skrub.deferred
-def load_weather_data(time, city_names, data_source_folder):
-    """Load and horizontal stack historical weather data for each city."""
-    all_city_weather = time
-    data_source_folder = Path(data_source_folder)
+# %%
+%%writefile make_X_y.py
+import skrub
+import polars as pl
+def get_X_y(prediction_time, load_electricity_load_history, horizons, mode=skrub.eval_mode()):
+    """
+    Compute input and target variables.
 
-    for city_name in city_names:
-        parquet_path = data_source_folder / f"weather_{city_name}.parquet"
-        if parquet_path.exists():
-            city_weather = pl.from_arrow(read_table(parquet_path)).with_columns(
-                pl.col("time").dt.cast_time_unit("us")
-            )
-        else:
+    For fitting (and validation), this builds the targets y by applying
+    appropriate shifts to the historical data. The targets y and prediction
+    times X are aligned, and rows with missing ground truth are dropped.
+    Returns a dictionary with keys X and y, ready to be split for
+    cross-validation or used to fit a model.
 
-            raise FileNotFoundError(
-                f"Could not find weather data for {city_name!r} in {data_source_folder}."
-            )
-
-        all_city_weather = all_city_weather.join(
-            city_weather.rename(
-                lambda x: x if x == "time" else "weather_" + x + "_" + city_name
-            ),
-            on="time",
+    For prediction, simply returns `prediction_time` in a dictionary with a
+    single key X.
+    """
+    if isinstance(horizons, int):
+        single_horizon = True
+        horizons = (horizons,)
+    else:
+        single_horizon = False
+    prediction_time = prediction_time.rename({"time": "prediction_time"})
+    if mode in ("fit", "fit_transform", "preview"):
+        # For those modes we need the ground truth; restrict to rows for which
+        # there is y
+        load = load_electricity_load_history.select(
+            pl.col("time"),
+            *[pl.col("load_mw").shift(-h).alias(f"{h}h") for h in horizons],
+        ).drop_nulls()
+        X_y = prediction_time.join(
+            load,
+            left_on="prediction_time",
+            right_on="time",
+            how="inner",
+            maintain_order="left",
         )
-    return all_city_weather
+        return {
+            "X": X_y.select(pl.col("prediction_time")),
+            "y": (
+                X_y[f"{horizons[0]}h"] if single_horizon else X_y.drop("prediction_time")
+            ),
+        }
+    else:
+        # In predict mode there is no y and we return unmodified query
+        return {"X": prediction_time}
 
+# %%
+from make_X_y import get_X_y
 
-all_city_weather = load_weather_data(time, city_names, data_source_folder)
-all_city_weather
+# Example output for 1 hours
+EXAMPLE_TIME_HORIZON = 1
+X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, EXAMPLE_TIME_HORIZON)
+X_y["X"]
 
 
 # %% [markdown]
-# ## Calendar and holidays features
 #
+## Feature engineering
+#
+# Now that we have our query and the ground-truth answers for it, we can start
+# building the rest of our predictive pipeline: creating the features and
+# adding a supervised predictor.
+#
+# Feature engineering takes _target time_ into account. In X we have the
+# prediction time, the time at which we make the prediction. We also want to
+# take into account the target time, i.e., the time about which we make a
+# prediction. For example if we are predicting what the load will be on Tuesday
+# at 3pm, we want to know what the weather will be, whether Tuesday is a
+# holiday, and what the load was on Monday at 3pm and the previous Tuesday at
+# 3pm. Those features are driven by the target time. So our first step is to
+# add it to the dataframe of features we are building up.
+
+# %%
+
+%%writefile add_features.py
+import polars as pl
+from polars import selectors as cs
+import holidays 
+
+from data_paths import data_dir
+
+def add_target_time(df, horizon):
+    return df.with_columns(
+        (pl.col("prediction_time") + pl.duration(hours=horizon)).alias("target_time")
+    )
+def add_lagged_features(df, load_electricity_load_history, horizon):
+    """
+    Build lagged features for the given horizon.
+
+    horizon must be <= 24 (hours). Only features that would be available at
+    prediction time, ie that require data at least horizon hours in the past,
+    are created.
+    """
+    assert horizon <= 24
+    lags = (
+        pl.col("load_mw").shift(lag).alias(f"lag_{lag}")
+        for lag in list(range(horizon, 24)) + [24, 24 * 2, 24 * 7]
+    )
+
+    rolling_lags = sorted(set((horizon, 24)))
+    rolling_widths = (24, 24 * 7)
+
+    def rolling(e, name):
+        return [
+            e.rolling(
+                index_column="time", period=f"{width}h", offset=f"{-width -lag}h"
+            ).alias(f"lag_{lag}_width_{width}_{name}")
+            for lag in rolling_lags
+            for width in rolling_widths
+        ]
+
+    medians = rolling(pl.col("load_mw").median(), "median")
+    iqr = rolling(
+        (pl.col("load_mw").quantile(0.75) - pl.col("load_mw").quantile(0.25)), "iqr"
+    )
+    features = load_electricity_load_history.select(pl.col("time"), *lags, *medians, *iqr)
+    return df.join(
+        features,
+        left_on="target_time",
+        right_on="time",
+        how="left",
+        maintain_order="left",
+    )
+def fetch_city_weather(city, data_dir=data_dir):
+    return pl.read_parquet(data_dir() / f"weather_{city}.parquet")
+
+def add_weather(
+    df,
+    horizon,
+    cities="all",
+    temperature_only=True,
+    city_weather_fetcher=fetch_city_weather,
+):
+    """Add weather information for the required cities."""
+    # NOTE: here ideally we should retrieve the exact weather forecast
+    # corresponding to the horizon. But we do not have it available in the
+    # historical data. Therefore we just take the only forecast we have and
+    # ignore the horizon.
+    del horizon
+    if isinstance(cities, str):
+        assert cities == "all"
+        cities =  (
+                    "paris",
+                    "lyon",
+                    "marseille",
+                    "toulouse",
+                    "lille",
+                    "limoges",
+                    "nantes",
+                    "strasbourg",
+                    "brest",
+                    "bayonne",
+                )
+    with_weather = df
+    for city in cities:
+        with_weather = with_weather.join(
+            city_weather_fetcher(city)
+            .with_columns(pl.col("time").dt.cast_time_unit("us"))
+            .select(
+                (pl.col("time"), cs.matches(".*temperature.*"))
+                if temperature_only
+                else pl.all()
+            )
+            .select(
+                pl.col("time"),
+                (~cs.by_name("time")).as_expr().name.map(f"weather_{{}}_{city}".format),
+            ),
+            left_on="target_time",
+            right_on="time",
+            how="left",
+            maintain_order="left",
+        )
+    return with_weather
+
+def add_calendar_and_holidays(target_time):
+    """Add calendar features and holiday information."""
+    fr_time = pl.col("prediction_time").dt.convert_time_zone("Europe/Paris")
+    fr_year_min = target_time.select(fr_time.dt.year().min()).item()
+    fr_year_max = target_time.select(fr_time.dt.year().max()).item()
+    holidays_fr = holidays.country_holidays(
+        "FR", years=range(fr_year_min, fr_year_max + 1)
+    )
+    return target_time.with_columns(
+        fr_time.dt.hour().alias("cal_hour_of_day"),
+        fr_time.dt.weekday().alias("cal_day_of_week"),
+        fr_time.dt.ordinal_day().alias("cal_day_of_year"),
+        fr_time.dt.year().alias("cal_year"),
+        fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
+    )
+    
+# %%    
+
+from add_features import add_target_time
+
+X = X_y["X"].skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
+
+# %% [markdown]
+#
+## Lagged features
+#
+# Next we have a function for adding lagged features (such as load on the same
+# day of the previous week). It needs the input dataframe (which so far only
+# contains prediction and target time), the historical data that will be used
+# to build the lagged features and join them to the input. The horizon
+# (difference between target and prediction time) is also needed to ensure that
+# we do not include lags that would not be available after deployment: for
+# example if we are creating a pipeline for a 12 h horizon we cannot include
+# the 3-hour lagged load (because it would only become available 9 hours after
+# the deadline for our prediction).
+
+# %%
+from add_features import add_lagged_features
+
+with_lags = X.skb.apply_func(
+    add_lagged_features, load_electricity_load_history, EXAMPLE_TIME_HORIZON
+)
+with_lags
+
+# %% [markdown]
+#
+## Weather Data
+
+# %% 
+from add_features import fetch_city_weather
+
+ALL_CITIES = (
+    "paris",
+    "lyon",
+    "marseille",
+    "toulouse",
+    "lille",
+    "limoges",
+    "nantes",
+    "strasbourg",
+    "brest",
+    "bayonne",
+)
+
+fetch_city_weather("paris")
+
+# %% [markdown]
+#
+# We are not sure if it is best to use all cities or only a few big ones. Also,
+# we don't know which features to use, temperature is probably the most
+# important one so we may want to try using all features or the temperature
+# only. Therefore the function we define has parameters for controlling that.
+#
+# Skrub lets us create "choice" objects, nodes in our pipeline that can take
+# different values for hyperparameter search. We use this for the choice of
+# city names and of temperature only vs all features.
+
+# %%
+from add_features import add_weather
+
+city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
+    "city_weather_fetcher"
+)
+
+temperature_only = skrub.choose_bool(name="temperature_only", default=True)
+cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
+
+
+with_weather = with_lags.skb.apply_func(
+    add_weather,
+    EXAMPLE_TIME_HORIZON,
+    cities=cities,
+    temperature_only=temperature_only,
+    city_weather_fetcher=city_weather_fetcher,
+)
+with_weather
+# %% [markdown]
+#
+# ## Calendar and holidays features
+# 
 # We leverage the `holidays` package to enrich the time range with some
 # calendar features such as public holidays in France. We also add some
 # features that are useful for time series forecasting such as the day of the
@@ -202,401 +532,50 @@ all_city_weather
 # patterns are influenced by inhabitants' daily routines aligned with the local
 # timezone.
 
+# %%
+from add_features import add_calendar_and_holidays
+
+with_calendar = with_weather.skb.apply_func(add_calendar_and_holidays)
+with_calendar
 
 # %%
-@skrub.deferred
-def prepare_french_calendar_data(time):
-    fr_time = pl.col("time").dt.convert_time_zone("Europe/Paris")
-    fr_year_min = time.select(fr_time.dt.year().min()).item()
-    fr_year_max = time.select(fr_time.dt.year().max()).item()
-    holidays_fr = holidays.country_holidays(
-        "FR", years=range(fr_year_min, fr_year_max + 1)
-    )
-    return time.with_columns(
-        [
-            fr_time.dt.hour().alias("cal_hour_of_day"),
-            fr_time.dt.weekday().alias("cal_day_of_week"),
-            fr_time.dt.ordinal_day().alias("cal_day_of_year"),
-            fr_time.dt.year().alias("cal_year"),
-            fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
-        ],
-    )
-
-
-calendar = prepare_french_calendar_data(time)
-calendar
-
-
-# %% [markdown]
-#
-# ## Electricity load data
-#
-# Finally we load the electricity load data. This data will both be used as a
-# target variable but also to craft some lagged and window-aggregated features.
-# %%
-@skrub.deferred
-def load_electricity_load_data(time, data_source_folder):
-    """Load and aggregate historical load data from the raw CSV files."""
-    load_data_files = [
-        data_file
-        for data_file in sorted(Path(data_source_folder).iterdir())
-        if data_file.name.startswith("Total Load - Day Ahead")
-        and data_file.name.endswith(".csv")
-    ]
-    return time.join(
-        (
-            pl.concat(
-                [
-                    pl.from_pandas(pd.read_csv(data_file, na_values=["N/A", "-"])).drop(
-                        ["Day-ahead Total Load Forecast [MW] - BZN|FR"]
-                    )
-                    for data_file in load_data_files
-                ]
-            ).select(
-                [
-                    pl.col("Time (UTC)")
-                    .str.split(by=" - ")
-                    .list.first()
-                    .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
-                    .alias("time"),
-                    pl.col("Actual Total Load [MW] - BZN|FR").alias("load_mw"),
-                ]
-            )
-        ),
-        on="time",
-    )
-
-
-# %% [markdown]
-#
-# Let's load the data and check if there are missing values since we will use
-# this data as the target variable for our forecasting model.
-
-# %%
-electricity_raw = load_electricity_load_data(time, data_source_folder)
-electricity_raw.filter(pl.col("load_mw").is_null())
-
-# %% [markdown]
-#
-# So apparently there a few missing measurements. Let's use linear
-# interpolation to fill those missing values.
-
-# %%
-electricity_raw.filter(
-    (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
-    & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
-).skb.eval().plot.line(x="time:T", y="load_mw:Q")
-
-# %%
-electricity = electricity_raw.with_columns([pl.col("load_mw").interpolate()])
-electricity.filter(
-    (pl.col("time") > pl.datetime(2021, 10, 30, hour=10, time_zone="UTC"))
-    & (pl.col("time") < pl.datetime(2021, 10, 31, hour=10, time_zone="UTC"))
-).skb.eval().plot.line(x="time:T", y="load_mw:Q")
-
-# %% [markdown]
-#
-# **Remark**: interpolating missing values in the target column that we will
-# use to train and evaluate our models can bias the learning problem and make
-# our cross-validation metrics misrepresent the performance of the deployed
-# predictive system.
-#
-# A potentially better approach would be to keep the missing values in the
-# dataset and use a sample_weight mask to keep a contiguous dataset while
-# ignoring the time periods with missing values when training or evaluating the
-# model.
-
-# %% [markdown]
-#
-# ## Lagged features
-#
-# We can now create some lagged features from the electricity load data.
-#
-# We will create 3 hourly lagged features, 1 daily lagged feature, and 1 weekly
-# lagged feature. We will also create a rolling median and inter-quartile
-# feature over the last 24 hours and over the last 7 days.
-
-
-# %%
-def iqr(col, *, window_size: int):
-    """Inter-quartile range (IQR) of a column."""
-    return col.rolling_quantile(0.75, window_size=window_size) - col.rolling_quantile(
-        0.25, window_size=window_size
-    )
-
-
-electricity_lagged = electricity.with_columns(
-    [pl.col("load_mw").shift(i).alias(f"load_mw_lag_{i}h") for i in range(1, 4)]
-    + [
-        pl.col("load_mw").shift(24).alias("load_mw_lag_1d"),
-        pl.col("load_mw").shift(24 * 7).alias("load_mw_lag_1w"),
-        pl.col("load_mw")
-        .rolling_median(window_size=24)
-        .alias("load_mw_rolling_median_24h"),
-        pl.col("load_mw")
-        .rolling_median(window_size=24 * 7)
-        .alias("load_mw_rolling_median_7d"),
-        iqr(pl.col("load_mw"), window_size=24).alias("load_mw_iqr_24h"),
-        iqr(pl.col("load_mw"), window_size=24 * 7).alias("load_mw_iqr_7d"),
-    ],
-)
-electricity_lagged
-
-# %%
-altair.Chart(electricity_lagged.tail(100).skb.preview()).transform_fold(
+altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
     [
-        "load_mw",
-        "load_mw_lag_1h",
-        "load_mw_lag_2h",
-        "load_mw_lag_3h",
-        "load_mw_lag_1d",
-        "load_mw_lag_1w",
-        "load_mw_rolling_median_24h",
-        "load_mw_rolling_median_7d",
-        "load_mw_rolling_iqr_24h",
-        "load_mw_rolling_iqr_7d",
+        "lag_1",
+        "lag_2",
+        "lag_3",
+        "lag_1_width_24_median",
+        "lag_1_width_168_median",
+        "lag_24_width_24_median",
+        "lag_24_width_168_median",
+        "lag_1_width_24_iqr",
+        "lag_24_width_24_iqr",
     ],
     as_=["key", "load_mw"],
-).mark_line(tooltip=True).encode(x="time:T", y="load_mw:Q", color="key:N").interactive()
+).mark_line(tooltip=True).encode(x="prediction_time:T", y="load_mw:Q", color="key:N").interactive()
 
 # %% [markdown]
 #
-# ## Important remark about lagged features engineering and system lag
-#
-# When working with historical data, we often have access to all the past
-# measurements in the dataset. However, when we want to use the lagged features
-# in a forecasting model, we need to be careful about the length of the
-# **system lag**. The system lag is the timelaps between the moment a timestamped 
-# measurement is made in the real world and the moment where the record is made 
-# available to the downstream application (in our case, a deployed predictive pipeline).
-#
-# System lag is rarely explicitly represented in the data sources even if such
-# delay can be as large as several hours or even days and can sometimes be
-# irregular. For instance, if there is a human intervention in the data
-# recording process, holidays and weekends can punctually add significant
-# delay.
-#
-# If the system lag is larger than the maximum feature engineering lag, the
-# resulting features be filled with missing values once deployed. More
-# importantly, if the system lag is not handled explicitly, those resulting
-# missing values will only be present in the features computed for the
-# deployed system but not present in the features computed to train and
-# backtest the system before deployment.
-#
-# This structural discrepancy can severely degrade the performance of the
-# deployed model compared to the performance estimated from backtesting on the
-# historical data.
-#
-# We will set this problem aside for now but discuss it again in a later
-# section of this tutorial.
-
-# %% [markdown]
-# ## Investigating outliers in the lagged features
-#
-# Let's use the `skrub.TableReport` tool to look at the plots of the marginal
-# distribution of the lagged features.
-
-# %%
-from skrub import TableReport
-
-TableReport(electricity_lagged.skb.eval(), max_plot_columns=0).open()
-# %% [markdown]
-#
-# Let's extract the dates where the inter-quartile range of the load on 7 days is
-# greater than 15,000 MW, to investigate the outliers hightlighted by the TableReport.
-
-# %%
-electricity_lagged.filter(pl.col("load_mw_iqr_7d") > 15_000)[
-    "time"
-].dt.date().unique().sort().to_list().skb.eval()
-
-# %% [markdown]
-#
-# We observe 3 date ranges with high inter-quartile range. Let's plot the
-# electricity load and the lagged features for the first data range along with
-# the weather data for Paris.
-
-# %%
-altair.Chart(
-    electricity_lagged.filter(
-        (pl.col("time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
-        & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
-    ).skb.eval()
-).transform_fold(
-    [
-        "load_mw",
-        "load_mw_iqr_7d",
-    ],
-).mark_line(
-    tooltip=True
-).encode(
-    x="time:T", y="value:Q", color="key:N"
-).interactive()
-
-# %%
-altair.Chart(
-    all_city_weather.filter(
-        (pl.col("time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
-        & (pl.col("time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
-    ).skb.eval()
-).transform_fold(
-    [f"weather_temperature_2m_{city_name}" for city_name in city_names.skb.eval()],
-).mark_line(
-    tooltip=True
-).encode(
-    x="time:T", y="value:Q", color="key:N"
-).interactive()
-
-# %% [markdown]
-#
-# Based on the plots above, we can see that the electricity load was high just
-# before the Christmas holidays due to low temperatures. Then the load suddenly
-# dropped because temperatures went higher right at the start of the
-# end-of-year holidays.
-#
-# So those outliers do not seem to be caused to a data quality issue but rather
-# due to a real change in the electricity load demand. We could conduct similar
-# analysis for the other date ranges with high inter-quartile range but we will
-# skip that for now.
-#
-# If we had observed significant data quality issues over extended periods of
-# time could have been addressed by removing the corresponding rows from the
-# dataset. However, this would make the lagged and windowing feature
-# engineering challenging to reimplement correctly. A better approach would be
-# to keep a contiguous dataset assign 0 weights to the affected rows when
-# fitting or evaluating the trained models via the use of the `sample_weight`
-# parameter.
-
-# %% [markdown]
 # ## Final dataset
 #
-# We now assemble the dataset that will be used to train and evaluate the forecasting
-# models via backtesting.
+# Now we are done with all the feature engineering steps. For later reuse we
+# group the steps we just created into one function:
 
-# %%
-prediction_start_time = skrub.var(
-    "prediction_start_time", historical_data_start_time.skb.eval() + pl.duration(days=7)
-)
-prediction_end_time = skrub.var(
-    "prediction_end_time", historical_data_end_time.skb.eval() - pl.duration(hours=24)
-)
+# %%  
 
 
-@skrub.deferred
-def define_prediction_time_range(prediction_start_time, prediction_end_time):
-    return pl.DataFrame().with_columns(
-        pl.datetime_range(
-            start=prediction_start_time,
-            end=prediction_end_time,
-            time_zone="UTC",
-            interval="1h",
-        ).alias("prediction_time"),
+%%writefile -a add_features.py
+import skrub
+def add_features(df, horizon, load_electricity_load_history, cities, temperature_only, city_weather_fetcher):
+    df = add_target_time(df, horizon=horizon)
+    df = add_lagged_features(df, load_electricity_load_history, horizon=horizon)
+    df = add_weather(
+    df,
+    horizon,
+    cities=cities,
+    temperature_only=temperature_only,
+    city_weather_fetcher=city_weather_fetcher,
     )
-
-
-prediction_time = define_prediction_time_range(
-    prediction_start_time, prediction_end_time
-).skb.subsample(n=1000, how="head")
-prediction_time
-
-
-# %%
-@skrub.deferred
-def build_features(
-    prediction_time,
-    electricity_lagged,
-    all_city_weather,
-    calendar,
-    future_feature_horizons=[1, 24],
-):
-
-    return (
-        prediction_time.join(
-            electricity_lagged, left_on="prediction_time", right_on="time"
-        )
-        .join(
-            all_city_weather.select(
-                [pl.col("time")]
-                + [
-                    pl.col(c).shift(-h).alias(c + f"_future_{h}h")
-                    for c in all_city_weather.columns
-                    if c != "time"
-                    for h in future_feature_horizons
-                ]
-            ),
-            left_on="prediction_time",
-            right_on="time",
-        )
-        .join(
-            calendar.select(
-                [pl.col("time")]
-                + [
-                    pl.col(c).shift(-h).alias(c + f"_future_{h}h")
-                    for c in calendar.columns
-                    if c != "time"
-                    for h in future_feature_horizons
-                ]
-            ),
-            left_on="prediction_time",
-            right_on="time",
-        )
-    ).drop("prediction_time")
-
-
-features = build_features(
-    prediction_time=prediction_time,
-    electricity_lagged=electricity_lagged,
-    all_city_weather=all_city_weather,
-    calendar=calendar,
-).skb.mark_as_X()
-
-features
-
-# %% [markdown]
-#
-# Let's build training and evaluation targets for all possible horizons from 1
-# to 24 hours.
-
-# %%
-horizons = range(1, 25)
-target_column_name_pattern = "load_mw_horizon_{horizon}h"
-
-
-@skrub.deferred
-def build_targets(prediction_time, electricity, horizons):
-    return prediction_time.join(
-        electricity.with_columns(
-            [
-                pl.col("load_mw")
-                .shift(-h)
-                .alias(target_column_name_pattern.format(horizon=h))
-                for h in horizons
-            ]
-        ),
-        left_on="prediction_time",
-        right_on="time",
-    )
-
-
-targets = build_targets(prediction_time, electricity, horizons)
-targets
-
-# %% [markdown]
-#
-# Let's serialize this data loading and feature engineering pipeline for
-# reuse in later notebooks.
-
-# %%
-import cloudpickle
-
-with open("feature_engineering_pipeline.pkl", "wb") as f:
-    cloudpickle.dump(
-        {
-            "features": features,
-            "targets": targets,
-            "prediction_time": prediction_time,
-            "horizons": horizons,
-            "target_column_name_pattern": target_column_name_pattern,
-        },
-        f,
-    )
+    df = add_calendar_and_holidays(df)
+    return df
+    

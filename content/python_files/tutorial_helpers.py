@@ -68,7 +68,7 @@ def lorenz_curve(observed_value, predicted_value, n_samples=1_000):
     )
 
 
-def plot_lorenz_curve(cv_predictions, n_samples=500):
+def plot_lorenz_curve(cv_predictions, horizon, n_samples=500):
     """Plot the Lorenz curve for a given cross-validation results containing
     observed and predicted values.
 
@@ -90,8 +90,8 @@ def plot_lorenz_curve(cv_predictions, n_samples=500):
     for fold_idx, predictions in enumerate(cv_predictions):
         results.append(
             lorenz_curve(
-                observed_value=predictions["load_mw"],
-                predicted_value=predictions["predicted_load_mw"],
+                observed_value=predictions[f"{horizon}h"],
+                predicted_value=predictions[f"pred_{horizon}h"],
                 n_samples=n_samples,
             ).with_columns(
                 pl.lit(fold_idx).alias("fold_idx"),
@@ -101,8 +101,8 @@ def plot_lorenz_curve(cv_predictions, n_samples=500):
 
         results.append(
             lorenz_curve(
-                observed_value=predictions["load_mw"],
-                predicted_value=predictions["load_mw"],
+                observed_value=predictions[f"{horizon}h"],
+                predicted_value=predictions[f"pred_{horizon}h"],
                 n_samples=n_samples,
             ).with_columns(
                 pl.lit(fold_idx).alias("fold_idx"),
@@ -174,7 +174,7 @@ def plot_lorenz_curve(cv_predictions, n_samples=500):
 
 
 def plot_reliability_diagram(
-    cv_predictions, kind="mean", quantile_level=0.5, n_bins=10
+    cv_predictions, horizon, kind="mean", quantile_level=0.5, n_bins=10
 ):
     """Plot the reliability diagram given cross-validation results containing
     observed and predicted values.
@@ -199,19 +199,19 @@ def plot_reliability_diagram(
     # min and max load over all predictions and observations for any folds:
     all_loads = pl.concat(
         [
-            cv_prediction.select(["load_mw", "predicted_load_mw"])
+            cv_prediction.select([f"{horizon}h",f"pred_{horizon}h"])
             for cv_prediction in cv_predictions
         ]
     )
-    all_loads = pl.concat(all_loads["load_mw", "predicted_load_mw"])
+    all_loads = pl.concat(all_loads[f"{horizon}h",f"pred_{horizon}h"])
     min_load, max_load = all_loads.min(), all_loads.max()
     scale = altair.Scale(domain=[min_load, max_load])
     if kind == "mean":
-        y_name = "mean_load_mw"
-        agg_expr = pl.col("load_mw").mean()
+        y_name = f"mean_load_{horizon}h"
+        agg_expr = pl.col(f"{horizon}h").mean()
     elif kind == "quantile":
-        y_name = "quantile_of_load_mw"
-        agg_expr = pl.col("load_mw").quantile(quantile_level)
+        y_name = f"quantile_of_load_{horizon}h"
+        agg_expr = pl.col(f"{horizon}h").quantile(quantile_level)
     else:
         raise ValueError(f"Unknown kind: {kind}. Use 'mean' or 'quantile'.")
 
@@ -219,7 +219,7 @@ def plot_reliability_diagram(
         altair.Chart(
             pl.DataFrame(
                 {
-                    "mean_predicted_load_mw": [min_load, max_load],
+                    f"mean_predicted_load_{horizon}h": [min_load, max_load],
                     y_name: [min_load, max_load],
                     "label": ["Perfect"] * 2,
                 }
@@ -227,7 +227,7 @@ def plot_reliability_diagram(
         )
         .mark_line(tooltip=True, opacity=0.8, strokeDash=[5, 5])
         .encode(
-            x=altair.X("mean_predicted_load_mw:Q", scale=scale),
+            x=altair.X(f"mean_predicted_load_{horizon}h:Q", scale=scale),
             y=altair.Y(f"{y_name}:Q", scale=scale),
             color=altair.Color(
                 "label:N",
@@ -244,15 +244,15 @@ def plot_reliability_diagram(
 
         mean_per_bins = (
             cv_predictions_i.group_by(
-                pl.col("predicted_load_mw").qcut(np.linspace(0, 1, n_bins))
+                pl.col(f"pred_{horizon}h").qcut(np.linspace(0, 1, n_bins))
             )
             .agg(
                 [
                     agg_expr.alias(y_name),
-                    pl.col("predicted_load_mw").mean().alias("mean_predicted_load_mw"),
+                    pl.col(f"pred_{horizon}h").mean().alias(f"mean_predicted_load_{horizon}h"),
                 ]
             )
-            .sort("predicted_load_mw")
+            .sort(f"pred_{horizon}h")
             .with_columns(pl.lit(fold_label).alias("fold_label"))
         )
 
@@ -260,7 +260,7 @@ def plot_reliability_diagram(
             altair.Chart(mean_per_bins)
             .mark_line(tooltip=True, point=True, opacity=0.8)
             .encode(
-                x=altair.X("mean_predicted_load_mw:Q", scale=scale),
+                x=altair.X(f"mean_predicted_load_{horizon}h:Q", scale=scale),
                 y=altair.Y(f"{y_name}:Q", scale=scale),
                 color=altair.Color(
                     "fold_label:N",
@@ -272,7 +272,7 @@ def plot_reliability_diagram(
     return chart.resolve_scale(color="independent")
 
 
-def plot_residuals_vs_predicted(cv_predictions):
+def plot_residuals_vs_predicted(cv_predictions, horizon):
     """Plot residuals vs predicted values scatter plot for all CV folds.
 
     Parameters
@@ -299,7 +299,7 @@ def plot_residuals_vs_predicted(cv_predictions):
 
         # Calculate residuals
         residuals_data = cv_prediction.with_columns(
-            [(pl.col("predicted_load_mw") - pl.col("load_mw")).alias("residual")]
+            [(pl.col(f"pred_{horizon}h") - pl.col(f"{horizon}h")).alias("residual")]
         ).with_columns([pl.lit(fold_label).alias("fold_label")])
 
         # Create scatter plot for this CV fold
@@ -308,7 +308,7 @@ def plot_residuals_vs_predicted(cv_predictions):
             .mark_circle(opacity=0.6, size=20)
             .encode(
                 x=altair.X(
-                    "predicted_load_mw:Q",
+                    f"pred_{horizon}h:Q",
                     title=x_title,
                     scale=altair.Scale(zero=False),
                 ),
@@ -317,7 +317,7 @@ def plot_residuals_vs_predicted(cv_predictions):
                 tooltip=[
                     "prediction_time:T",
                     "load_mw:Q",
-                    "predicted_load_mw:Q",
+                    f"pred_{horizon}h:Q",
                     "residual:Q",
                     "fold_label:N",
                 ],
@@ -327,7 +327,7 @@ def plot_residuals_vs_predicted(cv_predictions):
         all_scatter_plots.append(scatter_plot)
 
     all_predictions = pl.concat(
-        [cv_pred["predicted_load_mw"] for cv_pred in cv_predictions]
+        [cv_pred[f"pred_{horizon}h"] for cv_pred in cv_predictions]
     )
     min_pred, max_pred = all_predictions.min(), all_predictions.max()
 
@@ -335,7 +335,7 @@ def plot_residuals_vs_predicted(cv_predictions):
         altair.Chart(
             pl.DataFrame(
                 {
-                    "predicted_load_mw": [min_pred, max_pred],
+                    f"pred_{horizon}h": [min_pred, max_pred],
                     "perfect_residual": [0, 0],
                     "label": ["Perfect"] * 2,
                 }
@@ -343,7 +343,7 @@ def plot_residuals_vs_predicted(cv_predictions):
         )
         .mark_line(strokeDash=[5, 5], opacity=0.8, color="black")
         .encode(
-            x=altair.X("predicted_load_mw:Q", title=x_title),
+            x=altair.X(f"pred_{horizon}h:Q", title=x_title),
             y=altair.Y("perfect_residual:Q", title=y_title),
             color=altair.Color(
                 "label:N",
@@ -359,7 +359,7 @@ def plot_residuals_vs_predicted(cv_predictions):
     return (combined_scatter + perfect_line).resolve_scale(color="independent")
 
 
-def plot_binned_residuals(cv_predictions, by="hour"):
+def plot_binned_residuals(cv_predictions, horizon, by="hour"):
     """Plot the average residuals binned by time period, one line per CV fold.
 
     Parameters
@@ -398,7 +398,7 @@ def plot_binned_residuals(cv_predictions, by="hour"):
 
         residuals_detailed = cv_prediction.with_columns(
             [
-                (pl.col("predicted_load_mw") - pl.col("load_mw")).alias("residual"),
+                (pl.col(f"pred_{horizon}h") - pl.col(f"{horizon}h")).alias("residual"),
                 time_extractor,
             ]
         )
@@ -487,6 +487,7 @@ def plot_binned_residuals(cv_predictions, by="hour"):
 
 @skrub.deferred
 def plot_horizon_forecast(
+    horizon,
     targets,
     named_predictions,
     plot_at_time,
@@ -515,7 +516,7 @@ def plot_horizon_forecast(
     """
     merged_data = pl.concat(
         [
-            targets.select(pl.col("prediction_time"), pl.col("load_mw")),
+            targets.select(pl.col("prediction_time"), pl.col(f"{horizon}h")),
             named_predictions,
         ],
         how="horizontal",
@@ -524,10 +525,10 @@ def plot_horizon_forecast(
     end_time = plot_at_time + datetime.timedelta(hours=named_predictions.shape[1])
     true_values_past = merged_data.filter(
         pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
-    ).rename({"load_mw": "Past true load"})
+    ).rename({f"{horizon}h": "Past true load"})
     true_values_future = merged_data.filter(
         pl.col("prediction_time").is_between(plot_at_time, end_time, closed="right")
-    ).rename({"load_mw": "Future true load"})
+    ).rename({f"{horizon}h": "Future true load"})
     predicted_record = merged_data.select(cs.starts_with("predict")).row(
         by_predicate=pl.col("prediction_time") == plot_at_time, named=True
     )
