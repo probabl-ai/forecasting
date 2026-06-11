@@ -111,7 +111,6 @@ def time_range(start, end=None):
         )
         .dt.truncate("1h")
         .alias("time"),
-        allow_object=True,
     )
 
 # %%
