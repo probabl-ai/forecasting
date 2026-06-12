@@ -167,13 +167,13 @@ for data_file in sorted(get_data_dir().iterdir()):
 import polars as pl
 import datetime
 
-from data_paths import data_dir
+from data_paths import get_data_dir
 from time_range import time_range
 
 def load_electricity_history_data(data_dir=get_data_dir()):
     """Load and aggregate historical load data from the raw CSV files."""
     return (
-        pl.read_csv(data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
+        pl.read_csv(get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
         .drop_nulls()
         .select(
             pl.col("Time (UTC)")
@@ -323,7 +323,7 @@ import polars as pl
 from polars import selectors as cs
 import holidays 
 
-from data_paths import data_dir
+from data_paths import get_data_dir
 
 def add_target_time(df, horizon):
     return df.with_columns(
@@ -367,8 +367,8 @@ def add_lagged_features(df, electricity_load_history, horizon):
         how="left",
         maintain_order="left",
     )
-def fetch_city_weather(city, data_dir=data_dir):
-    return pl.read_parquet(data_dir() / f"weather_{city}.parquet")
+def fetch_city_weather(city, data_dir=get_data_dir()):
+    return pl.read_parquet(get_data_dir() / f"weather_{city}.parquet")
 
 def add_weather(
     df,

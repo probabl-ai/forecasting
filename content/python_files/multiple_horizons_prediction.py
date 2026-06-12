@@ -28,7 +28,6 @@ from time_range import time_range
 from load_electricity_and_resample import load_electricity_load_data, resample
 from make_X_y import get_X_y
 from add_features import add_features, fetch_city_weather
-from preprocessing import log_transform_maybe, exp_transform_maybe
 from train_test_split import TimeSeriesSplitter
 
 from tutorial_helpers import plot_horizon_forecast
