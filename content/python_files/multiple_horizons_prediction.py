@@ -4,11 +4,10 @@
 #
 # ## Environment setup
 #
-# We need to install some extra dependencies for this notebook if needed (when
-# running jupyterlite).
-
+mean_absolute_percentage_error(
 # %%
-# %pip install -q skrub altair holidays plotly nbformat polars
+)
+
 
 # %%
 import re
@@ -96,7 +95,7 @@ range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
 
 prediction_time = skrub.deferred(time_range)(range_start, range_end)
-X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, TIME_HORIZON)
+X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, TIME_HORIZONS)
 
 temperature_only = skrub.choose_bool(name="temperature_only", default=True)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
@@ -141,9 +140,6 @@ pred
 # ground truth and predictions on an example train/test split.
 
 # %%
-ts_cv_5 = DateBasedSplitter(prediction_timestamps)
-
-# %%
 split = pred.skb.train_test_split()
 learner = pred.skb.make_learner().fit(split["train"])
 predicted_y_test = learner.predict(split["test"])
@@ -155,14 +151,12 @@ predicted_y_test
 # the error for each target, without averaging:
 
 # %%
-from sklearn.ensemble import RandomForestRegressor
-
-# %%
 from sklearn.metrics import mean_absolute_percentage_error
 
 mean_absolute_percentage_error(
     split["y_test"].drop("allow_object"), predicted_y_test, multioutput="raw_values"
-) title_template="{dataset} {metric} scores by horizon (direct RandomForestRegressor)",
+)
+
 
 
 # %% [markdown]

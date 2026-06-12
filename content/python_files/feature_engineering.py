@@ -74,14 +74,6 @@ import skrub
 # step as is customary when working with dataframe libraries such as polars and
 # pandas in Jupyter notebooks.
 
-# %%
-historical_data_start_time = skrub.var(
-    "historical_data_start_time", pl.datetime(2021, 3, 23, hour=0, time_zone="UTC")
-)
-historical_data_end_time = skrub.var(
-    "historical_data_end_time", pl.datetime(2025, 5, 31, hour=23, time_zone="UTC")
-)
-
 
 # %%
 %%writefile time_range.py
@@ -136,7 +128,7 @@ prediction_time
 # %%
 %%writefile data_paths.py
 from pathlib import Path
-def data_dir():
+def get_data_dir():
     return Path(".").resolve().parent / "datasets"
 
 
@@ -147,8 +139,8 @@ def results_dir():
 
 # %%
 
-from data_paths import data_dir
-for data_file in sorted(data_dir().iterdir()):
+from data_paths import get_data_dir
+for data_file in sorted(get_data_dir().iterdir()):
     print(data_file)
 
 # %% [markdown]
@@ -178,7 +170,7 @@ import datetime
 from data_paths import data_dir
 from time_range import time_range
 
-def load_electricity_load_data(data_dir=data_dir):
+def load_electricity_history_data(data_dir=get_data_dir()):
     """Load and aggregate historical load data from the raw CSV files."""
     return (
         pl.read_csv(data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
@@ -193,7 +185,7 @@ def load_electricity_load_data(data_dir=data_dir):
         )
     )
 
-def resample(load_electricity_load_data):
+def resample(load_electricity_history_data):
     """
     Resample the load history on a regular time grid to have exactly 1 row every hour.
 
@@ -204,28 +196,28 @@ def resample(load_electricity_load_data):
     We add an extra empty 48h at the end to receive lags that can be used to
     predict beyond the range of the available data.
     """
-    averaged = load_electricity_load_data.group_by(pl.col("time").dt.truncate("1h")).agg(
+    averaged = load_electricity_history_data.group_by(pl.col("time").dt.truncate("1h")).agg(
         pl.col("load_mw").mean()
     )
     all_times = averaged["time"]
     return time_range(
-        all_times.min().strftime("%Y-%m-%d"), (all_times.max() + datetime.timedelta(hours=48)).strftime("%Y-%m-%d")
+        all_times.min(), (all_times.max() + datetime.timedelta(hours=48))
     ).join(averaged, on="time", how="left", maintain_order="left")
 
 # %%
 
-from load_electricity_and_resample import load_electricity_load_data
+from load_electricity_and_resample import load_electricity_history_data
 
-raw_load_electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
-    "load_electricity_load_data"
+raw_load_electricity_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
+    "load_electricity_history_data"
 )()
-raw_load_electricity_load_history
+raw_load_electricity_history
 
 # %%
 from load_electricity_and_resample import resample
 
-load_electricity_load_history = raw_load_electricity_load_history.skb.apply_func(resample)
-load_electricity_load_history
+electricity_load_history = raw_load_electricity_history.skb.apply_func(resample)
+electricity_load_history
 
 # %% [markdown]
 #
@@ -247,7 +239,7 @@ load_electricity_load_history
 %%writefile make_X_y.py
 import skrub
 import polars as pl
-def get_X_y(prediction_time, load_electricity_load_history, horizons, mode=skrub.eval_mode()):
+def get_X_y(prediction_time, electricity_load_history, horizons, mode=skrub.eval_mode()):
     """
     Compute input and target variables.
 
@@ -257,7 +249,7 @@ def get_X_y(prediction_time, load_electricity_load_history, horizons, mode=skrub
     Returns a dictionary with keys X and y, ready to be split for
     cross-validation or used to fit a model.
 
-    For prediction, simply returns `prediction_time` in a dictionary with a
+    For prediction, simply returns `target_time` in a dictionary with a
     single key X.
     """
     if isinstance(horizons, int):
@@ -269,7 +261,7 @@ def get_X_y(prediction_time, load_electricity_load_history, horizons, mode=skrub
     if mode in ("fit", "fit_transform", "preview"):
         # For those modes we need the ground truth; restrict to rows for which
         # there is y
-        load = load_electricity_load_history.select(
+        load = electricity_load_history.select(
             pl.col("time"),
             *[pl.col("load_mw").shift(-h).alias(f"{h}h") for h in horizons],
         ).drop_nulls()
@@ -295,9 +287,13 @@ from make_X_y import get_X_y
 
 # Example output for 1 hours
 EXAMPLE_TIME_HORIZON = 1
-X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, EXAMPLE_TIME_HORIZON)
-X_y["X"]
+X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON)
+X = X_y["X"].skb.mark_as_X()
+y = X_y["y"].skb.mark_as_y()
+X
 
+# %%
+y
 
 # %% [markdown]
 #
@@ -306,6 +302,10 @@ X_y["X"]
 # Now that we have our query and the ground-truth answers for it, we can start
 # building the rest of our predictive pipeline: creating the features and
 # adding a supervised predictor.
+#
+# We already marked X and y with `.skb.mark_as_X()` and `.skb.mark_as_y()`.
+# Doing this early lets us reuse the same expressions later with
+# `train_test_split` or `cross_validate` without extra wiring.
 #
 # Feature engineering takes _target time_ into account. In X we have the
 # prediction time, the time at which we make the prediction. We also want to
@@ -327,9 +327,9 @@ from data_paths import data_dir
 
 def add_target_time(df, horizon):
     return df.with_columns(
-        (pl.col("prediction_time") + pl.duration(hours=horizon)).alias("target_time")
+        (pl.col("target_time") + pl.duration(hours=horizon)).alias("target_time")
     )
-def add_lagged_features(df, load_electricity_load_history, horizon):
+def add_lagged_features(df, electricity_load_history, horizon):
     """
     Build lagged features for the given horizon.
 
@@ -359,7 +359,7 @@ def add_lagged_features(df, load_electricity_load_history, horizon):
     iqr = rolling(
         (pl.col("load_mw").quantile(0.75) - pl.col("load_mw").quantile(0.25)), "iqr"
     )
-    features = load_electricity_load_history.select(pl.col("time"), *lags, *medians, *iqr)
+    features = electricity_load_history.select(pl.col("time"), *lags, *medians, *iqr)
     return df.join(
         features,
         left_on="target_time",
@@ -420,7 +420,7 @@ def add_weather(
 
 def add_calendar_and_holidays(target_time):
     """Add calendar features and holiday information."""
-    fr_time = pl.col("prediction_time").dt.convert_time_zone("Europe/Paris")
+    fr_time = pl.col("target_time").dt.convert_time_zone("Europe/Paris")
     fr_year_min = target_time.select(fr_time.dt.year().min()).item()
     fr_year_max = target_time.select(fr_time.dt.year().max()).item()
     holidays_fr = holidays.country_holidays(
@@ -438,7 +438,7 @@ def add_calendar_and_holidays(target_time):
 
 from add_features import add_target_time
 
-X = X_y["X"].skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
+X = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 
 # %% [markdown]
 #
@@ -458,7 +458,7 @@ X = X_y["X"].skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 from add_features import add_lagged_features
 
 with_lags = X.skb.apply_func(
-    add_lagged_features, load_electricity_load_history, EXAMPLE_TIME_HORIZON
+    add_lagged_features, electricity_load_history, EXAMPLE_TIME_HORIZON
 )
 with_lags
 
@@ -468,19 +468,6 @@ with_lags
 
 # %% 
 from add_features import fetch_city_weather
-
-ALL_CITIES = (
-    "paris",
-    "lyon",
-    "marseille",
-    "toulouse",
-    "lille",
-    "limoges",
-    "nantes",
-    "strasbourg",
-    "brest",
-    "bayonne",
-)
 
 fetch_city_weather("paris")
 
@@ -551,7 +538,7 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
         "lag_24_width_24_iqr",
     ],
     as_=["key", "load_mw"],
-).mark_line(tooltip=True).encode(x="prediction_time:T", y="load_mw:Q", color="key:N").interactive()
+).mark_line(tooltip=True).encode(x="target_time:T", y="load_mw:Q", color="key:N").interactive()
 
 # %% [markdown]
 #
@@ -565,9 +552,9 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
 
 %%writefile -a add_features.py
 import skrub
-def add_features(df, horizon, load_electricity_load_history, cities, temperature_only, city_weather_fetcher):
+def add_features(df, horizon, electricity_load_history, cities, temperature_only, city_weather_fetcher):
     df = add_target_time(df, horizon=horizon)
-    df = add_lagged_features(df, load_electricity_load_history, horizon=horizon)
+    df = add_lagged_features(df, electricity_load_history, horizon=horizon)
     df = add_weather(
     df,
     horizon,

@@ -5,7 +5,7 @@
 ## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when
-# running jupyterlite).
+#     cv=TimeSeriesSplitter(),
 
 # %%
 # %pip install -q skrub altair holidays plotly nbformat polars
@@ -45,12 +45,12 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # %% [markdown]
 #
-# For now, let's focus on the last horizon (24 hours) to train a model
-# predicting the electricity load at the next 24 hours.
+# For now, let's focus on the last horizon (1 hour) to train a model
+# predicting the electricity load at the next 1 hour.
 
 # %%
 TIME_HORIZON = 1 # Focus on next step prediction
-load_electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
+electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
     "load_electricity_load_data"
 )().skb.apply_func(resample)
 
@@ -58,7 +58,7 @@ range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
 
 prediction_time = skrub.deferred(time_range)(range_start, range_end)
-X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, TIME_HORIZON)
+X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, TIME_HORIZON)
 
 temperature_only = skrub.choose_bool(name="temperature_only", default=True)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
@@ -70,27 +70,28 @@ city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
 #
 # ## Cross-validation splitter
 #
-# The first thing we need to do in our pipeline now that we have X and y is to
-# define how they are split into training and testing sets. So now we define a
-# time-based cross-validation splitter.
+# The first thing we need to do in our pipeline, now that we have X and y, is
+# to define how they are split into training and testing sets. For this we
+# define a custom time-based cross-validation splitter.
 #
-# We do not use the scikit-learn TimeSeries split because it is based on
-# positional indices but here we do not have a regular grid because of dropping
-# rows with missing ground truth. Also it is arguably easier to check the code
-# for splitting based on actual dates and a datetime column than based on
-# positional indices. Finally, the splitter here is a simple example of
-# something that needs to be done frequently, because forecasting problems
-# often have specific setups for when splits happen (to mimick the actual setup
-# of the deployed system, for example, on the first Tuesday of every month make
-# a prediction for every day of the following month, ...) that require a custom
-# datetime-based splitter.
+# We do not use scikit-learn's TimeSeriesSplit because it is based on
+# positional indices, while here we can have an irregular grid after dropping
+# rows with missing ground truth. It is also easier to inspect and debug splits
+# based on actual dates and a datetime column than on row positions.
 #
-# When we want an actual value to inspect, experiment with or debug, we can
-# always call .skb.preview(). It gives us the output of the pipeline for the
-# preview example data we set on the variables. Getting it is cheap because it
-# is precomputed eagerly when we define the dataop so it is readily available.
-# Here for example we grab the value of X (a dataframe) and we can use it to
-# test our splitter and debug it.
+# In this implementation, each fold starts after an initial training period of
+# two years, keeps a 7-day gap between the end of training and the start of the
+# test window, and evaluates on 3-month blocks that move forward by 3 months at
+# each iteration. This is a simple example of a setup that is common in
+# forecasting problems, where split boundaries must mimic operational
+# constraints in deployment.
+#
+# When we want an actual value to inspect, experiment with, or debug, we can
+# call .skb.preview(). It gives us the output of the pipeline for the preview
+# example data we set on the variables. Getting it is cheap because it is
+# precomputed eagerly when we define the dataop so it is readily available.
+# Here, for example, we grab the value of X (a dataframe) and use it to test
+# and debug our splitter.
 
 # %%
 %%writefile train_test_split.py
@@ -125,8 +126,12 @@ class TimeSeriesSplitter:
         min_date = X["prediction_time"].min()
         max_date = X["prediction_time"].max()
 
-        # Start test windows after train period + gap
-        start_date = min_date + datetime.timedelta(days=min_train_days + TRAIN_TEST_GAP_DAYS)
+        first_allowed = min_date + relativedelta(days=min_train_days) + datetime.timedelta(days=TRAIN_TEST_GAP_DAYS)
+
+        # Align to the first day of the first full month available.
+        start_date = first_allowed.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if start_date < first_allowed:
+            start_date = start_date + relativedelta(months=1)
         
         test_start_dates = []
         current_test_start = start_date
@@ -175,21 +180,6 @@ import numpy as np
 import polars as pl
 import skrub
 
-def log_transform_maybe(y_true, use_log_transform):
-    return y_true.log() if use_log_transform else y_true
-
-
-def exp_transform_maybe(estimator_output, use_log_transform):
-    if not use_log_transform:
-        return estimator_output
-    if isinstance(estimator_output, np.ndarray):
-        return np.exp(estimator_output)
-    if isinstance(estimator_output, pl.Series):
-        return estimator_output.exp()
-    # in 'fit' mode, the output of the final estimator will be the fitted
-    # estimator itself.
-    return estimator_output
-
 # %%
 from preprocessing import log_transform_maybe, exp_transform_maybe
 
@@ -198,15 +188,14 @@ def apply_predictor(X, y, horizon):
         X.skb.apply_func(
             add_features,
             horizon=horizon,
-            load_electricity_load_history=load_electricity_load_history,
+            load_electricity_load_history=electricity_load_history,
             cities=cities,
             temperature_only=temperature_only,
             city_weather_fetcher=city_weather_fetcher
         )
         .skb.set_name(f"feat_{horizon}h")
         .skb.drop(["prediction_time", "target_time"])
-        .skb.apply(regressor, y=y.skb.apply_func(log_transform_maybe, use_log_transform))
-        .skb.apply_func(exp_transform_maybe, use_log_transform)
+        .skb.apply(regressor, y=y)
         .skb.set_name(f"pred_{horizon}h")
     )
 
@@ -219,14 +208,6 @@ regressor = HistGradientBoostingRegressor(
         0.01, 0.7, default=0.1, log=True, name="learning_rate"
     ),
     max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
-)
-
-# If the log is squared_error, we want to try with and without log-transforming the targets.
-# Otherwise no log-transform.
-
-use_log_transform = loss.match(
-    {"squared_error": skrub.choose_bool(name="use_log_transform", default=True)},
-    default=False,
 )
 
 pred = apply_predictor(X, y, TIME_HORIZON).skb.with_scoring(
@@ -253,7 +234,7 @@ split["X_test"]
 split["y_test"]
 
 # %%
-hgbr_cv_predictions = pred.skb.make_learner().fit(split["train"]).predict(split["test"])
+pred.skb.make_learner().fit(split["train"]).predict(split["test"])
 
 # %% [markdown]
 #
@@ -268,7 +249,7 @@ cv_predictions = [
                 .fit(split["train"])
                 .predict(split["test"]),
                 "split": i,
-            },
+            }
         )
         for i, split in enumerate(pred.skb.iter_cv_splits())
         ]
@@ -384,8 +365,14 @@ plot_binned_residuals(cv_predictions, TIME_HORIZON, by="month").interactive().pr
 #
 # Use a scikit-learn `Pipeline` using `make_pipeline` to chain the steps together.
 #
-# Once the predictive model is defined, apply it on the `feature_with_dropped_cols`
-# expression. Do not forget to define that `target` is the `y` variable.
+# Chaining several `.skb.apply(...)` calls can be useful to inspect intermediate
+# outputs in reports, but for this exercise we keep a single pipeline. With the
+# current behavior of `SplineTransformer(sparse_output=True)`, step-by-step
+# `.skb.apply(...)` would require `no_wrap=True` to avoid wrapping sparse output
+# into a dataframe.
+#
+# Once the predictive model is defined, apply it on `X` and pass `y` as the
+# target.
 
 
 # %%
@@ -412,7 +399,7 @@ from sklearn.preprocessing import SplineTransformer
 #
 
 # %%
-predictions_ridge = features_with_dropped_cols.skb.apply(
+predictions_ridge = X.skb.apply(
     make_pipeline(
         SimpleImputer(add_indicator=True),
         SplineTransformer(sparse_output=True),
@@ -429,7 +416,7 @@ predictions_ridge = features_with_dropped_cols.skb.apply(
             alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)
         ),
     ),
-    y=target,
+    y=y,
 )
 predictions_ridge
 
@@ -437,7 +424,7 @@ predictions_ridge
 #
 # Now that you defined the predictive model, let's evaluate the performance of
 # the model using cross-validation. Use the time-based cross-validation
-# splitter `ts_cv_5` defined earlier. Make sure to compute the R2 score and the
+# splitter defined earlier in `TimeSeriesSplitter`. Make sure to compute the R2 score and the
 # mean absolute percentage error. Return the training scores as well as the
 # fitted pipeline such that we can make additional analysis.
 
@@ -457,7 +444,7 @@ predictions_ridge
 
 # %%
 cv_results_ridge = predictions_ridge.skb.cross_validate(
-    cv=ts_cv_5,
+    cv=TimeSeriesSplitter(),
     scoring={
         "r2": get_scorer("r2"),
         "mape": make_scorer(mean_absolute_percentage_error),
@@ -495,7 +482,7 @@ cv_results_ridge.round(3)
 
 # %%
 cv_predictions_ridge = collect_cv_predictions(
-    cv_results_ridge["learner"], ts_cv_5, predictions_ridge, prediction_time
+    cv_results_ridge["learner"], TimeSeriesSplitter(), predictions_ridge, prediction_time
 )
 
 # %%
@@ -573,7 +560,7 @@ fig.update_layout(margin=dict(l=200))
 # nested_cv_results_ridge = skrub.cross_validate(
 #     environment=predictions_ridge.skb.get_data(),
 #     learner=randomized_search_ridge,
-#     cv=ts_cv_5,
+#     cv=TimeSeriesSplitter(),
 #     scoring={
 #         "r2": get_scorer("r2"),
 #         "mape": make_scorer(mean_absolute_percentage_error),
