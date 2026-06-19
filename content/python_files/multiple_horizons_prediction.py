@@ -4,15 +4,15 @@
 #
 # ## Environment setup
 #
-mean_absolute_percentage_error(
-# %%
-)
+# We need to install some extra dependencies for this notebook if needed (when
+# running jupyterlite).
 
 
 # %%
 import re
 import datetime
 import warnings
+from pathlib import Path
 
 import altair
 import cloudpickle
@@ -28,13 +28,38 @@ from time_range import time_range
 from load_electricity_and_resample import load_electricity_load_data, resample
 from make_X_y import get_X_y
 from add_features import add_features, fetch_city_weather
-from train_test_split import TimeSeriesSplitter
+from extract_defs import extract_defs
 
 from tutorial_helpers import plot_horizon_forecast
 
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
+
+
+def load_splitter_from_next_horizon():
+    source = Path(__file__).with_name("next_horizon_prediction.py").read_text(encoding="utf-8")
+    namespace = {}
+    exec(
+        extract_defs(source, names=["_split_indices", "TimeSeriesSplitter"]),
+        namespace,
+    )
+    return namespace["TimeSeriesSplitter"]
+
+
+TimeSeriesSplitter = load_splitter_from_next_horizon()
+
+
+def load_or_cache(cache_file, builder):
+    cache_path = Path("results") / cache_file
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if cache_path.exists():
+        with cache_path.open("rb") as f:
+            return cloudpickle.load(f)
+    obj = builder()
+    with cache_path.open("wb") as f:
+        cloudpickle.dump(obj, f)
+    return obj
 
 # %% [markdown]
 #
@@ -58,8 +83,7 @@ def apply_predictor(X, y, horizon):
         )
         .skb.set_name(f"feat_{horizon}h")
         .skb.drop(["prediction_time", "target_time"])
-        .skb.apply(regressor, y=y.skb.apply_func(log_transform_maybe, use_log_transform))
-        .skb.apply_func(exp_transform_maybe, use_log_transform)
+        .skb.apply(regressor, y=y)
         .skb.set_name(f"pred_{horizon}h")
     )
 
@@ -86,9 +110,12 @@ def make_multi_horizon_pred(horizons):
 
 # %%
 TIME_HORIZONS = (1,12,24)
-load_electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
-    "load_electricity_load_data"
-)().skb.apply_func(resample)
+load_electricity_load_history = load_or_cache(
+    "load_electricity_load_history.pkl",
+    lambda: skrub.as_data_op(load_electricity_load_data).skb.set_name(
+        "load_electricity_load_data"
+    )().skb.apply_func(resample),
+)
 
 range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
@@ -118,14 +145,6 @@ regressor = HistGradientBoostingRegressor(
         0.01, 0.7, default=0.1, log=True, name="learning_rate"
     ),
     max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
-)
-
-# If the log is squared_error, we want to try with and without log-transforming the targets.
-# Otherwise no log-transform.
-
-use_log_transform = loss.match(
-    {"squared_error": skrub.choose_bool(name="use_log_transform", default=True)},
-    default=False,
 )
 
 pred = make_multi_horizon_pred(TIME_HORIZONS)

@@ -2,16 +2,17 @@
 #
 # # Next horizon predictive modeling
 #
-## Environment setup
+# ## Environment setup
 #
 # We need to install some extra dependencies for this notebook if needed (when
-#     cv=TimeSeriesSplitter(),
+# running jupyterlite).
 
 # %%
 # %pip install -q skrub altair holidays plotly nbformat polars
 
 # %%
 import warnings
+from pathlib import Path
 
 import altair
 import numpy as np
@@ -24,10 +25,7 @@ import polars as pl
 
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from time_range import time_range
-from load_electricity_and_resample import load_electricity_load_data, resample
-from make_X_y import get_X_y
-from add_features import add_features, fetch_city_weather
+from extract_defs import extract_defs
 
 
 
@@ -43,6 +41,51 @@ from tutorial_helpers import (
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
+
+def load_feature_defs():
+    source = Path(__file__).with_name("feature_engineering.py").read_text(encoding="utf-8")
+    namespace = {}
+    exec(
+        extract_defs(
+            source,
+            names=[
+                "time_range",
+                "get_data_dir",
+                "load_electricity_history_data",
+                "resample",
+                "get_X_y",
+                "add_target_time",
+                "add_lagged_features",
+                "fetch_city_weather",
+                "add_weather",
+                "add_calendar_and_holidays",
+                "add_features",
+            ],
+        ),
+        namespace,
+    )
+    return namespace
+
+
+feature_defs = load_feature_defs()
+time_range = feature_defs["time_range"]
+load_electricity_history_data = feature_defs["load_electricity_history_data"]
+resample = feature_defs["resample"]
+get_X_y = feature_defs["get_X_y"]
+add_features = feature_defs["add_features"]
+fetch_city_weather = feature_defs["fetch_city_weather"]
+
+def load_or_cache(cache_file, builder):
+    cache_path = Path("results") / cache_file
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    if cache_path.exists():
+        with cache_path.open("rb") as f:
+            return cloudpickle.load(f)
+    obj = builder()
+    with cache_path.open("wb") as f:
+        cloudpickle.dump(obj, f)
+    return obj
+
 # %% [markdown]
 #
 # For now, let's focus on the last horizon (1 hour) to train a model
@@ -50,9 +93,12 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # %%
 TIME_HORIZON = 1 # Focus on next step prediction
-electricity_load_history = skrub.as_data_op(load_electricity_load_data).skb.set_name(
-    "load_electricity_load_data"
-)().skb.apply_func(resample)
+electricity_load_history = load_or_cache(
+    "electricity_load_history.pkl",
+    lambda: skrub.as_data_op(load_electricity_history_data).skb.set_name(
+        "load_electricity_load_data"
+    )().skb.apply_func(resample),
+)
 
 range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
@@ -94,19 +140,15 @@ city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
 # and debug our splitter.
 
 # %%
-%%writefile train_test_split.py
-import polars as pl
 import datetime
 from dateutil.relativedelta import relativedelta
 
-TRAIN_TEST_GAP_DAYS = 7
-TEST_BLOCKS = 3
 
-def _split_indices(X, test_start_date, test_end_date):
+def _split_indices(X, test_start_date, test_end_date, gap_days=7):
     train = (
         X.with_row_index()
         .filter(
-            pl.col("prediction_time") < test_start_date - datetime.timedelta(days=TRAIN_TEST_GAP_DAYS)
+            pl.col("prediction_time") < test_start_date - datetime.timedelta(days=gap_days)
         )["index"]
         .to_numpy()
     )
@@ -121,12 +163,17 @@ def _split_indices(X, test_start_date, test_end_date):
     return train, test
     
 class TimeSeriesSplitter:
-    def split(self, X, y=None, groups=None, blocks=TEST_BLOCKS):
+    train_test_gap_days = 7
+    test_blocks = 3
+
+    def split(self, X, y=None, groups=None, blocks=None):
+        if blocks is None:
+            blocks = self.test_blocks
         min_train_days = 365 * 2  # Initial train period: 2 years
         min_date = X["prediction_time"].min()
         max_date = X["prediction_time"].max()
 
-        first_allowed = min_date + relativedelta(days=min_train_days) + datetime.timedelta(days=TRAIN_TEST_GAP_DAYS)
+        first_allowed = min_date + relativedelta(days=min_train_days) + datetime.timedelta(days=self.train_test_gap_days)
 
         # Align to the first day of the first full month available.
         start_date = first_allowed.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -144,15 +191,12 @@ class TimeSeriesSplitter:
 
         for test_start in test_start_dates:
             test_end = test_start + relativedelta(months=blocks)  
-            train, test = _split_indices(X, test_start, test_end)
+            train, test = _split_indices(X, test_start, test_end, gap_days=self.train_test_gap_days)
             if len(train) and len(test):
                 yield train, test
 
     def get_n_splits(self, X, y=None, groups=None):
         return len(list(self.split(X, y)))
-
-# %%
-from train_test_split import TimeSeriesSplitter
 
 X = X_y["X"].skb.mark_as_X(cv=TimeSeriesSplitter())
 y = X_y["y"].skb.mark_as_y()
@@ -174,15 +218,6 @@ y = X_y["y"].skb.mark_as_y()
 # splitter..
 
 # %%
-%%writefile preprocessing.py
-
-import numpy as np
-import polars as pl
-import skrub
-
-# %%
-from preprocessing import log_transform_maybe, exp_transform_maybe
-
 def apply_predictor(X, y, horizon):
     return (
         X.skb.apply_func(

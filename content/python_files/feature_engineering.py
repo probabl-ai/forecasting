@@ -76,9 +76,6 @@ import skrub
 
 
 # %%
-%%writefile time_range.py
-import datetime
-import polars as pl
 
 def time_range(start, end=None):
     """
@@ -105,9 +102,6 @@ def time_range(start, end=None):
         .alias("time"),
     )
 
-# %%
-from time_range import time_range
-
 range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
 
@@ -126,7 +120,6 @@ prediction_time
 # have already been downloaded and saved in the `datasets` folder. 
 
 # %%
-%%writefile data_paths.py
 from pathlib import Path
 def get_data_dir():
     return Path(".").resolve().parent / "datasets"
@@ -138,14 +131,12 @@ def results_dir():
     return out
 
 # %%
-
-from data_paths import get_data_dir
 for data_file in sorted(get_data_dir().iterdir()):
     print(data_file)
 
 # %% [markdown]
 #
-## Electricity load data
+# ## Electricity load data
 #
 # Finally we load the electricity load data. This data will both be used as a
 # target variable but also to craft the data pipeline. We build a pipeline that 
@@ -163,12 +154,6 @@ for data_file in sorted(get_data_dir().iterdir()):
 # feature set we are building.
 #
 # %%
-%%writefile load_electricity_and_resample.py
-import polars as pl
-import datetime
-
-from data_paths import get_data_dir
-from time_range import time_range
 
 def load_electricity_history_data(data_dir=get_data_dir()):
     """Load and aggregate historical load data from the raw CSV files."""
@@ -206,22 +191,18 @@ def resample(load_electricity_history_data):
 
 # %%
 
-from load_electricity_and_resample import load_electricity_history_data
-
 raw_load_electricity_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
     "load_electricity_history_data"
 )()
 raw_load_electricity_history
 
 # %%
-from load_electricity_and_resample import resample
-
 electricity_load_history = raw_load_electricity_history.skb.apply_func(resample)
 electricity_load_history
 
 # %% [markdown]
 #
-## Building the training dataset
+# ## Building the training dataset
 # The prediction time range we built above is the input query to our system.
 # For each row, it outputs a prediction.
 #
@@ -236,9 +217,6 @@ electricity_load_history
 
 
 # %%
-%%writefile make_X_y.py
-import skrub
-import polars as pl
 def get_X_y(prediction_time, electricity_load_history, horizons, mode=skrub.eval_mode()):
     """
     Compute input and target variables.
@@ -282,9 +260,6 @@ def get_X_y(prediction_time, electricity_load_history, horizons, mode=skrub.eval
         # In predict mode there is no y and we return unmodified query
         return {"X": prediction_time}
 
-# %%
-from make_X_y import get_X_y
-
 # Example output for 1 hours
 EXAMPLE_TIME_HORIZON = 1
 X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON)
@@ -297,7 +272,7 @@ y
 
 # %% [markdown]
 #
-## Feature engineering
+# ## Feature engineering
 #
 # Now that we have our query and the ground-truth answers for it, we can start
 # building the rest of our predictive pipeline: creating the features and
@@ -317,13 +292,8 @@ y
 # add it to the dataframe of features we are building up.
 
 # %%
-
-%%writefile add_features.py
-import polars as pl
 from polars import selectors as cs
 import holidays 
-
-from data_paths import get_data_dir
 
 def add_target_time(df, horizon):
     return df.with_columns(
@@ -436,13 +406,11 @@ def add_calendar_and_holidays(target_time):
     
 # %%    
 
-from add_features import add_target_time
-
 X = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 
 # %% [markdown]
 #
-## Lagged features
+# ## Lagged features
 #
 # Next we have a function for adding lagged features (such as load on the same
 # day of the previous week). It needs the input dataframe (which so far only
@@ -455,8 +423,6 @@ X = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 # the deadline for our prediction).
 
 # %%
-from add_features import add_lagged_features
-
 with_lags = X.skb.apply_func(
     add_lagged_features, electricity_load_history, EXAMPLE_TIME_HORIZON
 )
@@ -464,11 +430,9 @@ with_lags
 
 # %% [markdown]
 #
-## Weather Data
+# ## Weather Data
 
 # %% 
-from add_features import fetch_city_weather
-
 fetch_city_weather("paris")
 
 # %% [markdown]
@@ -483,8 +447,6 @@ fetch_city_weather("paris")
 # city names and of temperature only vs all features.
 
 # %%
-from add_features import add_weather
-
 city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
     "city_weather_fetcher"
 )
@@ -519,8 +481,6 @@ with_weather
 # timezone.
 
 # %%
-from add_features import add_calendar_and_holidays
-
 with_calendar = with_weather.skb.apply_func(add_calendar_and_holidays)
 with_calendar
 
@@ -549,9 +509,6 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
 
 # %%  
 
-
-%%writefile -a add_features.py
-import skrub
 def add_features(df, horizon, electricity_load_history, cities, temperature_only, city_weather_fetcher):
     df = add_target_time(df, horizon=horizon)
     df = add_lagged_features(df, electricity_load_history, horizon=horizon)
