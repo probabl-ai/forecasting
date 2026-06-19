@@ -297,7 +297,7 @@ import holidays
 
 def add_target_time(df, horizon):
     return df.with_columns(
-        (pl.col("target_time") + pl.duration(hours=horizon)).alias("target_time")
+        (pl.col("prediction_time") + pl.duration(hours=horizon)).alias("target_time")
     )
 def add_lagged_features(df, electricity_load_history, horizon):
     """
