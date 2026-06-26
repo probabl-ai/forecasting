@@ -24,42 +24,25 @@ import polars as pl
 
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from time_range import time_range
-from load_electricity_and_resample import load_electricity_load_data, resample
-from make_X_y import get_X_y
-from add_features import add_features, fetch_city_weather
-from extract_defs import extract_defs
+from feature_engineering_lib import (
+    time_range,
+    load_electricity_history_data,
+    resample,
+    get_X_y,
+    fetch_city_weather,
+    add_features,
+)
+
+from next_horizon_prediction_lib import (
+    TimeSeriesSplitter,
+    apply_predictor,
+)
 
 from tutorial_helpers import plot_horizon_forecast
 
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
-
-
-def load_splitter_from_next_horizon():
-    source = Path(__file__).with_name("next_horizon_prediction.py").read_text(encoding="utf-8")
-    namespace = {}
-    exec(
-        extract_defs(source, names=["_split_indices", "TimeSeriesSplitter"]),
-        namespace,
-    )
-    return namespace["TimeSeriesSplitter"]
-
-
-TimeSeriesSplitter = load_splitter_from_next_horizon()
-
-
-def load_or_cache(cache_file, builder):
-    cache_path = Path("results") / cache_file
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    if cache_path.exists():
-        with cache_path.open("rb") as f:
-            return cloudpickle.load(f)
-    obj = builder()
-    with cache_path.open("wb") as f:
-        cloudpickle.dump(obj, f)
-    return obj
 
 # %% [markdown]
 #
@@ -71,21 +54,6 @@ def load_or_cache(cache_file, builder):
 
 
 # %%
-def apply_predictor(X, y, horizon):
-    return (
-        X.skb.apply_func(
-            add_features,
-            horizon=horizon,
-            load_electricity_load_history=load_electricity_load_history,
-            cities=cities,
-            temperature_only=temperature_only,
-            city_weather_fetcher=city_weather_fetcher
-        )
-        .skb.set_name(f"feat_{horizon}h")
-        .skb.drop(["prediction_time", "target_time"])
-        .skb.apply(regressor, y=y)
-        .skb.set_name(f"pred_{horizon}h")
-    )
 
 def concat_horizons(predictions):
     """
@@ -98,7 +66,7 @@ def make_multi_horizon_pred(horizons):
     """
     Create a full DataOp for predicting the specified horizons.
     """
-    X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, horizons)
+    X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, horizons)
     X = X_y["X"].skb.mark_as_X(cv=TimeSeriesSplitter())
     y = X_y["y"].skb.mark_as_y()
     predictions = {h: apply_predictor(X, y[f"{h}h"], h) for h in horizons}
@@ -110,18 +78,17 @@ def make_multi_horizon_pred(horizons):
 
 # %%
 TIME_HORIZONS = (1,12,24)
-load_electricity_load_history = load_or_cache(
-    "load_electricity_load_history.pkl",
-    lambda: skrub.as_data_op(load_electricity_load_data).skb.set_name(
-        "load_electricity_load_data"
-    )().skb.apply_func(resample),
+electricity_load_history = (
+    skrub.as_data_op(load_electricity_history_data)
+    .skb.set_name("load_electricity_load_data")()
+    .skb.apply_func(resample)
 )
 
 range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
 
 prediction_time = skrub.deferred(time_range)(range_start, range_end)
-X_y = prediction_time.skb.apply_func(get_X_y, load_electricity_load_history, TIME_HORIZONS)
+X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, TIME_HORIZONS)
 
 temperature_only = skrub.choose_bool(name="temperature_only", default=True)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
