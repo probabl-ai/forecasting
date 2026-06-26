@@ -19,7 +19,6 @@ import cloudpickle
 import numpy as np
 import pyarrow  # noqa: F401
 import polars as pl
-import skrub
 import tzdata  # noqa: F401
 
 from tutorial_helpers import (
@@ -85,56 +84,26 @@ scoring = {
 # - a model predicting the 5th percentile of the load
 # - a model predicting the median of the load
 # - a model predicting the 95th percentile of the load
-#
-# Following the `skrub` choices pattern, we can also expose a few tree
-# hyperparameters directly in the DataOps plan. The default values below match
-# the previous fixed configuration, so previews and quick evaluations keep the
-# same behavior unless we explicitly run a hyperparameter search. Can see whether
-# we want to revert this back to the fixed configuration or not.
 
 # %%
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 
 common_params = dict(
-    loss="quantile",
-    learning_rate=skrub.choose_float(
-        0.01, 0.5, default=0.1, log=True, name="learning_rate"
-    ),
-    max_leaf_nodes=skrub.choose_int(
-        20, 300, default=100, log=True, name="max_leaf_nodes"
-    ),
-    min_samples_leaf=skrub.choose_int(
-        5, 100, default=20, log=True, name="min_samples_leaf"
-    ),
-    random_state=0,
+    loss="quantile", learning_rate=0.1, max_leaf_nodes=100, random_state=0
 )
-quantile_levels = {"05": 0.05, "50": 0.50, "95": 0.95}
-
-
-def make_quantile_prediction(quantile_level):
-    return features.skb.apply(
-        HistGradientBoostingRegressor(**common_params, quantile=quantile_level),
-        y=target,
-    )
-
-
-predictions_hgbr = {
-    label: make_quantile_prediction(quantile_level)
-    for label, quantile_level in quantile_levels.items()
-}
-predictions_hgbr_05 = predictions_hgbr["05"]
-predictions_hgbr_50 = predictions_hgbr["50"]
-predictions_hgbr_95 = predictions_hgbr["95"]
-
-# %% [markdown]
-#
-# As in the `skrub` choices tutorial, the DataOps plan uses the default values
-# of those choices unless we explicitly launch a parameter search.
-
-# %%
-quantile_pipeline = predictions_hgbr_50.skb.make_learner()
-quantile_pipeline.describe_params()
+predictions_hgbr_05 = features.skb.apply(
+    HistGradientBoostingRegressor(**common_params, quantile=0.05),
+    y=target,
+)
+predictions_hgbr_50 = features.skb.apply(
+    HistGradientBoostingRegressor(**common_params, quantile=0.5),
+    y=target,
+)
+predictions_hgbr_95 = features.skb.apply(
+    HistGradientBoostingRegressor(**common_params, quantile=0.95),
+    y=target,
+)
 
 # %% [markdown]
 #
@@ -154,52 +123,42 @@ ts_cv_5 = TimeSeriesSplit(
 )
 
 # %%
-def cross_validate_quantile_predictions(predictions_by_quantile, cv, scoring):
-    return {
-        label: prediction.skb.cross_validate(
-            cv=cv,
-            scoring=scoring,
-            return_learner=True,
-            verbose=1,
-            n_jobs=-1,
-        )
-        for label, prediction in predictions_by_quantile.items()
-    }
-
-
-cv_results_hgbr = cross_validate_quantile_predictions(predictions_hgbr, ts_cv_5, scoring)
-cv_results_hgbr_05 = cv_results_hgbr["05"]
-cv_results_hgbr_50 = cv_results_hgbr["50"]
-cv_results_hgbr_95 = cv_results_hgbr["95"]
+cv_results_hgbr_05 = predictions_hgbr_05.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    return_learner=True,
+    verbose=1,
+    n_jobs=-1,
+)
+cv_results_hgbr_50 = predictions_hgbr_50.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    return_learner=True,
+    verbose=1,
+    n_jobs=-1,
+)
+cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
+    cv=ts_cv_5,
+    scoring=scoring,
+    return_learner=True,
+    verbose=1,
+    n_jobs=-1,
+)
 
 # %% [markdown]
 #
 # Let's first collect all the cross-validated predictions to make further inspection.
 
 # %%
-def collect_quantile_cv_predictions(
-    cv_results_by_quantile, predictions_by_quantile, cv, prediction_time
-):
-    return {
-        label: collect_cv_predictions(
-            cv_results_by_quantile[label]["learner"],
-            cv,
-            predictions_by_quantile[label],
-            prediction_time,
-        )
-        for label in predictions_by_quantile
-    }
-
-
-cv_predictions_hgbr = collect_quantile_cv_predictions(
-    cv_results_hgbr,
-    predictions_hgbr,
-    ts_cv_5,
-    prediction_time,
+cv_predictions_hgbr_05 = collect_cv_predictions(
+    cv_results_hgbr_05["learner"], ts_cv_5, predictions_hgbr_05, prediction_time
 )
-cv_predictions_hgbr_05 = cv_predictions_hgbr["05"]
-cv_predictions_hgbr_50 = cv_predictions_hgbr["50"]
-cv_predictions_hgbr_95 = cv_predictions_hgbr["95"]
+cv_predictions_hgbr_50 = collect_cv_predictions(
+    cv_results_hgbr_50["learner"], ts_cv_5, predictions_hgbr_50, prediction_time
+)
+cv_predictions_hgbr_95 = collect_cv_predictions(
+    cv_results_hgbr_95["learner"], ts_cv_5, predictions_hgbr_95, prediction_time
+)
 
 # %% [markdown]
 #
@@ -207,24 +166,18 @@ cv_predictions_hgbr_95 = cv_predictions_hgbr["95"]
 # all the predictions in a single dataframe.
 
 # %%
-def make_interval_plot_frame(cv_predictions_by_quantile, fold_idx=0, n_hours=24 * 10):
-    return pl.concat(
-        [
-            cv_predictions_by_quantile["05"][fold_idx].rename(
-                {"predicted_load_mw": "predicted_load_mw_05"}
-            ),
-            cv_predictions_by_quantile["50"][fold_idx]
-            .select("predicted_load_mw")
-            .rename({"predicted_load_mw": "predicted_load_mw_50"}),
-            cv_predictions_by_quantile["95"][fold_idx]
-            .select("predicted_load_mw")
-            .rename({"predicted_load_mw": "predicted_load_mw_95"}),
-        ],
-        how="horizontal",
-    ).tail(n_hours)
-
-
-results = make_interval_plot_frame(cv_predictions_hgbr)
+results = pl.concat(
+    [
+        cv_predictions_hgbr_05[0].rename({"predicted_load_mw": "predicted_load_mw_05"}),
+        cv_predictions_hgbr_50[0].select("predicted_load_mw").rename(
+            {"predicted_load_mw": "predicted_load_mw_50"}
+        ),
+        cv_predictions_hgbr_95[0].select("predicted_load_mw").rename(
+            {"predicted_load_mw": "predicted_load_mw_95"}
+        ),
+    ],
+    how="horizontal",
+).tail(24 * 10)
 
 # %% [markdown]
 #
@@ -265,19 +218,19 @@ combined_chart.resolve_scale(color="independent").interactive()
 # Now, we can inspect the cross-validated metrics for each model.
 
 # %%
-def summarize_test_scores(cv_results):
-    return cv_results[
-        [col for col in cv_results.columns if col.startswith("test_")]
-    ].mean(axis=0).round(3)
-
-
-summarize_test_scores(cv_results_hgbr_05)
+cv_results_hgbr_05[
+    [col for col in cv_results_hgbr_05.columns if col.startswith("test_")]
+].mean(axis=0).round(3)
 
 # %%
-summarize_test_scores(cv_results_hgbr_50)
+cv_results_hgbr_50[
+    [col for col in cv_results_hgbr_50.columns if col.startswith("test_")]
+].mean(axis=0).round(3)
 
 # %%
-summarize_test_scores(cv_results_hgbr_95)
+cv_results_hgbr_95[
+    [col for col in cv_results_hgbr_95.columns if col.startswith("test_")]
+].mean(axis=0).round(3)
 
 # %% [markdown]
 #

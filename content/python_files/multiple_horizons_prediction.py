@@ -80,7 +80,7 @@ def make_multi_horizon_pred(horizons):
 TIME_HORIZONS = (1,12,24)
 electricity_load_history = (
     skrub.as_data_op(load_electricity_history_data)
-    .skb.set_name("load_electricity_load_data")()
+    .skb.set_name("electricity_load_data")()
     .skb.apply_func(resample)
 )
 
@@ -190,8 +190,8 @@ pred.skb.make_learner().fit(split["train"]).score(split["test"])
 # up or did the cross-validation.
 
 # %%
-history_dates = skrub.as_data_op(load_electricity_load_data).skb.set_name(
-    "load_electricity_load_data")()["time"].skb.preview()
+history_dates = skrub.as_data_op(electricity_load_history).skb.set_name(
+    "electricity_load_data")()["time"].skb.preview()
 history_dates.max()
 
 # %%
@@ -232,7 +232,7 @@ def transpose_pred(prediction_date, prediction):
 future_pred_tall = transpose_pred(new_date, future_pred)
 
 # %%
-history_tail = load_electricity_load_history.skb.preview().filter(
+history_tail = electricity_load_history.skb.preview().filter(
     pl.col("time") > new_date - datetime.timedelta(days=8)
 )
 

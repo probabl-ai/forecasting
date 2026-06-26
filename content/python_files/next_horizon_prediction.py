@@ -35,15 +35,10 @@ from tutorial_helpers import (
 )
 from feature_engineering_lib import (
     time_range,
-    get_data_dir,
     load_electricity_history_data,
     resample,
     get_X_y,
-    add_target_time,
-    add_lagged_features,
     fetch_city_weather,
-    add_weather,
-    add_calendar_and_holidays,
     add_features,
 )
 
@@ -59,7 +54,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 TIME_HORIZON = 1  # Focus on next step prediction
 electricity_load_history = (
     skrub.as_data_op(load_electricity_history_data)
-    .skb.set_name("load_electricity_load_data")()
+    .skb.set_name("electricity_load_data")()
     .skb.apply_func(resample)
 )
 
@@ -381,6 +376,7 @@ from sklearn.linear_model import Ridge
 from sklearn.kernel_approximation import Nystroem
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import SplineTransformer
+from sklearn.metrics import get_scorer, make_scorer, mean_absolute_percentage_error
 
 # %%
 # Write your code here.
