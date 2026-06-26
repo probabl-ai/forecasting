@@ -25,9 +25,6 @@ import polars as pl
 
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from extract_defs import extract_defs
-
-
 
 from tutorial_helpers import (
     plot_lorenz_curve,
@@ -36,55 +33,22 @@ from tutorial_helpers import (
     plot_binned_residuals,
     collect_cv_predictions,
 )
-
+from feature_engineering_lib import (
+    time_range,
+    get_data_dir,
+    load_electricity_history_data,
+    resample,
+    get_X_y,
+    add_target_time,
+    add_lagged_features,
+    fetch_city_weather,
+    add_weather,
+    add_calendar_and_holidays,
+    add_features,
+)
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
-
-
-def load_feature_defs():
-    source = Path(__file__).with_name("feature_engineering.py").read_text(encoding="utf-8")
-    namespace = {}
-    exec(
-        extract_defs(
-            source,
-            names=[
-                "time_range",
-                "get_data_dir",
-                "load_electricity_history_data",
-                "resample",
-                "get_X_y",
-                "add_target_time",
-                "add_lagged_features",
-                "fetch_city_weather",
-                "add_weather",
-                "add_calendar_and_holidays",
-                "add_features",
-            ],
-        ),
-        namespace,
-    )
-    return namespace
-
-
-feature_defs = load_feature_defs()
-time_range = feature_defs["time_range"]
-load_electricity_history_data = feature_defs["load_electricity_history_data"]
-resample = feature_defs["resample"]
-get_X_y = feature_defs["get_X_y"]
-add_features = feature_defs["add_features"]
-fetch_city_weather = feature_defs["fetch_city_weather"]
-
-def load_or_cache(cache_file, builder):
-    cache_path = Path("results") / cache_file
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    if cache_path.exists():
-        with cache_path.open("rb") as f:
-            return cloudpickle.load(f)
-    obj = builder()
-    with cache_path.open("wb") as f:
-        cloudpickle.dump(obj, f)
-    return obj
 
 # %% [markdown]
 #
@@ -92,12 +56,11 @@ def load_or_cache(cache_file, builder):
 # predicting the electricity load at the next 1 hour.
 
 # %%
-TIME_HORIZON = 1 # Focus on next step prediction
-electricity_load_history = load_or_cache(
-    "electricity_load_history.pkl",
-    lambda: skrub.as_data_op(load_electricity_history_data).skb.set_name(
-        "load_electricity_load_data"
-    )().skb.apply_func(resample),
+TIME_HORIZON = 1  # Focus on next step prediction
+electricity_load_history = (
+    skrub.as_data_op(load_electricity_history_data)
+    .skb.set_name("load_electricity_load_data")()
+    .skb.apply_func(resample)
 )
 
 range_start = skrub.var("start", "2021-03-23")

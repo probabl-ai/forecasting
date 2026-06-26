@@ -84,6 +84,7 @@ content/results
 # jupyter-book build
 book/_build
 content/notebooks
+content/python_files/*_lib.py
 
 # jupyterlite build
 jupyterlite/.jupyterlite.doit.db
