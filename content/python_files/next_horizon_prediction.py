@@ -181,7 +181,7 @@ def apply_predictor(X, y, horizon):
         X.skb.apply_func(
             add_features,
             horizon=horizon,
-            load_electricity_load_history=electricity_load_history,
+            electricity_load_history=electricity_load_history,
             cities=cities,
             temperature_only=temperature_only,
             city_weather_fetcher=city_weather_fetcher
