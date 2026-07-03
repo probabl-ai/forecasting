@@ -125,7 +125,6 @@ def get_data_dir():
     return Path(".").resolve().parent / "datasets"
 
 
-
 # %%
 for data_file in sorted(get_data_dir().iterdir()):
     print(data_file)
@@ -403,6 +402,7 @@ def add_calendar_and_holidays(target_time):
 # %%    
 
 with_target_time = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
+with_target_time
 
 # %% [markdown]
 #
