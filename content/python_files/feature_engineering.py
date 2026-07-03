@@ -134,7 +134,7 @@ for data_file in sorted(get_data_dir().iterdir()):
 #
 # ## Electricity load data
 #
-# Finally we load the electricity load data. This data will both be used as a
+# We load the electricity load data. This data will both be used as a
 # target variable but also to craft the data pipeline. We build a pipeline that 
 # for a given prediction time, predicts the future electricity load. 
 # We start by doing it for 1 horizon, then we extend to
@@ -166,7 +166,7 @@ def load_electricity_history_data(data_dir=get_data_dir()):
         )
     )
 
-def resample(load_electricity_history_data):
+def resample(electricity_history_data):
     """
     Resample the load history on a regular time grid to have exactly 1 row every hour.
 
@@ -177,7 +177,7 @@ def resample(load_electricity_history_data):
     We add an extra empty 48h at the end to receive lags that can be used to
     predict beyond the range of the available data.
     """
-    averaged = load_electricity_history_data.group_by(pl.col("time").dt.truncate("1h")).agg(
+    averaged = electricity_history_data.group_by(pl.col("time").dt.truncate("1h")).agg(
         pl.col("load_mw").mean()
     )
     all_times = averaged["time"]
@@ -187,13 +187,13 @@ def resample(load_electricity_history_data):
 
 # %%
 
-raw_load_electricity_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
-    "load_electricity_history_data"
+raw_electricity_load_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
+    "electricity_history_data"
 )()
-raw_load_electricity_history
+raw_electricity_load_history
 
 # %%
-electricity_load_history = raw_load_electricity_history.skb.apply_func(resample)
+electricity_load_history = raw_electricity_load_history.skb.apply_func(resample)
 electricity_load_history
 
 # %% [markdown]
@@ -402,7 +402,7 @@ def add_calendar_and_holidays(target_time):
     
 # %%    
 
-X = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
+with_target_time = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 
 # %% [markdown]
 #
@@ -419,7 +419,7 @@ X = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 # the deadline for our prediction).
 
 # %%
-with_lags = X.skb.apply_func(
+with_lags = with_target_time.skb.apply_func(
     add_lagged_features, electricity_load_history, EXAMPLE_TIME_HORIZON
 )
 with_lags
@@ -459,6 +459,46 @@ with_weather = with_lags.skb.apply_func(
     city_weather_fetcher=city_weather_fetcher,
 )
 with_weather
+
+# %%
+lag_window = with_lags.filter(
+    (pl.col("target_time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
+    & (pl.col("target_time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
+).skb.eval()
+
+altair.Chart(lag_window).transform_fold(
+    [
+        "lag_1",
+        "lag_24",
+        "lag_1_width_24_median",
+        "lag_1_width_168_iqr",
+    ],
+    as_=["key", "value"],
+).mark_line(
+    tooltip=True
+).encode(
+    x="target_time:T", y="value:Q", color="key:N"
+).interactive()
+
+# %%
+weather_window = with_weather.filter(
+    (pl.col("target_time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
+    & (pl.col("target_time") < pl.datetime(2021, 12, 10, time_zone="UTC"))
+).skb.eval()
+
+weather_cols = [
+    c for c in weather_window.columns if c.startswith("weather_") and "temperature" in c
+][:6]
+
+altair.Chart(weather_window).transform_fold(
+    weather_cols,
+    as_=["key", "value"],
+).mark_line(
+    tooltip=True
+).encode(
+    x="target_time:T", y="value:Q", color="key:N"
+).interactive()
+
 # %% [markdown]
 #
 # ## Calendar and holidays features
