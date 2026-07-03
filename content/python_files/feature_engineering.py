@@ -125,10 +125,6 @@ def get_data_dir():
     return Path(".").resolve().parent / "datasets"
 
 
-def results_dir():
-    out = Path(".").resolve() / "results"
-    out.mkdir(exist_ok=True)
-    return out
 
 # %%
 for data_file in sorted(get_data_dir().iterdir()):
