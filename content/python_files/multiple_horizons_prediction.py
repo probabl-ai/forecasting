@@ -25,12 +25,9 @@ import polars as pl
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 from feature_engineering_lib import (
-    time_range,
-    load_electricity_history_data,
-    resample,
-    get_X_y,
     fetch_city_weather,
     add_features,
+    pick_up_where_we_left_off,
 )
 
 from next_horizon_prediction_lib import (
@@ -78,17 +75,8 @@ def make_multi_horizon_pred(horizons):
 
 # %%
 TIME_HORIZONS = (1,12,24)
-electricity_load_history = (
-    skrub.as_data_op(load_electricity_history_data)
-    .skb.set_name("electricity_load_data")()
-    .skb.apply_func(resample)
-)
-
-range_start = skrub.var("start", "2021-03-23")
-range_end = skrub.var("end", "2025-05-31")
-
-prediction_time = skrub.deferred(time_range)(range_start, range_end)
-X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, TIME_HORIZONS)
+electricity_load_history, X, y = pick_up_where_we_left_off(TIME_HORIZONS)
+prediction_time = X
 
 temperature_only = skrub.choose_bool(name="temperature_only", default=True)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")

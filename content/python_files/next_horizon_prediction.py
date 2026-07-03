@@ -34,12 +34,9 @@ from tutorial_helpers import (
     collect_cv_predictions,
 )
 from feature_engineering_lib import (
-    time_range,
-    load_electricity_history_data,
-    resample,
-    get_X_y,
     fetch_city_weather,
     add_features,
+    pick_up_where_we_left_off,
 )
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
@@ -52,17 +49,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # %%
 TIME_HORIZON = 1  # Focus on next step prediction
-electricity_load_history = (
-    skrub.as_data_op(load_electricity_history_data)
-    .skb.set_name("electricity_load_data")()
-    .skb.apply_func(resample)
-)
-
-range_start = skrub.var("start", "2021-03-23")
-range_end = skrub.var("end", "2025-05-31")
-
-prediction_time = skrub.deferred(time_range)(range_start, range_end)
-X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, TIME_HORIZON)
+electricity_load_history, X, y = pick_up_where_we_left_off(TIME_HORIZON)
+prediction_time = X
 
 temperature_only = skrub.choose_bool(name="temperature_only", default=True)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
@@ -156,8 +144,8 @@ class TimeSeriesSplitter:
     def get_n_splits(self, X, y=None, groups=None):
         return len(list(self.split(X, y)))
 
-X = X_y["X"].skb.mark_as_X(cv=TimeSeriesSplitter())
-y = X_y["y"].skb.mark_as_y()
+X = X.skb.mark_as_X(cv=TimeSeriesSplitter())
+y = y.skb.mark_as_y()
 
 
 # %% [markdown]
@@ -181,7 +169,7 @@ def apply_predictor(X, y, horizon):
         X.skb.apply_func(
             add_features,
             horizon=horizon,
-            electricity_load_history=electricity_load_history,
+            load_electricity_load_history=electricity_load_history,
             cities=cities,
             temperature_only=temperature_only,
             city_weather_fetcher=city_weather_fetcher

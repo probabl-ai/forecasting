@@ -557,4 +557,20 @@ def add_features(df, horizon, electricity_load_history, cities, temperature_only
     )
     df = add_calendar_and_holidays(df)
     return df
+
+def pick_up_where_we_left_off(horizons):
+    range_start = skrub.var("start", "2021-03-23")
+    range_end = skrub.var("end", "2025-05-31")
+
+    prediction_time = skrub.deferred(time_range)(range_start, range_end)
+    resampled_history = (
+        skrub.as_data_op(load_electricity_history_data)
+        .skb.set_name("electricity_history_data")()
+        .skb.apply_func(resample)
+    )
+    X_y = prediction_time.skb.apply_func(get_X_y, resampled_history, horizons)
+
+    X = X_y["X"].skb.mark_as_X()
+    y = X_y["y"].skb.mark_as_y()
+    return resampled_history, X, y
     
