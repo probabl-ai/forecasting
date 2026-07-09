@@ -545,6 +545,7 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
 
 # %%  
 
+
 def add_features(df, horizon, electricity_load_history, cities, temperature_only, city_weather_fetcher):
     df = add_target_time(df, horizon=horizon)
     df = add_lagged_features(df, electricity_load_history, horizon=horizon)
@@ -558,19 +559,36 @@ def add_features(df, horizon, electricity_load_history, cities, temperature_only
     df = add_calendar_and_holidays(df)
     return df
 
-def pick_up_where_we_left_off(horizons):
+
+def feature_engineering_outputs(horizons, cv_splitter=None):
     range_start = skrub.var("start", "2021-03-23")
-    range_end = skrub.var("end", "2025-05-31")
+    range_end = skrub.var("end",  "2025-05-31")
 
     prediction_time = skrub.deferred(time_range)(range_start, range_end)
-    resampled_history = (
-        skrub.as_data_op(load_electricity_history_data)
-        .skb.set_name("electricity_history_data")()
-        .skb.apply_func(resample)
-    )
+    resampled_history = skrub.var(
+        "electricity_history_loader", load_electricity_history_data, becomes_default=True
+    )().skb.apply_func(resample)
     X_y = prediction_time.skb.apply_func(get_X_y, resampled_history, horizons)
-
-    X = X_y["X"].skb.mark_as_X()
+    X = X_y["X"].skb.mark_as_X(cv=cv_splitter)
     y = X_y["y"].skb.mark_as_y()
-    return resampled_history, X, y
-    
+    temperature_only = skrub.choose_bool(name="temperature_only", default=True)
+    cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
+    city_weather_fetcher = skrub.var(
+        "city_weather_fetcher", fetch_city_weather, becomes_default=True
+    )
+    if isinstance(horizons, int):
+        single_horizon=True
+        horizons = (horizons,)
+    else:
+        single_horizon = False
+    all_features = {}
+    for h in horizons:
+        all_features[h] = X.skb.apply_func(
+            add_features,
+            horizon=h,
+            temperature_only=temperature_only,
+            cities=cities,
+            electricity_load_history=resampled_history,
+            city_weather_fetcher=city_weather_fetcher,
+        ).skb.set_name(f"feat_{h}h")
+    return all_features[horizons[0]] if single_horizon else all_features, y

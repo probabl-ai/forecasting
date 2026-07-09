@@ -33,11 +33,7 @@ from tutorial_helpers import (
     plot_binned_residuals,
     collect_cv_predictions,
 )
-from feature_engineering_lib import (
-    fetch_city_weather,
-    add_features,
-    pick_up_where_we_left_off,
-)
+from feature_engineering_lib import feature_engineering_outputs
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
@@ -46,17 +42,6 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 #
 # For now, let's focus on the last horizon (1 hour) to train a model
 # predicting the electricity load at the next 1 hour.
-
-# %%
-TIME_HORIZON = 1  # Focus on next step prediction
-electricity_load_history, X, y = pick_up_where_we_left_off(TIME_HORIZON)
-prediction_time = X
-
-temperature_only = skrub.choose_bool(name="temperature_only", default=True)
-cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
-city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
-    "city_weather_fetcher"
-    )
 
 # %% [markdown]
 #
@@ -144,9 +129,9 @@ class TimeSeriesSplitter:
     def get_n_splits(self, X, y=None, groups=None):
         return len(list(self.split(X, y)))
 
-X = X.skb.mark_as_X(cv=TimeSeriesSplitter())
-y = y.skb.mark_as_y()
-
+# %%
+TIME_HORIZON = 1  # Focus on next step prediction
+features, y = feature_engineering_outputs(horizons=TIME_HORIZON, cv_splitter=TimeSeriesSplitter())
 
 # %% [markdown]
 #
@@ -164,22 +149,6 @@ y = y.skb.mark_as_y()
 # splitter..
 
 # %%
-def apply_predictor(X, y, horizon):
-    return (
-        X.skb.apply_func(
-            add_features,
-            horizon=horizon,
-            load_electricity_load_history=electricity_load_history,
-            cities=cities,
-            temperature_only=temperature_only,
-            city_weather_fetcher=city_weather_fetcher
-        )
-        .skb.set_name(f"feat_{horizon}h")
-        .skb.drop(["prediction_time", "target_time"])
-        .skb.apply(regressor, y=y)
-        .skb.set_name(f"pred_{horizon}h")
-    )
-
 loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
 
 regressor = HistGradientBoostingRegressor(
@@ -191,8 +160,8 @@ regressor = HistGradientBoostingRegressor(
     max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
 )
 
-pred = apply_predictor(X, y, TIME_HORIZON).skb.with_scoring(
-    "neg_mean_absolute_percentage_error"
+pred = features.skb.apply(regressor, y=y).skb.with_scoring(
+    ["neg_mean_absolute_percentage_error", "r2"]
 )
 pred
 
@@ -222,19 +191,28 @@ pred.skb.make_learner().fit(split["train"]).predict(split["test"])
 # Now we can collect predictions for all splits and plot them.
 
 # %%
-cv_predictions = [
-        split["X_test"].with_columns(
-            split["y_test"],
-            **{
-                f"pred_{TIME_HORIZON}h": pred.skb.make_learner()
-                .fit(split["train"])
-                .predict(split["test"]),
-                "split": i,
-            }
+def get_cv_results(pred, return_train_score=False):
+    predictions = []
+    scores = []
+    for i, split in enumerate(pred.skb.iter_cv_splits()):
+        learner =             pred.skb.make_learner().fit(split["train"])
+
+        split_scores, split_predictions = (
+            learner.score(split["test"], return_predictions=True)
         )
-        for i, split in enumerate(pred.skb.iter_cv_splits())
-        ]
-cv_predictions[0]
+        if return_train_score:
+            split_scores.update({f"train_{k}": v for k, v in learner.score(split["train"]).items()})
+        scores.append(split_scores | {"split": i})
+        predictions.append(
+            split["X_test"].with_columns(
+                split["y_test"],
+                **{f"pred_{TIME_HORIZON}h": split_predictions["predict"], "split": i},
+            )
+        )
+    return pl.concat(predictions, how="vertical"), pl.DataFrame(scores)
+
+
+cv_predictions, cv_scores = get_cv_results(pred)
 
 
 # %% [markdown]
@@ -245,7 +223,7 @@ cv_predictions[0]
 
 # %%
 altair.Chart(
-    pl.concat(cv_predictions).tail(100)
+    cv_predictions.tail(100)
 ).transform_fold(
     ["1h", "pred_1h"],
 ).mark_line(
@@ -263,7 +241,7 @@ altair.Chart(
 # load proportion.
 
 # %%
-plot_lorenz_curve(cv_predictions[4:], TIME_HORIZON).interactive()
+plot_lorenz_curve(cv_predictions, TIME_HORIZON).interactive()
 
 # %% [markdown]
 #
@@ -381,7 +359,7 @@ from sklearn.metrics import get_scorer, make_scorer, mean_absolute_percentage_er
 #
 
 # %%
-predictions_ridge = X.skb.apply(
+predictions_ridge = features.skb.apply(
     make_pipeline(
         SimpleImputer(add_indicator=True),
         SplineTransformer(sparse_output=True),
@@ -399,7 +377,7 @@ predictions_ridge = X.skb.apply(
         ),
     ),
     y=y,
-)
+).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
 predictions_ridge
 
 # %% [markdown]
@@ -425,17 +403,8 @@ predictions_ridge
 #
 
 # %%
-cv_results_ridge = predictions_ridge.skb.cross_validate(
-    cv=TimeSeriesSplitter(),
-    scoring={
-        "r2": get_scorer("r2"),
-        "mape": make_scorer(mean_absolute_percentage_error),
-    },
-    return_train_score=True,
-    return_learner=True,
-    verbose=1,
-    n_jobs=-1,
-)
+cv_predictions_ridge, cv_scores_ridge = get_cv_results(predictions_ridge, return_train_score=True)
+
 
 # %% [markdown]
 # Do a sanity check by plotting the observed values and predictions for the first fold
@@ -460,16 +429,12 @@ cv_results_ridge = predictions_ridge.skb.cross_validate(
 #
 
 # %%
-cv_results_ridge.round(3)
+cv_scores_ridge
+
 
 # %%
-cv_predictions_ridge = collect_cv_predictions(
-    cv_results_ridge["learner"], TimeSeriesSplitter(), predictions_ridge, prediction_time
-)
-
-# %%
-altair.Chart(cv_predictions_ridge[0].tail(24 * 7)).transform_fold(
-    ["load_mw", "predicted_load_mw"],
+altair.Chart(cv_predictions_ridge.tail(24 * 7)).transform_fold(
+    ["1h", "pred_1h"],
 ).mark_line(
     tooltip=True
 ).encode(
@@ -495,10 +460,10 @@ altair.Chart(cv_predictions_ridge[0].tail(24 * 7)).transform_fold(
 #
 
 # %%
-plot_lorenz_curve(cv_predictions_ridge).interactive()
+plot_lorenz_curve(cv_predictions_ridge, TIME_HORIZON).interactive()
 
 # %%
-plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
+plot_reliability_diagram(cv_predictions_ridge, TIME_HORIZON).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
 
@@ -510,8 +475,7 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 
 # %%
 # randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
-#     cv=ts_cv_2,
-#     scoring="r2",
+#     refit="r2",
 #     n_iter=100,
 #     fitted=True,
 #     verbose=1,
@@ -523,8 +487,9 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 # write_json(fig, "parallel_coordinates_ridge.json")
 
 # %%
-fig = read_json("parallel_coordinates_ridge.json")
-fig.update_layout(margin=dict(l=200))
+# TODO: regenerate the plot which is outdated (still shows last year parametrization)
+# fig = read_json("parallel_coordinates_ridge.json")
+# fig.update_layout(margin=dict(l=200))
 
 # %% [markdown]
 #
