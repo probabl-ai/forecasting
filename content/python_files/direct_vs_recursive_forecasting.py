@@ -43,7 +43,7 @@ SEGMENT_LENGTH = 30
 
 
 def generate_synthetic_1(
-    segment_length=SEGMENT_LENGTH,
+    segment_length=30,
     n_segments=100,
     low_noise_level=0.01,
     high_noise_level=0.1,
