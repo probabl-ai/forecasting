@@ -68,7 +68,7 @@ def lorenz_curve(observed_value, predicted_value, n_samples=1_000):
     )
 
 
-def plot_lorenz_curve(cv_predictions, horizon, n_samples=500):
+def plot_lorenz_curve(cv_predictions, horizon, n_samples=250):
     """Plot the Lorenz curve for a given cross-validation results containing
     observed and predicted values.
 
@@ -87,7 +87,7 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=500):
     """
 
     results = []
-    for fold_idx, predictions in enumerate(cv_predictions):
+    for (fold_idx,), predictions in cv_predictions.group_by("split", maintain_order=True):
         results.append(
             lorenz_curve(
                 observed_value=predictions[f"{horizon}h"],
@@ -102,7 +102,7 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=500):
         results.append(
             lorenz_curve(
                 observed_value=predictions[f"{horizon}h"],
-                predicted_value=predictions[f"pred_{horizon}h"],
+                predicted_value=predictions[f"{horizon}h"],
                 n_samples=n_samples,
             ).with_columns(
                 pl.lit(fold_idx).alias("fold_idx"),
@@ -197,13 +197,8 @@ def plot_reliability_diagram(
         A chart with the reliability diagram.
     """
     # min and max load over all predictions and observations for any folds:
-    all_loads = pl.concat(
-        [
-            cv_prediction.select([f"{horizon}h",f"pred_{horizon}h"])
-            for cv_prediction in cv_predictions
-        ]
-    )
-    all_loads = pl.concat(all_loads[f"{horizon}h",f"pred_{horizon}h"])
+    all_loads = cv_predictions.select([f"{horizon}h",f"pred_{horizon}h"])
+    all_loads = pl.concat(all_loads)
     min_load, max_load = all_loads.min(), all_loads.max()
     scale = altair.Scale(domain=[min_load, max_load])
     if kind == "mean":
@@ -237,7 +232,7 @@ def plot_reliability_diagram(
         )
     )
 
-    for fold_idx, cv_predictions_i in enumerate(cv_predictions):
+    for (fold_idx,), cv_predictions_i in cv_predictions.group_by("split", maintain_order=True):
         min_date = cv_predictions_i["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
         fold_label = f"#{fold_idx} - {min_date} to {max_date}"
@@ -291,7 +286,7 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
     x_title = "Predicted Load (MW)"
     y_title = "Residual load (MW): predicted - actual"
 
-    for i, cv_prediction in enumerate(cv_predictions):
+    for (i,), cv_prediction in cv_predictions.group_by("split", maintain_order=True):
         # Get date range for this CV fold
         min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_prediction["prediction_time"].max().strftime("%Y-%m-%d")
@@ -326,9 +321,7 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
 
         all_scatter_plots.append(scatter_plot)
 
-    all_predictions = pl.concat(
-        [cv_pred[f"pred_{horizon}h"] for cv_pred in cv_predictions]
-    )
+    all_predictions = cv_predictions[f"pred_{horizon}h"]
     min_pred, max_pred = all_predictions.min(), all_predictions.max()
 
     perfect_line = (
@@ -391,7 +384,7 @@ def plot_binned_residuals(cv_predictions, horizon, by="hour"):
     all_mean_lines = []
     time_range = None  # Will store the min/max time values for the perfect line
 
-    for i, cv_prediction in enumerate(cv_predictions):
+    for (i,), cv_prediction in cv_predictions.group_by("split", maintain_order=True):
         min_date = cv_prediction["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_prediction["prediction_time"].max().strftime("%Y-%m-%d")
         fold_label = f"#{i+1} - {min_date} to {max_date}"

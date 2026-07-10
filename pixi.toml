@@ -49,14 +49,12 @@ jupyterlite-pyodide-kernel = "*"
 python-libarchive-c = "*"
 
 [feature.doc.tasks]
-execute-file-creating-pickle = { cmd = "python feature_engineering.py", cwd = "content/python_files" }
 create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
-copy-pickled-pipelines = { cmd = "cp ./content/python_files/*.pkl ./content/notebooks/", depends-on = ["create-notebooks-dir", "execute-file-creating-pickle"] }
 scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
 copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
 copy-parallel-coordinates-plots = { cmd = "cp ./content/python_files/*.json ./content/notebooks/", depends-on = ["create-notebooks-dir"] }
 convert-to-notebooks = { cmd = "jupytext --to notebook ./content/python_files/*.py && rm ./content/python_files/*_lib.ipynb && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
-convert-to-executed-notebooks = { cmd = "jupytext --to notebook --execute ./content/python_files/*.py && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-pickled-pipelines", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
+convert-to-executed-notebooks = { cmd = "jupytext --to notebook --execute ./content/python_files/*.py && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
 build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
 build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
 serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }
