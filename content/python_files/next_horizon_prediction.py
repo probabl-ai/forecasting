@@ -215,7 +215,9 @@ def get_cv_results(pred, return_train_score=False):
                 ], how="horizontal"
             ).with_columns(split=pl.lit(i))
         )
-        print(i, split_scores)
+        print(f"split {i}:", split["X_test"]["prediction_time"].min().isoformat())
+        print(split_scores)
+
     return pl.concat(predictions, how="vertical"), pl.DataFrame(scores)
 
 

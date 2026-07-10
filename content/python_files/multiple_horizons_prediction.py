@@ -282,8 +282,7 @@ study_name = f"randomized_search"
 
 search = pred.skb.make_randomized_search(
     backend="optuna",
-    # n_iter=64,
-    n_iter=2,
+    n_iter=10,
     n_jobs=1,
     refit="neg_mape_average",
     storage=None,#storage,
