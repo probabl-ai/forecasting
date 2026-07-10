@@ -24,16 +24,10 @@ import polars as pl
 
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-from feature_engineering_lib import (
-    fetch_city_weather,
-    add_features,
-    pick_up_where_we_left_off,
-)
 
-from next_horizon_prediction_lib import (
-    TimeSeriesSplitter,
-    apply_predictor,
-)
+from feature_engineering_lib import feature_engineering_outputs, load_electricity_history_data
+
+from next_horizon_prediction_lib import TimeSeriesSplitter, get_regressor, get_cv_results
 
 from tutorial_helpers import plot_horizon_forecast
 
@@ -57,32 +51,18 @@ def concat_horizons(predictions):
     Consolidate predictions of models for different horizons in one dataframe.
     """
     return pl.DataFrame({f"{h}h": v for h, v in predictions.items()})
-
-
-def make_multi_horizon_pred(horizons):
+def make_multi_horizon_pred(features, y):
     """
     Create a full DataOp for predicting the specified horizons.
     """
-    X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, horizons)
-    X = X_y["X"].skb.mark_as_X(cv=TimeSeriesSplitter())
-    y = X_y["y"].skb.mark_as_y()
-    predictions = {h: apply_predictor(X, y[f"{h}h"], h) for h in horizons}
-    return skrub.deferred(concat_horizons)(predictions).skb.set_name("pred_multi_horizon")
-
-# %% [markdown]
-#
-# We fetch the data and test the data pipeline for three example time horizons 1,12,24
-
-# %%
-TIME_HORIZONS = (1,12,24)
-electricity_load_history, X, y = pick_up_where_we_left_off(TIME_HORIZONS)
-prediction_time = X
-
-temperature_only = skrub.choose_bool(name="temperature_only", default=True)
-cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
-city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
-    "city_weather_fetcher"
-    )
+    regressor = get_regressor()
+    predictions = {
+        h: feat.skb.drop(["prediction_time", "target_time"])
+        .skb.apply(regressor, y=y[f"{h}h"])
+        .skb.set_name(f"pred_{h}h")
+        for h, feat in features.items()
+    }
+    return skrub.deferred(concat_horizons)(predictions)
 
 # %% [markdown]
 #
@@ -91,18 +71,10 @@ city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
 # all horizons between 1 and 25 hours.
 
 # %%
-loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
+TIME_HORIZONS = (1,12,24)
+features, y = feature_engineering_outputs(TIME_HORIZONS, cv_splitter=TimeSeriesSplitter())
 
-regressor = HistGradientBoostingRegressor(
-    random_state=0,
-    loss=loss,
-    learning_rate=skrub.choose_float(
-        0.01, 0.7, default=0.1, log=True, name="learning_rate"
-    ),
-    max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
-)
-
-pred = make_multi_horizon_pred(TIME_HORIZONS)
+pred = make_multi_horizon_pred(features, y)
 pred
 
 # %% [markdown]
@@ -126,9 +98,7 @@ predicted_y_test
 # %%
 from sklearn.metrics import mean_absolute_percentage_error
 
-mean_absolute_percentage_error(
-    split["y_test"].drop("allow_object"), predicted_y_test, multioutput="raw_values"
-)
+mean_absolute_percentage_error(split["y_test"], predicted_y_test, multioutput="raw_values")
 
 
 
@@ -152,23 +122,18 @@ def neg_mape(y_true, y_pred):
 
 
 def neg_mape_scorer(estimator, X, y):
-    y = y.drop("allow_object")
     return neg_mape(y, estimator.predict(X))
 
 
 # We set this as the default scorer on our pipeline.
-pred = make_multi_horizon_pred(TIME_HORIZONS).skb.with_scoring(neg_mape_scorer)
-pred
+pred = make_multi_horizon_pred(features, y).skb.with_scoring(neg_mape_scorer)
 
-
-print(pred.skb.describe_param_grid())
 
 # %% [markdown]
 # Now that we have configured the scorer, we can check the score of our
 # pipeline on the example split:
 
 # %%
-split["test"]['_skrub_y'] = split["test"]['_skrub_y'].drop("allow_object")
 pred.skb.make_learner().fit(split["train"]).score(split["test"])
 
 # %% [markdown]
@@ -178,20 +143,21 @@ pred.skb.make_learner().fit(split["train"]).score(split["test"])
 # up or did the cross-validation.
 
 # %%
-history_dates = skrub.as_data_op(electricity_load_history).skb.set_name(
-    "electricity_load_data")()["time"].skb.preview()
+electricity_load_history = load_electricity_history_data()
+history_dates = electricity_load_history["time"]
 history_dates.max()
 
 # %%
 new_date = (
     (history_dates - datetime.timedelta(seconds=1)).dt.truncate("1h")
-    + datetime.timedelta(hours=1)
 ).max()
 new_date
 
 # %%
-# fit on all available data
-learner = pred.skb.make_learner(fitted=True)
+# fit a model for 24 horizons on all available data
+features_24_horizons, y_24_horizons = feature_engineering_outputs(range(1, 25), TimeSeriesSplitter())
+pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons).skb.with_scoring(neg_mape_scorer)
+learner = pred_24_horizons.skb.make_learner(fitted=True)
 future_pred = learner.predict({"start": new_date, "end": None})
 future_pred
 
@@ -213,14 +179,14 @@ def transpose_pred(prediction_date, prediction):
         prediction_date + datetime.timedelta(hours=int(c.removesuffix("h")))
         for c in prediction.columns
     ]
-    load = prediction.row()
+    load = prediction.row(0)
     return pl.DataFrame({"time": date, "load_mw": load})
 
 
 future_pred_tall = transpose_pred(new_date, future_pred)
 
 # %%
-history_tail = electricity_load_history.skb.preview().filter(
+history_tail = electricity_load_history.filter(
     pl.col("time") > new_date - datetime.timedelta(days=8)
 )
 
@@ -230,69 +196,22 @@ fig.add_trace(plot_line(future_pred_tall["time"], future_pred_tall["load_mw"]))
 fig.update_layout(height=700)
 
 # %% [markdown]
-# We want to get the predictions in long rather than wide format indexed by
-# date for a single prediction date might be a frequent need. We can add a
-# little post-processor to the pipeline to optionally do that.
-
-# %%
-def post_process(pred):
-    if range_end is not None:
-        return pred
-    return transpose_pred(prediction_time["time"].to_list()[0], pred)
-
-
-pred = (
-    make_multi_horizon_pred(TIME_HORIZONS)
-    .skb.apply_func(post_process)
-    .skb.with_scoring(neg_mape_scorer)
-)
-pred.skb.cross_validate()
-
-# %% [markdown]
 # Now we make the predictions and plot them. We notice that the 1h horizon
 # qualitatively seems to stick better to the ground truth, which is expected
 # and also corresponds to what we see in the MAPE.
 
 # %%
-def concat_X_y_predictions(X_test, y_test, prediction):
-    return pl.concat(
-        [
-            X_test,
-            y_test,
-            prediction.rename("pred_{}".format),
-        ],
-        how="horizontal",
-    )
+cv_predictions, cv_scores = get_cv_results(pred)
 
+# %%
 
-def cross_val_predict(data_op, environment=None):
-    """
-    Get cross-validated predictions for different horizons.
-    """
-    all_predictions, all_scores = [], []
-    for i, split in enumerate(data_op.skb.iter_cv_splits(environment=environment)):
-        split["test"]['_skrub_y'] = split["test"]['_skrub_y'].drop("allow_object")
-        prediction = data_op.skb.make_learner().fit(split["train"]).predict(split["test"])
-        all_predictions.append(
-            concat_X_y_predictions(
-                split["X_test"], split["y_test"].drop("allow_object"), prediction
-            ).with_columns(split=pl.lit(i)),
+def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
+    if start is not None:
+        cv_predictions = cv_predictions.filter(
+            pl.col("prediction_time")
+            > datetime.datetime.fromisoformat(start).astimezone(datetime.UTC)
         )
-        split_neg_mape = neg_mape(split["y_test"].drop("allow_object"), prediction)
-        split_start = split["X_test"]["prediction_time"].min()
-        fmt_mape = " ".join(
-            f"{k.removeprefix('neg_mape_')}: {-v:.1%}" for k, v in split_neg_mape.items()
-        )
-        print(f"{split_start:%Y-%m-%d}: {fmt_mape}")
-        all_scores.append(split_neg_mape | {"split": i})
-    all_predictions = pl.concat(all_predictions, how="vertical")
-    all_scores = pl.DataFrame(all_scores)
-    return all_predictions, all_scores
 
-
-cv_predictions, cv_scores = cross_val_predict(pred)
-
-def plot_predictions(cv_predictions, horizons=None):
     if horizons is None:
         horizons = [
             int(m.group(1))
@@ -314,38 +233,11 @@ def plot_predictions(cv_predictions, horizons=None):
 plot_predictions(cv_predictions)
 
 # %% [markdown]
-#
-# We can save this pipeline for future reuse:
-
-# %%
-import pickle
-from data_paths import results_dir
-
-with open(results_dir() / "learner_3_horizons.pickle", "wb") as f:
-    pickle.dump(pred.skb.make_learner(), f)
-
-# %% [markdown]
 # Finally, we run the cross-validation for all 24 horizons
 
 # %%
-HORIZONS = tuple(range(1, 25))
-
-pred_24_horizons = (
-    make_multi_horizon_pred(HORIZONS)
-    .skb.apply_func(post_process)
-    .skb.with_scoring(neg_mape_scorer)
-)
 cv_scores = pred_24_horizons.skb.cross_validate(verbose=2)
 cv_scores
-
-# %%
-learner = pred_24_horizons.skb.make_learner(fitted=True)
-future_pred = learner.predict({"start": new_date, "end": None})
-fig = go.Figure()
-fig.add_trace(plot_line(history_tail["time"], history_tail["load_mw"]))
-fig.add_trace(plot_line(future_pred["time"], future_pred["load_mw"]))
-fig.update_layout(height=700)
-
 
 # %% [markdown]
 # We can plot horizon vs MAPE to see if shorter horizons are easier to predict:
@@ -360,10 +252,6 @@ plt.xticks(rotation=45)
 plt.xlabel("Horizon")
 plt.ylabel("MAPE")
 
-# %%
-with open(results_dir() / "learner_24_horizons.pickle", "wb") as f:
-    pickle.dump(pred_24_horizons.skb.make_learner(), f)
-
 # %% [markdown]
 ## Hyperparameter Tuning
 #
@@ -371,13 +259,6 @@ with open(results_dir() / "learner_24_horizons.pickle", "wb") as f:
 # hyperparameters with optuna.
 
 # %%
-import pickle
-from data_paths import results_dir
-
-with open(results_dir() / "learner_3_horizons.pickle", "rb") as f:
-    pred = pickle.load(f).data_op
-
-
 env = {"start": "2021-03-23", "end": "2025-05-31"}
 
 # %% [markdown]
@@ -401,7 +282,8 @@ study_name = f"randomized_search"
 
 search = pred.skb.make_randomized_search(
     backend="optuna",
-    n_iter=64,
+    # n_iter=64,
+    n_iter=2,
     n_jobs=1,
     refit="neg_mape_average",
     storage=None,#storage,
@@ -409,13 +291,6 @@ search = pred.skb.make_randomized_search(
 )
 
 search.fit(outer_split["train"])
-with open(results_dir / "randomized_search.pickle", "wb") as f:
-    pickle.dump(search, f)
-
-with open(results_dir / "best_learner.pickle", "wb") as f:
-    pickle.dump(search.best_learner_, f)
-
-search.results_.to_csv("search_results.csv", index=False)
 search.score(outer_split["test"])
 
 # %%
