@@ -149,18 +149,19 @@ features, y = feature_engineering_outputs(horizons=TIME_HORIZON, cv_splitter=Tim
 # splitter..
 
 # %%
-loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
+def get_regressor():
+    loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
 
-regressor = HistGradientBoostingRegressor(
-    random_state=0,
-    loss=loss,
-    learning_rate=skrub.choose_float(
-        0.01, 0.7, default=0.1, log=True, name="learning_rate"
-    ),
-    max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
-)
+    return HistGradientBoostingRegressor(
+        random_state=0,
+        loss=loss,
+        learning_rate=skrub.choose_float(
+            0.01, 0.7, default=0.1, log=True, name="learning_rate"
+        ),
+        max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
+    )
 
-pred = features.skb.apply(regressor, y=y).skb.with_scoring(
+pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(
     ["neg_mean_absolute_percentage_error", "r2"]
 )
 pred
@@ -195,20 +196,28 @@ def get_cv_results(pred, return_train_score=False):
     predictions = []
     scores = []
     for i, split in enumerate(pred.skb.iter_cv_splits()):
-        learner =             pred.skb.make_learner().fit(split["train"])
+        learner = pred.skb.make_learner().fit(split["train"])
 
-        split_scores, split_predictions = (
-            learner.score(split["test"], return_predictions=True)
+        split_scores, split_predictions = learner.score(
+            split["test"], return_predictions=True
         )
         if return_train_score:
-            split_scores.update({f"train_{k}": v for k, v in learner.score(split["train"]).items()})
+            split_scores.update(
+                {f"train_{k}": v for k, v in learner.score(split["train"]).items()}
+            )
         scores.append(split_scores | {"split": i})
         predictions.append(
-            split["X_test"].with_columns(
-                split["y_test"],
-                **{f"pred_{TIME_HORIZON}h": split_predictions["predict"], "split": i},
-            )
+            pl.concat(
+                [
+                    split["X_test"],
+                    pl.DataFrame(split["y_test"]),
+                    split_predictions["predict"].rename("pred_{}".format),
+                ], how="horizontal"
+            ).with_columns(split=pl.lit(i))
         )
+        print(f"split {i}:", split["X_test"]["prediction_time"].min().isoformat())
+        print(split_scores)
+
     return pl.concat(predictions, how="vertical"), pl.DataFrame(scores)
 
 

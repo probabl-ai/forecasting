@@ -13,7 +13,7 @@ notebook = ">=7.4.3,<8"
 jupyterlab = ">=4.4.3,<5"
 jupytext = ">=1.17.2,<2"
 scikit-learn = ">=1.7.0,<2"
-skrub = ">=0.6.2,<1"
+skrub = ">=0.10.0,<1"
 polars = "==1.24.0"
 matplotlib-base = ">=3.10.3,<4"
 pyarrow = ">=20.0.0,<21"
@@ -53,8 +53,8 @@ create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
 scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
 copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
 copy-parallel-coordinates-plots = { cmd = "cp ./content/python_files/*.json ./content/notebooks/", depends-on = ["create-notebooks-dir"] }
-convert-to-notebooks = { cmd = "jupytext --to notebook ./content/python_files/*.py && rm ./content/python_files/*_lib.ipynb && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
-convert-to-executed-notebooks = { cmd = "jupytext --to notebook --execute ./content/python_files/*.py && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
+convert-to-notebooks = { cmd = "find ./content/python_files -name '*.py' ! -name '*_lib.py' | xargs jupytext --to notebook  && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
+convert-to-executed-notebooks = { cmd = "find ./content/python_files -name '*.py' ! -name '*_lib.py' | xargs jupytext --to notebook --execute && mv ./content/python_files/*.ipynb ./content/notebooks", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
 build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
 build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
 serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }
