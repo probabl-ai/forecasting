@@ -519,17 +519,17 @@ randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
 # computationally expensive.
 
 # %%
-nested_cv_results_ridge = skrub.cross_validate(
-     environment=predictions_ridge.skb.get_data(),
-     learner=randomized_search_ridge,
-     cv=TimeSeriesSplitter(),
-     scoring={
-         "r2": get_scorer("r2"),
-         "mape": make_scorer(mean_absolute_percentage_error),
-     },
-     n_jobs=-1,
-     return_learner=True,
- ).round(3)
+# nested_cv_results_ridge = skrub.cross_validate(
+#      environment=predictions_ridge.skb.get_data(),
+#      learner=randomized_search_ridge,
+#      cv=TimeSeriesSplitter(),
+#      scoring={
+#          "r2": get_scorer("r2"),
+#          "mape": make_scorer(mean_absolute_percentage_error),
+#      },
+#      n_jobs=-1,
+#      return_learner=True,
+#  ).round(3)
 
 # %%
-nested_cv_results_ridge.round(3)
+# nested_cv_results_ridge.round(3)
