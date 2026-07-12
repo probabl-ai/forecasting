@@ -7,6 +7,8 @@
 # We need to install some extra dependencies for this notebook if needed (when
 # running jupyterlite).
 
+# %%
+# %pip install -q skrub altair holidays plotly nbformat polars
 
 # %%
 import re
@@ -75,7 +77,7 @@ TIME_HORIZONS = (1,12,24)
 features, y = feature_engineering_outputs(TIME_HORIZONS, cv_splitter=TimeSeriesSplitter())
 
 pred = make_multi_horizon_pred(features, y)
-pred
+pred.skb.preview()
 
 # %% [markdown]
 #
@@ -274,6 +276,11 @@ outer_split["X_test"]
 # %% [markdown]
 # We use persistent storage for our optuna database so we can resume or inspect
 # it after the current process exits.
+
+# %%
+# %pip install -q optuna
+# import optuna
+# print(f"optuna version: {optuna.__version__}")
 
 # %%
 #storage = f"sqlite:///{results_dir / 'optuna.sqlite'}"

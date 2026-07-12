@@ -164,7 +164,7 @@ def get_regressor():
 pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(
     ["neg_mean_absolute_percentage_error", "r2"]
 )
-pred
+pred.skb.preview()
 
 # %%
 
@@ -206,12 +206,22 @@ def get_cv_results(pred, return_train_score=False):
                 {f"train_{k}": v for k, v in learner.score(split["train"]).items()}
             )
         scores.append(split_scores | {"split": i})
+        y_test = pl.DataFrame(split["y_test"])
+        pred_values = np.asarray(split_predictions["predict"])
+        if pred_values.ndim == 1:
+            pred_values = pred_values[:, None]
+        pred_columns = pl.DataFrame(
+            {
+                f"pred_{column}": pred_values[:, idx]
+                for idx, column in enumerate(y_test.columns)
+            }
+        )
         predictions.append(
             pl.concat(
                 [
                     split["X_test"],
-                    pl.DataFrame(split["y_test"]),
-                    split_predictions["predict"].rename("pred_{}".format),
+                    y_test,
+                    pred_columns,
                 ], how="horizontal"
             ).with_columns(split=pl.lit(i))
         )
@@ -345,7 +355,8 @@ plot_binned_residuals(cv_predictions, TIME_HORIZON, by="month").interactive().pr
 
 # %%
 # Here we provide all the imports for creating the predictive model.
-from sklearn.feature_selection import SelectKBest, VarianceThreshold
+from functools import partial
+from sklearn.feature_selection import SelectKBest, VarianceThreshold, f_regression
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.kernel_approximation import Nystroem
@@ -374,7 +385,8 @@ predictions_ridge = features.skb.apply(
         SplineTransformer(sparse_output=True),
         VarianceThreshold(threshold=1e-6),
         SelectKBest(
-            k=skrub.choose_int(100, 1_000, log=True, name="n_selected_splines")
+            score_func=partial(f_regression, force_finite=True),
+            k=skrub.choose_int(100, 400, log=True, name="n_selected_splines"),
         ),
         Nystroem(
             n_components=skrub.choose_int(
@@ -387,7 +399,7 @@ predictions_ridge = features.skb.apply(
     ),
     y=y,
 ).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
-predictions_ridge
+predictions_ridge.skb.preview()
 
 # %% [markdown]
 #
@@ -483,22 +495,16 @@ plot_reliability_diagram(cv_predictions_ridge, TIME_HORIZON).interactive().prope
 # expensive, we are reloading the results of the parallel coordinates plot.
 
 # %%
-# randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
-#     refit="r2",
-#     n_iter=100,
-#     fitted=True,
-#     verbose=1,
-#     n_jobs=-1,
-# )
+randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
+     refit="r2",
+     n_iter=50,
+     fitted=True,
+     verbose=1,
+     n_jobs=-1,
+ )
 
 # %%
-# fig = randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
-# write_json(fig, "parallel_coordinates_ridge.json")
-
-# %%
-# TODO: regenerate the plot which is outdated (still shows last year parametrization)
-# fig = read_json("parallel_coordinates_ridge.json")
-# fig.update_layout(margin=dict(l=200))
+randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
 
 # %% [markdown]
 #
@@ -513,17 +519,17 @@ plot_reliability_diagram(cv_predictions_ridge, TIME_HORIZON).interactive().prope
 # computationally expensive.
 
 # %%
-# nested_cv_results_ridge = skrub.cross_validate(
-#     environment=predictions_ridge.skb.get_data(),
-#     learner=randomized_search_ridge,
-#     cv=TimeSeriesSplitter(),
-#     scoring={
-#         "r2": get_scorer("r2"),
-#         "mape": make_scorer(mean_absolute_percentage_error),
-#     },
-#     n_jobs=-1,
-#     return_learner=True,
-# ).round(3)
+nested_cv_results_ridge = skrub.cross_validate(
+     environment=predictions_ridge.skb.get_data(),
+     learner=randomized_search_ridge,
+     cv=TimeSeriesSplitter(),
+     scoring={
+         "r2": get_scorer("r2"),
+         "mape": make_scorer(mean_absolute_percentage_error),
+     },
+     n_jobs=-1,
+     return_learner=True,
+ ).round(3)
 
 # %%
-# nested_cv_results_ridge.round(3)
+nested_cv_results_ridge.round(3)
