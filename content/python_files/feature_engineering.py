@@ -562,7 +562,10 @@ def add_features(df, horizon, electricity_load_history, cities, temperature_only
 
 
 def feature_engineering_outputs(horizons, cv_splitter=None):
-    prediction_time = skrub.deferred(time_range)("2021-03-23", "2025-05-31")
+    range_start = skrub.var("start", "2021-03-23")
+    range_end = skrub.var("end",  "2025-05-31")
+
+    prediction_time = skrub.deferred(time_range)(range_start, range_end)
     resampled_history = skrub.var(
         "electricity_history_loader", load_electricity_history_data, becomes_default=True
     )().skb.apply_func(resample)
