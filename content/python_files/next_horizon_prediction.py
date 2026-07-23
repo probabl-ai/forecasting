@@ -59,9 +59,11 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 # In this implementation, each fold starts after an initial training period of
 # two years, keeps a 7-day gap between the end of training and the start of the
 # test window, and evaluates on 3-month blocks that move forward by 3 months at
-# each iteration. This is a simple example of a setup that is common in
-# forecasting problems, where split boundaries must mimic operational
+# each iteration. This is an example of a [Backtesting with intermittent refit including gap](https://skforecast.org/latest/introduction-forecasting/introduction-forecasting#backtesting-with-intermittent-refit)
+# setup that is common in forecasting problems, where split boundaries must mimic operational
 # constraints in deployment.
+#
+# ![Backtesting with intermittent refit](https://skforecast.org/latest/img/time-series-backtesting-forecasting-with-gap.gif)
 #
 # When we want an actual value to inspect, experiment with, or debug, we can
 # call .skb.preview(). It gives us the output of the pipeline for the preview

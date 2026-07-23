@@ -43,7 +43,10 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # We now have a pipeline that makes predictions for 1 horizon. To predict
 # multiple horizons, we just need to make one prediction for each horizon and
-# group them in a single dataframe.
+# group them in a single dataframe. This follows the strategy of 
+# [Direct multi-step forecasting](https://skforecast.org/latest/introduction-forecasting/introduction-forecasting#direct-multi-step-forecasting)
+# where an independent model is trained for each horizon. 
+# ![Direct multi-step forecasting](https://skforecast.org/latest/img/diagram-direct-multi-step-forecasting.png)
 
 
 # %%
