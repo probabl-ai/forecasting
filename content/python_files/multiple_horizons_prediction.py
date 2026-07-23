@@ -8,317 +8,308 @@
 # running jupyterlite).
 
 # %%
-# %pip install -q https://pypi.anaconda.org/ogrisel/simple/polars/1.24.0/polars-1.24.0-cp39-abi3-emscripten_3_1_58_wasm32.whl
-# %pip install -q skrub altair holidays plotly nbformat
+# %pip install -q skrub altair holidays plotly nbformat polars
 
 # %%
+import re
 import datetime
 import warnings
+from pathlib import Path
 
 import altair
 import cloudpickle
 import pyarrow  # noqa: F401
 import tzdata  # noqa: F401
+import skrub
+import numpy as np
+import polars as pl
+
+from sklearn.ensemble import HistGradientBoostingRegressor
+
+
+from feature_engineering_lib import feature_engineering_outputs, load_electricity_history_data
+
+from next_horizon_prediction_lib import TimeSeriesSplitter, get_regressor, get_cv_results
 
 from tutorial_helpers import plot_horizon_forecast
+
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
-
-# %%
-with open("feature_engineering_pipeline.pkl", "rb") as f:
-    feature_engineering_pipeline = cloudpickle.load(f)
-
-
-features = feature_engineering_pipeline["features"]
-targets = feature_engineering_pipeline["targets"]
-prediction_time = feature_engineering_pipeline["prediction_time"]
-horizons = feature_engineering_pipeline["horizons"]
-target_column_name_pattern = feature_engineering_pipeline["target_column_name_pattern"]
-
-
 # %% [markdown]
 #
 # ## Predicting multiple horizons with a grid of single output models
-#
-# It is really common to predict values for multiple horizons at once. The most
-# naive approach is to train as many models as there are horizons. To achieve this,
-# scikit-learn provides a meta-estimator called `MultiOutputRegressor` that can be used
-# to train a single model that predicts multiple horizons at once.
-#
-# In short, we only need to provide multiple targets where each column corresponds to
-# an horizon and this meta-estimator will train an independent model for each column.
-# However, we could expect that the quality of the forecast might degrade as the horizon
-# increases.
-#
-# Let's train a gradient boosting regressor for each horizon.
+
+# We now have a pipeline that makes predictions for 1 horizon. To predict
+# multiple horizons, we just need to make one prediction for each horizon and
+# group them in a single dataframe. This follows the strategy of 
+# [Direct multi-step forecasting](https://skforecast.org/latest/introduction-forecasting/introduction-forecasting#direct-multi-step-forecasting)
+# where an independent model is trained for each horizon. 
+# ![Direct multi-step forecasting](https://skforecast.org/latest/img/diagram-direct-multi-step-forecasting.png)
+
 
 # %%
-from sklearn.multioutput import MultiOutputRegressor
-from sklearn.ensemble import HistGradientBoostingRegressor
 
-multioutput_predictions = features.skb.apply(
-    MultiOutputRegressor(
-        estimator=HistGradientBoostingRegressor(random_state=0), n_jobs=-1
-    ),
-    y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
-)
+def concat_horizons(predictions):
+    """
+    Consolidate predictions of models for different horizons in one dataframe.
+    """
+    return pl.DataFrame({f"{h}h": v for h, v in predictions.items()})
+def make_multi_horizon_pred(features, y):
+    """
+    Create a full DataOp for predicting the specified horizons.
+    """
+    regressor = get_regressor()
+    predictions = {
+        h: feat.skb.drop(["prediction_time", "target_time"])
+        .skb.apply(regressor, y=y[f"{h}h"])
+        .skb.set_name(f"pred_{h}h")
+        for h, feat in features.items()
+    }
+    return skrub.deferred(concat_horizons)(predictions)
 
 # %% [markdown]
 #
-# Now, let's just rename the columns for the predictions to make it easier to plot
-# the horizon forecast.
+# We inspect the pipeline on an example with only 3 horizons so that it is fast
+# and reasonably easy to visualize. Later we will cross-validate a pipeline for
+# all horizons between 1 and 25 hours.
 
 # %%
-target_column_names = [target_column_name_pattern.format(horizon=h) for h in horizons]
-predicted_target_column_names = [
-    f"predicted_{target_column_name}" for target_column_name in target_column_names
-]
-named_predictions = multioutput_predictions.rename(
-    {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
-)
+TIME_HORIZONS = (1,12,24)
+features, y = feature_engineering_outputs(TIME_HORIZONS, cv_splitter=TimeSeriesSplitter())
+
+pred = make_multi_horizon_pred(features, y)
+pred
 
 # %% [markdown]
 #
-# Let's plot the horizon forecast on a training data to check the validity of the
-# output.
+# We want to define a scorer that will produce the Mean Absolute Percentage
+# Error (MAPE) for each of the horizons, and also averaged across horizons. To
+# easily try our metric function on actual values and debug it, we collect
+# ground truth and predictions on an example train/test split.
 
 # %%
-plot_at_time = datetime.datetime(2021, 4, 19, 0, 0, tzinfo=datetime.timezone.utc)
-plot_horizon_forecast(
-    targets,
-    named_predictions,
-    plot_at_time,
-    target_column_name_pattern,
-).skb.preview()
+split = pred.skb.train_test_split()
+learner = pred.skb.make_learner().fit(split["train"])
+predicted_y_test = learner.predict(split["test"])
+predicted_y_test
 
 # %% [markdown]
 #
-# On this curve, the red line corresponds to the observed values past to the the date
-# for which we would like to forecast. The orange line corresponds to the observed
-# values for the next 24 hours and the blue line corresponds to the predicted values
-# for the next 24 hours.
-#
-# Since we are using a strong model and very few training data to check the validity
-# we observe that our model perfectly fits the training data.
-#
-# So, we are now ready to assess the performance of this multi-output model and we need
-# to cross-validate it. Since we do not want to aggregate the metrics for the different
-# horizons, we need to create a scikit-learn scorer in which we set
-# `multioutput="raw_values"` to get the scores for each horizon.
-#
-# Passing this scorer to the `cross_validate` function returns all horizons scores.
+# For multioutput regression, we can `mean_absolute_percentage_error` to return
+# the error for each target, without averaging:
 
 # %%
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_absolute_percentage_error
+
+mean_absolute_percentage_error(split["y_test"], predicted_y_test, multioutput="raw_values")
 
 
-max_train_size = 2 * 52 * 24 * 7  # max ~2 years of training data
-test_size = 24 * 7 * 24  # 24 weeks of test data
-gap = 7 * 24  # 1 week gap between train and test sets
-ts_cv_5 = TimeSeriesSplit(
-    n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap
-)
+
+# %% [markdown]
+# We will therefore use `multioutput='raw_values'` and return all the errors in
+# a dictionary, after adding the averaged error.
+#
+# Once we have defined this function of true and predicted electricity loads,
+# (what scikit-learn calls a 'metric'), we wrap it in a 'scorer', a function
+# that takes an estimator, X and y. Scorers can return a single score, or a
+# dictionary mapping metric names (in our case 'neg_mape_1h', 'neg_mape_2h', ...) to
+# scores.
 
 # %%
-from sklearn.metrics import r2_score, mean_absolute_percentage_error
-
-
-def multioutput_scorer(regressor, X, y, score_func, score_name):
-    y_pred = regressor.predict(X)
-    return {
-        f"{score_name}_horizon_{h}h": score
-        for h, score in enumerate(
-            score_func(y, y_pred, multioutput="raw_values"), start=1
-        )
+def neg_mape(y_true, y_pred):
+    average = mean_absolute_percentage_error(y_true, y_pred)
+    detail = mean_absolute_percentage_error(y_true, y_pred, multioutput="raw_values")
+    return {"neg_mape_average": -average} | {
+        f"neg_mape_{c}": -float(s) for c, s in zip(y_true.columns, detail)
     }
 
 
-def scoring(regressor, X, y):
-    return {
-        **multioutput_scorer(regressor, X, y, mean_absolute_percentage_error, "mape"),
-        **multioutput_scorer(regressor, X, y, r2_score, "r2"),
-    }
+def neg_mape_scorer(estimator, X, y):
+    return neg_mape(y, estimator.predict(X))
 
 
-multioutput_cv_results = multioutput_predictions.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring=scoring,
-    return_train_score=True,
-    verbose=1,
-    n_jobs=-1,
-)
+# We set this as the default scorer on our pipeline.
+pred = make_multi_horizon_pred(features, y).skb.with_scoring(neg_mape_scorer)
+
 
 # %% [markdown]
-#
-# One thing that we observe is that training such multi-output model is expensive. It is
-# expected since each horizon involves a different model and thus a training.
+# Now that we have configured the scorer, we can check the score of our
+# pipeline on the example split:
 
 # %%
-multioutput_cv_results.round(3)
+pred.skb.make_learner().fit(split["train"]).score(split["test"])
 
 # %% [markdown]
-#
-# Instead of reading the results in the table, we can plot the scores depending on the
-# type of data and the metric.
+## **Out-of-sample check:**
+# it is always good that our pipeline can make a prediction on some truly
+# left-out data, as a sanity check which could find bugs in the way we set it
+# up or did the cross-validation.
 
 # %%
-import itertools
-from IPython.display import display
+electricity_load_history = load_electricity_history_data()
+history_dates = electricity_load_history["time"]
+history_dates.max()
 
-for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "test"]):
-    columns = multioutput_cv_results.columns[
-        multioutput_cv_results.columns.str.startswith(f"{dataset_type}_{metric_name}")
-    ]
-    data_to_plot = multioutput_cv_results[columns]
-    data_to_plot.columns = [
-        col.replace(f"{dataset_type}_", "")
-        .replace(f"{metric_name}_", "")
-        .replace("_", " ")
-        for col in columns
-    ]
+# %%
+new_date = (
+    (history_dates - datetime.timedelta(seconds=1)).dt.truncate("1h")
+).max()
+new_date
 
-    data_long = data_to_plot.melt(var_name="horizon", value_name="score")
-    chart = (
-        altair.Chart(
-            data_long,
-            title=f"{dataset_type.title()} {metric_name.upper()} scores by horizon",
-        )
-        .mark_boxplot(extent="min-max")
-        .encode(
-            x=altair.X(
-                "horizon:N",
-                title="Horizon",
-                sort=altair.Sort(
-                    [f"horizon {h}h" for h in range(1, data_to_plot.shape[1])]
-                ),
-            ),
-            y=altair.Y("score:Q", title=f"{metric_name.upper()} Score"),
-            color=altair.Color("horizon:N", legend=None),
-        )
+# %%
+# fit a model for 24 horizons on all available data
+features_24_horizons, y_24_horizons = feature_engineering_outputs(range(1, 25), TimeSeriesSplitter())
+pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons).skb.with_scoring(neg_mape_scorer)
+learner = pred_24_horizons.skb.make_learner(fitted=True)
+future_pred = learner.predict({"start": new_date, "end": None})
+future_pred
+
+# %%
+import plotly.graph_objects as go
+
+
+def plot_line(x, y):
+    return go.Scatter(
+        x=x,
+        y=y,
+        mode="lines+markers",
+        name=y.name,
+        hovertemplate="%{x|%Y-%m-%dT%H} (%{x|%A}): %{y}<extra></extra>",
     )
 
-    display(chart)
+def transpose_pred(prediction_date, prediction):
+    date = [
+        prediction_date + datetime.timedelta(hours=int(c.removesuffix("h")))
+        for c in prediction.columns
+    ]
+    load = prediction.row(0)
+    return pl.DataFrame({"time": date, "load_mw": load})
+
+
+future_pred_tall = transpose_pred(new_date, future_pred)
+
+# %%
+history_tail = electricity_load_history.filter(
+    pl.col("time") > new_date - datetime.timedelta(days=8)
+)
+
+fig = go.Figure()
+fig.add_trace(plot_line(history_tail["time"], history_tail["load_mw"]))
+fig.add_trace(plot_line(future_pred_tall["time"], future_pred_tall["load_mw"]))
+fig.update_layout(height=700)
 
 # %% [markdown]
-#
-# An interesting and unexpected observation is that the MAPE error on the test
-# data is first increases and then decreases once past the horizon 18h. We
-# would not necessarily expect this behaviour.
-#
-# ## Native multi-output handling using `RandomForestRegressor`
-#
-# In the previous section, we showed how to wrap a `HistGradientBoostingRegressor`
-# in a `MultiOutputRegressor` to predict multiple horizons. With such a strategy, it
-# means that we trained independent `HistGradientBoostingRegressor`, one for each
-# horizon.
-#
-# `RandomForestRegressor` natively supports multi-output regression: instead of
-# independently training a model per horizon, it will train a joint model that
-# predicts all horizons at once.
-#
-# Repeat the previous analysis using a `RandomForestRegressor`. Fix the parameter
-# `min_samples_leaf` to 30 to limit the depth.
-#
-# Once you created the model, plot the horizon forecast for a given date and time.
-# In addition, compute the cross-validated predictions and plot the R2 and MAPE
-# scores for each horizon.
-#
-# Does this model perform better or worse than the previous model?
+# Now we make the predictions and plot them. We notice that the 1h horizon
+# qualitatively seems to stick better to the ground truth, which is expected
+# and also corresponds to what we see in the MAPE.
 
 # %%
-from sklearn.ensemble import RandomForestRegressor
+cv_predictions, cv_scores = get_cv_results(pred)
 
 # %%
-# Write your code here.
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
-#
 
-# %%
-multioutput_predictions_rf = features.skb.apply(
-    RandomForestRegressor(min_samples_leaf=30, random_state=0, n_jobs=-1),
-    y=targets.skb.drop(cols=["prediction_time", "load_mw"]).skb.mark_as_y(),
-)
-
-# %%
-named_predictions_rf = multioutput_predictions_rf.rename(
-    {k: v for k, v in zip(target_column_names, predicted_target_column_names)}
-)
-
-# %%
-plot_at_time = datetime.datetime(2021, 4, 24, 0, 0, tzinfo=datetime.timezone.utc)
-plot_horizon_forecast(
-    targets,
-    named_predictions_rf,
-    plot_at_time,
-    target_column_name_pattern,
-).skb.preview()
-
-# %%
-multioutput_cv_results_rf = multioutput_predictions_rf.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring=scoring,
-    return_train_score=True,
-    verbose=1,
-    n_jobs=-1,
-)
-
-# %%
-multioutput_cv_results_rf.round(3)
-
-# %%
-import itertools
-from IPython.display import display
-
-for metric_name, dataset_type in itertools.product(["mape", "r2"], ["train", "test"]):
-    columns = multioutput_cv_results_rf.columns[
-        multioutput_cv_results_rf.columns.str.startswith(
-            f"{dataset_type}_{metric_name}"
+def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
+    if start is not None:
+        cv_predictions = cv_predictions.filter(
+            pl.col("prediction_time")
+            > datetime.datetime.fromisoformat(start).astimezone(datetime.UTC)
         )
-    ]
-    data_to_plot = multioutput_cv_results_rf[columns]
-    data_to_plot.columns = [
-        col.replace(f"{dataset_type}_", "")
-        .replace(f"{metric_name}_", "")
-        .replace("_", " ")
-        for col in columns
-    ]
 
-    data_long = data_to_plot.melt(var_name="horizon", value_name="score")
-    chart = (
-        altair.Chart(
-            data_long,
-            title=f"{dataset_type.title()} {metric_name.upper()} Scores by Horizon",
-        )
-        .mark_boxplot(extent="min-max")
-        .encode(
-            x=altair.X(
-                "horizon:N",
-                title="Horizon",
-                sort=altair.Sort(
-                    [f"horizon {h}h" for h in range(1, data_to_plot.shape[1])]
-                ),
-            ),
-            y=altair.Y("score:Q", title=f"{metric_name.upper()} Score"),
-            color=altair.Color("horizon:N", legend=None),
-        )
-    )
+    if horizons is None:
+        horizons = [
+            int(m.group(1))
+            for c in cv_predictions.columns
+            if (m := re.match(r"^pred_(\d+)h$", c)) is not None
+        ]
+    fig = go.Figure()
+    for i, h in enumerate(horizons):
+        target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=h)
+        if i == 0:
+            fig.add_trace(
+                plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load"))
+            )
+        fig.add_trace(plot_line(target_time, cv_predictions[f"pred_{h}h"]))
+    fig.update_layout(height=700)
+    return fig
 
-    display(chart)
+
+plot_predictions(cv_predictions)
 
 # %% [markdown]
+# Finally, we run the cross-validation for all 24 horizons
+
+# %%
+cv_scores = pred_24_horizons.skb.cross_validate(verbose=2)
+cv_scores
+
+# %% [markdown]
+# We can plot horizon vs MAPE to see if shorter horizons are easier to predict:
+
+# %%
+from matplotlib import pyplot as plt
+
+(cv_scores.filter(regex="test_neg_mape_.*h") * -1).rename(
+    columns=lambda c: c.removeprefix("test_neg_mape_")
+).boxplot()
+plt.xticks(rotation=45)
+plt.xlabel("Horizon")
+plt.ylabel("MAPE")
+
+# %% [markdown]
+## Hyperparameter Tuning
 #
-# We observe that the performance of the `RandomForestRegressor` is not better in terms
-# of scores or computational cost. The trend of the scores along the horizon is also
-# different from the `HistGradientBoostingRegressor`: the scores worsen as the horizon
-# increases.
+# We load the dataop we dumped in the previous notebook and search for the best
+# hyperparameters with optuna.
+
+# %%
+env = {"start": "2021-03-23", "end": "2025-05-31"}
+
+# %% [markdown]
+# We keep the last split of the default splitter as a held-out test set on
+# which to validate the selected pipeline.
+
+# %%
+for outer_split in pred.skb.iter_cv_splits(env):
+    pass
+
+outer_split["X_test"]
+
+# %% [markdown]
+# We use persistent storage for our optuna database so we can resume or inspect
+# it after the current process exits.
+
+# %%
+# %pip install -q optuna
+# import optuna
+# print(f"optuna version: {optuna.__version__}")
+
+# %%
+#storage = f"sqlite:///{results_dir / 'optuna.sqlite'}"
+#print(f"Check search progress with:\noptuna-dashboard {storage}")
+study_name = f"randomized_search"
+
+search = pred.skb.make_randomized_search(
+    backend="optuna",
+    n_iter=10,
+    n_jobs=1,
+    refit="neg_mape_average",
+    storage=None,#storage,
+    study_name=study_name,
+)
+
+search.fit(outer_split["train"])
+search.score(outer_split["test"])
+
+# %%
+search.plot_results()
+
+# %% [markdown]
+# 
+# Make an example prediction
+
+# %%
+search.predict({"start": "2025-06-27T15:00:00", "end": None})
+
+    

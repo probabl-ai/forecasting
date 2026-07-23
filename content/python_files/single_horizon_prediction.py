@@ -137,7 +137,7 @@ hgbr_pipeline.describe_params()
 # the steps of the DAG using the following (once uncommented):
 
 # %%
-# hgbr_predictions.skb.full_report()
+hgbr_predictions.skb.full_report()
 
 # %% [markdown]
 #
@@ -356,48 +356,48 @@ plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
 ts_cv_2 = TimeSeriesSplit(
     n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
 )
-# randomized_search_hgbr = hgbr_predictions.skb.make_randomized_search(
-#     cv=ts_cv_2,
-#     scoring="r2",
-#     n_iter=100,
-#     fitted=True,
-#     verbose=1,
-#     n_jobs=-1,
-# )
+randomized_search_hgbr = hgbr_predictions.skb.make_randomized_search(
+     cv=ts_cv_2,
+     scoring="r2",
+     n_iter=100,
+     fitted=True,
+     verbose=1,
+     n_jobs=-1,
+ )
 
 # %%
-# randomized_search_hgbr.results_.round(3)
+randomized_search_hgbr.results_.round(3)
 
 # %%
-# fig = randomized_search_hgbr.plot_results().update_layout(margin=dict(l=200))
-# write_json(fig, "parallel_coordinates_hgbr.json")
+fig = randomized_search_hgbr.plot_results().update_layout(margin=dict(l=200))
+write_json(fig, "parallel_coordinates_hgbr.json")
 
 # %%
 fig = read_json("parallel_coordinates_hgbr.json")
 fig.update_layout(margin=dict(l=200))
 
 # %%
-# nested_cv_results = skrub.cross_validate(
-#     environment=hgbr_predictions.skb.get_data(),
-#     learner=randomized_search_hgbr,
-#     cv=ts_cv_5,
-#     scoring={
-#         "r2": get_scorer("r2"),
-#         "mape": make_scorer(mean_absolute_percentage_error),
-#     },
-#     n_jobs=-1,
-#     return_learner=True,
-# ).round(3)
-# nested_cv_results
+nested_cv_results = skrub.cross_validate(
+     environment=hgbr_predictions.skb.get_data(),
+     learner=randomized_search_hgbr,
+     cv=ts_cv_5,
+     scoring={
+         "r2": get_scorer("r2"),
+         "mape": make_scorer(mean_absolute_percentage_error),
+     },
+     n_jobs=-1,
+     return_learner=True,
+ ).round(3)
+nested_cv_results
 
 # %%
-# for outer_fold_idx in range(len(nested_cv_results)):
-#     print(
-#         nested_cv_results.loc[outer_fold_idx, "learner"]
-#         .results_.loc[:, "mean_test_score"]
-#         .round(3)
-#         .to_dict()
-#    )
+for outer_fold_idx in range(len(nested_cv_results)):
+     print(
+         nested_cv_results.loc[outer_fold_idx, "learner"]
+         .results_.loc[:, "mean_test_score"]
+         .round(3)
+         .to_dict()
+    )
 
 # %% [markdown]
 #
@@ -579,18 +579,18 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 # expensive, we are reloading the results of the parallel coordinates plot.
 
 # %%
-# randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
-#     cv=ts_cv_2,
-#     scoring="r2",
-#     n_iter=100,
-#     fitted=True,
-#     verbose=1,
-#     n_jobs=-1,
-# )
+randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
+     cv=ts_cv_2,
+     scoring="r2",
+     n_iter=100,
+     fitted=True,
+     verbose=1,
+     n_jobs=-1,
+ )
 
 # %%
-# fig = randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
-# write_json(fig, "parallel_coordinates_ridge.json")
+fig = randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
+write_json(fig, "parallel_coordinates_ridge.json")
 
 # %%
 fig = read_json("parallel_coordinates_ridge.json")
@@ -609,17 +609,19 @@ fig.update_layout(margin=dict(l=200))
 # computationally expensive.
 
 # %%
-# nested_cv_results_ridge = skrub.cross_validate(
-#     environment=predictions_ridge.skb.get_data(),
-#     learner=randomized_search_ridge,
-#     cv=ts_cv_5,
-#     scoring={
-#         "r2": get_scorer("r2"),
-#         "mape": make_scorer(mean_absolute_percentage_error),
-#     },
-#     n_jobs=-1,
-#     return_learner=True,
-# ).round(3)
+nested_cv_results_ridge = skrub.cross_validate(
+     environment=predictions_ridge.skb.get_data(),
+     learner=randomized_search_ridge,
+     cv=ts_cv_5,
+     scoring={
+         "r2": get_scorer("r2"),
+         "mape": make_scorer(mean_absolute_percentage_error),
+     },
+     n_jobs=-1,
+     return_learner=True,
+ ).round(3)
 
 # %%
-# nested_cv_results_ridge.round(3)
+nested_cv_results_ridge.round(3)
+
+# %%
