@@ -166,7 +166,7 @@ def get_regressor():
 pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(
     ["neg_mean_absolute_percentage_error", "r2"]
 )
-pred.skb.preview()
+pred
 
 # %%
 
@@ -401,7 +401,7 @@ predictions_ridge = features.skb.apply(
     ),
     y=y,
 ).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
-predictions_ridge.skb.preview()
+predictions_ridge
 
 # %% [markdown]
 #

@@ -107,7 +107,7 @@ range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
 
 prediction_time = skrub.deferred(time_range)(range_start, range_end)
-prediction_time.skb.preview()
+prediction_time
 
 # %% [markdown]
 #
@@ -190,11 +190,11 @@ def resample(electricity_history_data):
 raw_electricity_load_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
     "electricity_history_data"
 )()
-raw_electricity_load_history.skb.preview()
+raw_electricity_load_history
 
 # %%
 electricity_load_history = raw_electricity_load_history.skb.apply_func(resample)
-electricity_load_history.skb.preview()
+electricity_load_history
 
 # %% [markdown]
 #
@@ -261,10 +261,10 @@ EXAMPLE_TIME_HORIZON = 1
 X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON)
 X = X_y["X"].skb.mark_as_X()
 y = X_y["y"].skb.mark_as_y()
-X.skb.preview()
+X
 
 # %%
-y.skb.preview()
+y
 
 # %% [markdown]
 #
@@ -403,7 +403,7 @@ def add_calendar_and_holidays(target_time):
 # %%    
 
 with_target_time = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
-with_target_time.skb.preview()
+with_target_time
 
 # %% [markdown]
 #
@@ -423,7 +423,7 @@ with_target_time.skb.preview()
 with_lags = with_target_time.skb.apply_func(
     add_lagged_features, electricity_load_history, EXAMPLE_TIME_HORIZON
 )
-with_lags.skb.preview()
+with_lags
 
 # %% [markdown]
 #
@@ -459,7 +459,7 @@ with_weather = with_lags.skb.apply_func(
     temperature_only=temperature_only,
     city_weather_fetcher=city_weather_fetcher,
 )
-with_weather.skb.preview()
+with_weather
 
 # %%
 lag_window = with_lags.filter(
@@ -519,7 +519,7 @@ altair.Chart(weather_window).transform_fold(
 
 # %%
 with_calendar = with_weather.skb.apply_func(add_calendar_and_holidays)
-with_calendar.skb.preview()
+with_calendar
 
 # %%
 altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(

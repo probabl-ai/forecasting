@@ -80,7 +80,7 @@ TIME_HORIZONS = (1,12,24)
 features, y = feature_engineering_outputs(TIME_HORIZONS, cv_splitter=TimeSeriesSplitter())
 
 pred = make_multi_horizon_pred(features, y)
-pred.skb.preview()
+pred
 
 # %% [markdown]
 #
