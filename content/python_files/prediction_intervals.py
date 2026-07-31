@@ -12,14 +12,19 @@
 # %pip install -q skrub altair holidays plotly nbformat
 
 # %%
+from datetime import datetime
+import functools
+import re
 import warnings
 
 import altair
-import cloudpickle
+import skrub
 import numpy as np
-import pyarrow  # noqa: F401
 import polars as pl
-import tzdata  # noqa: F401
+
+import tutorial_helpers
+import importlib
+importlib.reload(tutorial_helpers)
 
 from tutorial_helpers import (
     binned_coverage,
@@ -29,20 +34,15 @@ from tutorial_helpers import (
     collect_cv_predictions,
 )
 
+
+from feature_engineering_lib import feature_engineering_outputs, time_range
+
+from next_horizon_prediction_lib import TimeSeriesSplitter
+from multiple_horizons_prediction_lib import make_multi_horizon_pred
+
+
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
-
-
-# %%
-with open("feature_engineering_pipeline.pkl", "rb") as f:
-    feature_engineering_pipeline = cloudpickle.load(f)
-
-
-features = feature_engineering_pipeline["features"]
-targets = feature_engineering_pipeline["targets"]
-prediction_time = feature_engineering_pipeline["prediction_time"]
-horizons = feature_engineering_pipeline["horizons"]
-target_column_name_pattern = feature_engineering_pipeline["target_column_name_pattern"]
 
 
 # %% [markdown]
@@ -52,185 +52,242 @@ target_column_name_pattern = feature_engineering_pipeline["target_column_name_pa
 # function to predict different quantiles and thus obtain an uncertainty quantification
 # of the predictions.
 #
-# In terms of evaluation, we reuse the R2 and MAPE scores. However, they are not helpful
+# In terms of evaluation, we reuse the MAPE score. However, they it is not helpful
 # to assess the reliability of quantile models. For this purpose, we use a derivate of
-# the metric minimize by those models: the pinball loss. We use the D2 score that is
+# the metric minimized by the quantile regressors: the pinball loss. We use the D2 score that is
 # easier to interpret since the best possible score is bounded by 1 and a score of 0
 # corresponds to constant predictions at the target quantile.
 
 # %%
-horizon_of_interest = horizons[-1]  # Focus on the 24-hour horizon
-target_column_name = target_column_name_pattern.format(horizon=horizon_of_interest)
-predicted_target_column_name = "predicted_" + target_column_name
-target = targets[target_column_name].skb.mark_as_y()
-target
-
-# %%
-from sklearn.metrics import get_scorer, make_scorer
 from sklearn.metrics import mean_absolute_percentage_error, d2_pinball_score
 
-scoring = {
-    "r2": get_scorer("r2"),
-    "mape": make_scorer(mean_absolute_percentage_error),
-    "d2_pinball_05": make_scorer(d2_pinball_score, alpha=0.05),
-    "d2_pinball_50": make_scorer(d2_pinball_score, alpha=0.50),
-    "d2_pinball_95": make_scorer(d2_pinball_score, alpha=0.95),
-}
+def split_by_quantile(pred):
+    quantile_cols = {}
+    for c in pred.columns:
+        quantile_cols.setdefault(c.split("__")[1], []).append(c)
+    return {
+        q: pred.select(cols).rename(lambda c: c.split("__")[0])
+        for q, cols in quantile_cols.items()
+    }
+
+def post_process(pred, prediction_time, range_end, quantile_regression):
+    if range_end is not None:
+        return pred
+    pred_time = prediction_time["time"].to_list()[0]
+    horizons, q = zip(
+        *(re.match(r"(\d+)h(?:__(q_.*))?", c).groups() for c in pred.columns)
+    )
+    date = [pred_time + datetime.timedelta(hours=int(h)) for h in horizons]
+    load = pred.row()
+    if not quantile_regression:
+        return pl.DataFrame({"time": date, "load_mw": load})
+    return pl.DataFrame({"time": date, "load_mw": load, "quantile": q}).pivot(
+        on="quantile", values="load_mw", maintain_order=True, sort_columns=False
+    )
+
+
+def neg_mape(y_true, y_pred, quantile_regression=False):
+    if quantile_regression:
+        quantile_predictions = split_by_quantile(y_pred)
+        scores = {}
+        for q, q_pred in quantile_predictions.items():
+            q_neg_mape = neg_mape(y_true, q_pred, quantile_regression=False)
+            scores.update({f"{k}__{q}": v for k, v in q_neg_mape.items()})
+            if q == "q_0.5":
+                # Pick the median if available for comparison with non-quantile
+                # models
+                scores.update(q_neg_mape)
+        return scores
+    average = mean_absolute_percentage_error(y_true, y_pred)
+    detail = mean_absolute_percentage_error(y_true, y_pred, multioutput="raw_values")
+    return {"neg_mape__average": -average} | {
+        f"neg_mape__{c}": -float(s) for c, s in zip(y_true.columns, detail)
+    }
+
+
+def neg_mape_scorer(estimator, X, y, quantile_regression=False):
+    return neg_mape(y, estimator.predict(X), quantile_regression=quantile_regression)
+
+
+def pinball(y_true, y_pred):
+    quantile_predictions = split_by_quantile(y_pred)
+    scores = {}
+    for q, q_pred in quantile_predictions.items():
+        scores[f"d2_pinball_score__average__{q}"] = d2_pinball_score(
+            y_true, q_pred, alpha=float(q.removeprefix("q_"))
+        )
+        detail = d2_pinball_score(y_true, q_pred, multioutput="raw_values")
+        scores.update(
+            {
+                f"d2_pinball_score__{c}__{q}": float(s)
+                for c, s in zip(y_true.columns, detail)
+            }
+        )
+    return scores
+
+
+def pinball_scorer(estimator, X, y):
+    return pinball(y, estimator.predict(X))
+
+# %%
+# We focus on the 24 hour horison for the quantile regression models.
+TIME_HORIZONS = (1,12,24) 
+range_start = skrub.var("start", "2021-03-23")
+range_end = skrub.var("end",  "2025-05-31")
+features_24_horizons, y_24_horizons = feature_engineering_outputs(TIME_HORIZONS, TimeSeriesSplitter())
+prediction_time = skrub.deferred(time_range)(range_start, range_end)
 
 # %% [markdown]
 #
-# We know define three different models:
+# We follow a multiple regressor approach and define separate 
+# models per quantile as follows:
 #
 # - a model predicting the 5th percentile of the load
 # - a model predicting the median of the load
 # - a model predicting the 95th percentile of the load
-
-# %%
-from sklearn.ensemble import HistGradientBoostingRegressor
-
-
-common_params = dict(
-    loss="quantile", learning_rate=0.1, max_leaf_nodes=100, random_state=0
-)
-predictions_hgbr_05 = features.skb.apply(
-    HistGradientBoostingRegressor(**common_params, quantile=0.05),
-    y=target,
-)
-predictions_hgbr_50 = features.skb.apply(
-    HistGradientBoostingRegressor(**common_params, quantile=0.5),
-    y=target,
-)
-predictions_hgbr_95 = features.skb.apply(
-    HistGradientBoostingRegressor(**common_params, quantile=0.95),
-    y=target,
-)
-
-# %% [markdown]
-#
-# ### Evaluation via cross-validation
-#
+# 
 # We evaluate the performance of the quantile regressors via cross-validation.
 
 # %%
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.base import BaseEstimator, RegressorMixin
+
+class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
+    def __init__(self, quantiles=(0.05, 0.5, 0.95), hgb_params=None):
+        self.quantiles = quantiles
+        self.hgb_params = hgb_params
+
+    def fit(self, X, y):
+        params = (self.hgb_params or {}) | {"loss": "quantile"}
+        self.estimators_ = {
+            q: HistGradientBoostingRegressor(quantile=q, **params).fit(X, y)
+            for q in self.quantiles
+        }
+        return self
+
+    def predict(self, X):
+        return pl.DataFrame({f"q_{q}": e.predict(X) for q, e in self.estimators_.items()})
 
 
-max_train_size = 2 * 52 * 24 * 7  # max ~2 years of training data
-test_size = 24 * 7 * 24  # 24 weeks of test data
-gap = 7 * 24  # 1 week gap between train and test sets
-ts_cv_5 = TimeSeriesSplit(
-    n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap
+quantiles=(0.05, 0.5, 0.95)
+
+quantiles_to_predict = skrub.as_data_op(quantiles).skb.set_name("quantiles")
+learning_rate = skrub.choose_float(
+    0.01, 0.7, default=0.1, log=True, name="learning_rate"
+)
+max_leaf_nodes = skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes")
+hgb_params = dict(
+    random_state=0,
+    learning_rate=learning_rate,
+    max_leaf_nodes=max_leaf_nodes,
 )
 
-# %%
-cv_results_hgbr_05 = predictions_hgbr_05.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring=scoring,
-    return_learner=True,
-    verbose=1,
-    n_jobs=-1,
-)
-cv_results_hgbr_50 = predictions_hgbr_50.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring=scoring,
-    return_learner=True,
-    verbose=1,
-    n_jobs=-1,
-)
-cv_results_hgbr_95 = predictions_hgbr_95.skb.cross_validate(
-    cv=ts_cv_5,
-    scoring=scoring,
-    return_learner=True,
-    verbose=1,
-    n_jobs=-1,
-)
+hgb_q_regressor = HGBQuantileRegressor(quantiles=quantiles, hgb_params=hgb_params)
 
+pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons, regressor=hgb_q_regressor, quantile_regression=True).skb.apply_func(
+            post_process,
+            prediction_time,
+            range_end,
+            quantile_regression=True,
+        ).skb.with_scoring(
+            functools.partial(neg_mape_scorer, quantile_regression=True)
+        ).skb.with_scoring(pinball_scorer)
 # %% [markdown]
 #
 # Let's first collect all the cross-validated predictions to make further inspection.
 
 # %%
-cv_predictions_hgbr_05 = collect_cv_predictions(
-    cv_results_hgbr_05["learner"], ts_cv_5, predictions_hgbr_05, prediction_time
-)
-cv_predictions_hgbr_50 = collect_cv_predictions(
-    cv_results_hgbr_50["learner"], ts_cv_5, predictions_hgbr_50, prediction_time
-)
-cv_predictions_hgbr_95 = collect_cv_predictions(
-    cv_results_hgbr_95["learner"], ts_cv_5, predictions_hgbr_95, prediction_time
-)
-
-# %% [markdown]
-#
-# Now, let's make a plot of the predictions for each model and thus we need to gather
-# all the predictions in a single dataframe.
-
-# %%
-results = pl.concat(
-    [
-        cv_predictions_hgbr_05[0].rename({"predicted_load_mw": "predicted_load_mw_05"}),
-        cv_predictions_hgbr_50[0].select("predicted_load_mw").rename(
-            {"predicted_load_mw": "predicted_load_mw_50"}
-        ),
-        cv_predictions_hgbr_95[0].select("predicted_load_mw").rename(
-            {"predicted_load_mw": "predicted_load_mw_95"}
-        ),
-    ],
-    how="horizontal",
-).tail(24 * 10)
-
-# %% [markdown]
-#
-# Now, we plot the observed values and the predicted median with a line. In addition,
-# we plot the 5th and 95th percentiles as a shaded area. It means that between those
-# two bounds, we expect to find 90% of the observed values.
-#
-# We plot this information on a portion of the test data from the first fold of the
-# cross-validation.
-
-# %%
-median_chart = (
-    altair.Chart(results)
-    .transform_fold(["load_mw", "predicted_load_mw_50"])
-    .mark_line(tooltip=True)
-    .encode(x="prediction_time:T", y="value:Q", color="key:N")
-)
-
-# Add a column for the band legend
-results_with_band = results.with_columns(pl.lit("90% interval").alias("band_type"))
-
-quantile_band_chart = (
-    altair.Chart(results_with_band)
-    .mark_area(opacity=0.4, tooltip=True)
-    .encode(
-        x="prediction_time:T",
-        y="predicted_load_mw_05:Q",
-        y2="predicted_load_mw_95:Q",
-        color=altair.Color("band_type:N", scale=altair.Scale(range=["lightgreen"])),
+def concat_X_y_predictions(X_test, y_test, prediction):
+    return pl.concat(
+        [
+            X_test,
+            y_test,
+            prediction.rename("pred_{}".format),
+        ],
+        how="horizontal",
     )
-)
 
-combined_chart = quantile_band_chart + median_chart
-combined_chart.resolve_scale(color="independent").interactive()
+def cross_val_predict(data_op, environment=None):
+    """
+    Get cross-validated predictions for different horizons.
+    """
+    all_predictions, all_scores = [], []
+    for i, split in enumerate(data_op.skb.iter_cv_splits(environment=environment)):
+        learner = data_op.skb.make_learner().fit(split["train"])
+        prediction = learner.predict(split["test"])
+        all_predictions.append(
+            concat_X_y_predictions(
+                split["X_test"], split["y_test"], prediction
+            ).with_columns(split=pl.lit(i)),
+        )
+        score = learner.score(split["test"])
+        print(split["X_test"]["prediction_time"].min().isoformat())
+        print(score)
+        all_scores.append(score | {"split": i})
+    all_predictions = pl.concat(all_predictions, how="vertical")
+    all_scores = pl.DataFrame(all_scores)
+    return all_predictions, all_scores
+
+cv_predictions_hgbr = cross_val_predict(pred_24_horizons, 
+                                        environment={"start": "2023-01-01", "end": "2025-05-31"})
 
 # %% [markdown]
-#
-# Now, we can inspect the cross-validated metrics for each model.
+# Now, we can inspect the cross-validated predictions and plot them for the different quantiles.
 
 # %%
-cv_results_hgbr_05[
-    [col for col in cv_results_hgbr_05.columns if col.startswith("test_")]
-].mean(axis=0).round(3)
+import plotly.graph_objects as go
+from datetime import UTC, timedelta
+def plot_predictions(results, horizons=None, start="2025-03-01"):
+    if start is not None:
+        results = results.filter(
+            pl.col("prediction_time")
+            > datetime.fromisoformat(start).replace(tzinfo=UTC)
+        )
+    if horizons is None:
+        horizons = sorted(
+            {
+                int(m.group(1))
+                for c in results.columns
+                if (m := re.match(r"^pred_(\d+)h.*$", c)) is not None
+            }
+        )
+    fig = go.Figure()
+    for i, h in enumerate(horizons):
+        target_time = (results["prediction_time"] + timedelta(hours=h)).to_list()
+        if not i:
+            fig.add_trace(
+                go.Scatter(
+                    x=target_time,
+                    y=results[f"{h}h"].to_list(),
+                    mode="lines+markers",
+                    line={"dash": "dash"},
+                    name="true_load_mw",
+                    hovertemplate="%{x|%Y-%m-%d} (%{x|%A}): %{y}<extra></extra>",
+                )
+            )
+        for col in filter(lambda c: f"pred_{h}h" in c, results.columns):
+            fig.add_trace(
+                go.Scatter(
+                    x=target_time,
+                    y=results[col].to_list(),
+                    mode="lines+markers",
+                    name=col,
+                    hovertemplate="%{x|%Y-%m-%d} (%{x|%A}): %{y}<extra></extra>",
+                )
+            )
+    fig.update_layout(height=600, title=f"CV predicted load mw")
+    return fig
+
+plot_predictions(cv_predictions_hgbr[0], horizons=[1, 12, 24], start="2023-01-01").show()
+
+# %% [markdown]
+# Now, let's collect the cross-validated predictions and plot the residual vs predicted
+# values for the different models into a report.
 
 # %%
-cv_results_hgbr_50[
-    [col for col in cv_results_hgbr_50.columns if col.startswith("test_")]
-].mean(axis=0).round(3)
+cv_predictions_hgbr[0].head(5)  
 
-# %%
-cv_results_hgbr_95[
-    [col for col in cv_results_hgbr_95.columns if col.startswith("test_")]
-].mean(axis=0).round(3)
+
 
 # %% [markdown]
 #
@@ -243,7 +300,7 @@ cv_results_hgbr_95[
 # values for the different models.
 
 # %%
-plot_residuals_vs_predicted(cv_predictions_hgbr_05).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr[0],1,quantile=0.05).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions"
         " for quantile 0.05"
@@ -251,12 +308,12 @@ plot_residuals_vs_predicted(cv_predictions_hgbr_05).interactive().properties(
 )
 
 # %%
-plot_residuals_vs_predicted(cv_predictions_hgbr_50).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr[0],1,quantile=0.5).interactive().properties(
     title=("Residuals vs Predicted Values from cross-validation predictions for median")
 )
 
 # %%
-plot_residuals_vs_predicted(cv_predictions_hgbr_95).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr[0],1,quantile=0.95).interactive().properties(
     title=(
         "Residuals vs Predicted Values from cross-validation predictions"
         " for quantile 0.95"
@@ -269,135 +326,43 @@ plot_residuals_vs_predicted(cv_predictions_hgbr_95).interactive().properties(
 # for the median model while not centered and biased for the 5th and 95th percentiles
 # models.
 #
-# Note that we could obtain similar plots using scikit-learn's `PredictionErrorDisplay`.
-# This display allows to also plot the observed values vs predicted values as well.
-
-# %%
-cv_predictions_hgbr_05_concat = pl.concat(cv_predictions_hgbr_05, how="vertical")
-cv_predictions_hgbr_50_concat = pl.concat(cv_predictions_hgbr_50, how="vertical")
-cv_predictions_hgbr_95_concat = pl.concat(cv_predictions_hgbr_95, how="vertical")
-
-# %%
-import matplotlib.pyplot as plt
-from sklearn.metrics import PredictionErrorDisplay
-
-
-for kind in ["actual_vs_predicted", "residual_vs_predicted"]:
-    fig, axs = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
-
-    PredictionErrorDisplay.from_predictions(
-        y_true=cv_predictions_hgbr_05_concat["load_mw"].to_numpy(),
-        y_pred=cv_predictions_hgbr_05_concat["predicted_load_mw"].to_numpy(),
-        kind=kind,
-        ax=axs[0],
-    )
-    axs[0].set_title("0.05 quantile regression")
-
-    PredictionErrorDisplay.from_predictions(
-        y_true=cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
-        y_pred=cv_predictions_hgbr_50_concat["predicted_load_mw"].to_numpy(),
-        kind=kind,
-        ax=axs[1],
-    )
-    axs[1].set_title("Median regression")
-
-    PredictionErrorDisplay.from_predictions(
-        y_true=cv_predictions_hgbr_95_concat["load_mw"].to_numpy(),
-        y_pred=cv_predictions_hgbr_95_concat["predicted_load_mw"].to_numpy(),
-        kind=kind,
-        ax=axs[2],
-    )
-    axs[2].set_title("0.95 quantile regression")
-
-    fig.suptitle(f"{kind} for GBRT minimzing different quantile losses")
-
 # %% [markdown]
-#
-# Those plots carry the same information than the previous ones.
-#
 # Now, we assess if the actual coverage of the models is close to the target coverage of
 # 90%. In addition, we compute the average width of the bands.
 
 
 # %%
-def coverage(y_true, y_quantile_low, y_quantile_high):
-    y_true = np.asarray(y_true)
-    y_quantile_low = np.asarray(y_quantile_low)
-    y_quantile_high = np.asarray(y_quantile_high)
-    return float(
-        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high)
-        .mean()
-        .round(4)
+from tutorial_helpers import coverage, binned_coverage
+import altair
+
+preds = cv_predictions_hgbr[0]
+horizon = 1
+
+# --- Overall coverage per fold ---
+for (split_idx,), fold_df in preds.group_by("split", maintain_order=True):
+    cov = coverage(
+        fold_df[f"{horizon}h"].to_numpy(),
+        fold_df[f"pred_{horizon}h__q_0.05"].to_numpy(),
+        fold_df[f"pred_{horizon}h__q_0.95"].to_numpy(),
     )
+    print(f"Split {split_idx}: {cov:.1%} coverage (90% interval)")
 
-
-def mean_width(y_true, y_quantile_low, y_quantile_high):
-    y_true = np.asarray(y_true)
-    y_quantile_low = np.asarray(y_quantile_low)
-    y_quantile_high = np.asarray(y_quantile_high)
-    return float(np.abs(y_quantile_high - y_quantile_low).mean().round(1))
-
-
-# %%
-coverage(
-    cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
-    cv_predictions_hgbr_05_concat["predicted_load_mw"].to_numpy(),
-    cv_predictions_hgbr_95_concat["predicted_load_mw"].to_numpy(),
+# --- Binned coverage plot ---
+folds = [
+    fold_df
+    for (_, ), fold_df in preds.group_by("split", maintain_order=True)
+]
+binned = binned_coverage(
+    y_true_folds=[f[f"{horizon}h"].to_numpy() for f in folds],
+    y_quantile_low=[f[f"pred_{horizon}h__q_0.05"].to_numpy() for f in folds],
+    y_quantile_high=[f[f"pred_{horizon}h__q_0.95"].to_numpy() for f in folds],
 )
 
-# %% [markdown]
-#
-# We see that the obtained coverage (~77%) on the cross-validated predictions is much
-# lower than the target coverage of 90%. It means that the pair of regressors is not
-# jointly calibrated to estimate the 90% interval.
-
-# %%
-mean_width(
-    cv_predictions_hgbr_50_concat["load_mw"].to_numpy(),
-    cv_predictions_hgbr_05_concat["predicted_load_mw"].to_numpy(),
-    cv_predictions_hgbr_95_concat["predicted_load_mw"].to_numpy(),
-)
-
-# %% [markdown]
-#
-# In terms of interpretable measure, the mean width provides a measure in the original
-# unit of the target variable in MW that is ~5,100 MW.
-#
-# We can go a bit further and bin the cross-validated predictions and check if some
-# specific bins show a better or worse coverage.
-
-# %%
-binned_coverage_results = binned_coverage(
-    [df["load_mw"].to_numpy() for df in cv_predictions_hgbr_50],
-    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_hgbr_05],
-    [df["predicted_load_mw"].to_numpy() for df in cv_predictions_hgbr_95],
-    n_bins=10,
-)
-binned_coverage_results
-
-# %% [markdown]
-#
-# Let's make a plot to check those data visually.
-
-# %%
-coverage_by_bin = binned_coverage_results.copy()
-coverage_by_bin["bin_label"] = coverage_by_bin.apply(
-    lambda row: f"[{row.bin_left:.0f}, {row.bin_right:.0f}]", axis=1
-)
-
-# %%
-ax = coverage_by_bin.boxplot(column="coverage", by="bin_label", whis=1000)
-ax.axhline(y=0.9, color="red", linestyle="--", label="Target coverage (0.9)")
-ax.set(
-    xlabel="Load bins (MW)",
-    ylabel="Coverage",
-    title="Coverage Distribution by Load Bins",
-)
-ax.set_title("Coverage Distribution by Load Bins")
-ax.legend()
-plt.suptitle("")  # Remove automatic suptitle from boxplot
-_ = plt.xticks(rotation=45)
-
+altair.Chart(binned).mark_line(point=True).encode(
+    x=altair.X("bin_center:Q", title="True load (MW)"),
+    y=altair.Y("coverage:Q", title="Coverage", scale=altair.Scale(domain=[0, 1])),
+    color=altair.Color("fold_idx:N"),
+).properties(title=f"Binned coverage — {horizon}h horizon, 90% interval")
 # %% [markdown]
 #
 # We observe that the lower and higher bins, so low and high load, have the worse
@@ -407,37 +372,37 @@ _ = plt.xticks(rotation=45)
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_hgbr_50, kind="quantile", quantile_level=0.50
+    cv_predictions_hgbr[0], 1, forecast_quantile=0.50
 ).interactive().properties(
     title="Reliability diagram for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_hgbr_05, kind="quantile", quantile_level=0.05
+    cv_predictions_hgbr[0], 1, forecast_quantile=0.05
 ).interactive().properties(
     title="Reliability diagram for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_hgbr_95, kind="quantile", quantile_level=0.95
+    cv_predictions_hgbr[0], 1, forecast_quantile=0.95
 ).interactive().properties(
     title="Reliability diagram for quantile 0.95 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_hgbr_50).interactive().properties(
+plot_lorenz_curve(cv_predictions_hgbr[0], 1, quantile=0.50).interactive().properties(
     title="Lorenz curve for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_hgbr_05).interactive().properties(
+plot_lorenz_curve(cv_predictions_hgbr[0], 1, quantile=0.05).interactive().properties(
     title="Lorenz curve for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_hgbr_95).interactive().properties(
+plot_lorenz_curve(cv_predictions_hgbr[0], 1, quantile=0.95).interactive().properties(
     title="Lorenz curve for quantile 0.95 from cross-validation predictions"
 )
 
@@ -476,7 +441,7 @@ plot_lorenz_curve(cv_predictions_hgbr_95).interactive().properties(
 
 # %%
 from scipy.interpolate import interp1d
-from sklearn.base import BaseEstimator, RegressorMixin, clone
+from sklearn.base import clone
 from sklearn.utils.validation import check_is_fitted
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import KBinsDiscretizer
@@ -491,11 +456,13 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
         estimator=None,
         n_bins=100,
         quantile=0.5,
+        quantiles=None,
         random_state=None,
     ):
         self.n_bins = n_bins
         self.estimator = estimator
         self.quantile = quantile
+        self.quantiles = quantiles
         self.random_state = random_state
 
     def fit(self, X, y):
@@ -550,6 +517,11 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
         return np.asarray([interp1d(y_cdf_i, edges)(quantiles) for y_cdf_i in y_cdf])
 
     def predict(self, X):
+        if self.quantiles is not None:
+            preds = self.predict_quantiles(X, quantiles=self.quantiles)
+            return pl.DataFrame(
+                {f"q_{q}": preds[:, i] for i, q in enumerate(self.quantiles)}
+            )
         return self.predict_quantiles(X, quantiles=(self.quantile,)).ravel()
 
 
@@ -564,96 +536,84 @@ bqr = BinnedQuantileRegressor(
         random_state=0,
     ),
     n_bins=30,
+    quantiles=quantiles,
 )
 bqr
 
 # %%
 from sklearn.model_selection import cross_validate
+def limit_train_size(df, size=9000, mode=skrub.eval_mode()):
+    if mode in ("fit", "fit_transform", "preview"):
+        return df.tail(size)
+    else:
+        return df
 
-X, y = features.skb.eval(), target.skb.eval()
+# We limit the training size and only predict the next 1 hour horizon for the quantile regression models.
+features = {1: features_24_horizons[1].skb.apply_func(limit_train_size)}
+y = y_24_horizons.skb.apply_func(limit_train_size)
 
-cv_results_bqr = cross_validate(
-    bqr,
-    X,
-    y,
-    cv=ts_cv_5,
-    scoring={
-        "d2_pinball_50": make_scorer(d2_pinball_score, alpha=0.5),
-    },
-    return_estimator=True,
-    return_indices=True,
-    verbose=1,
-    n_jobs=-1,
-)
+pred_24_horizons = make_multi_horizon_pred(features, y, regressor=bqr, quantile_regression=True).skb.apply_func(
+            post_process,
+            prediction_time,
+            range_end,
+            quantile_regression=True,
+        ).skb.with_scoring(
+            functools.partial(neg_mape_scorer, quantile_regression=True)
+        ).skb.with_scoring(pinball_scorer)
+cv_predictions_bqr = cross_val_predict(pred_24_horizons, 
+                                        environment={"start": "2023-01-01", "end": "2025-05-31"})
 
 # %%
-cv_predictions_bqr_all = [
-    cv_predictions_bqr_05 := [],
-    cv_predictions_bqr_50 := [],
-    cv_predictions_bqr_95 := [],
+preds = cv_predictions_bqr[0]
+horizon = 1
+
+# --- Overall coverage per fold ---
+for (split_idx,), fold_df in preds.group_by("split", maintain_order=True):
+    cov = coverage(
+        fold_df[f"{horizon}h"].to_numpy(),
+        fold_df[f"pred_{horizon}h__q_0.05"].to_numpy(),
+        fold_df[f"pred_{horizon}h__q_0.95"].to_numpy(),
+    )
+    print(f"Split {split_idx}: {cov:.1%} coverage (90% interval)")
+
+# --- Binned coverage plot ---
+folds = [
+    fold_df
+    for (_, ), fold_df in preds.group_by("split", maintain_order=True)
 ]
-for fold_ix, (qreg, test_idx) in enumerate(
-    zip(cv_results_bqr["estimator"], cv_results_bqr["indices"]["test"])
-):
-    print(f"CV iteration #{fold_ix}")
-    print(f"Test set size: {test_idx.shape[0]} rows")
-    print(
-        f"Test time range: {prediction_time.skb.eval()[test_idx][0, 0]} to "
-        f"{prediction_time.skb.eval()[test_idx][-1, 0]} "
-    )
-    y_pred_all_quantiles = qreg.predict_quantiles(X[test_idx], quantiles=quantiles)
+binned = binned_coverage(
+    y_true_folds=[f[f"{horizon}h"].to_numpy() for f in folds],
+    y_quantile_low=[f[f"pred_{horizon}h__q_0.05"].to_numpy() for f in folds],
+    y_quantile_high=[f[f"pred_{horizon}h__q_0.95"].to_numpy() for f in folds],
+)
 
-    coverage_score = coverage(
-        y[test_idx],
-        y_pred_all_quantiles[:, 0],
-        y_pred_all_quantiles[:, 2],
-    )
-    print(f"Coverage: {coverage_score:.3f}")
+altair.Chart(binned).mark_line(point=True).encode(
+    x=altair.X("bin_center:Q", title="True load (MW)"),
+    y=altair.Y("coverage:Q", title="Coverage", scale=altair.Scale(domain=[0, 1])),
+    color=altair.Color("fold_idx:N"),
+).properties(title=f"Binned coverage — {horizon}h horizon, 90% interval")
 
-    mean_width_score = mean_width(
-        y[test_idx],
-        y_pred_all_quantiles[:, 0],
-        y_pred_all_quantiles[:, 2],
-    )
-    print(f"Mean prediction interval width: " f"{mean_width_score:.1f} MW")
-
-    for q_idx, (quantile, predictions) in enumerate(
-        zip(quantiles, cv_predictions_bqr_all)
-    ):
-        observed = y[test_idx]
-        predicted = y_pred_all_quantiles[:, q_idx]
-        predictions.append(
-            pl.DataFrame(
-                {
-                    "prediction_time": prediction_time.skb.eval()[test_idx],
-                    "load_mw": observed,
-                    "predicted_load_mw": predicted,
-                }
-            )
-        )
-        print(f"d2_pinball score: {d2_pinball_score(observed, predicted):.3f}")
-    print()
 
 # %% [markdown
 # Let's assess the calibration of the quantile regression model:
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_bqr_50, kind="quantile", quantile_level=0.50
+    cv_predictions_bqr, 1, forecast_quantile=0.50
 ).interactive().properties(
     title="Reliability diagram for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_bqr_05, kind="quantile", quantile_level=0.05
+    cv_predictions_bqr, 1, forecast_quantile=0.05
 ).interactive().properties(
     title="Reliability diagram for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_bqr_95, kind="quantile", quantile_level=0.95
+    cv_predictions_bqr, 1, forecast_quantile=0.95
 ).interactive().properties(
     title="Reliability diagram for quantile 0.95 from cross-validation predictions"
 )
@@ -664,16 +624,16 @@ plot_reliability_diagram(
 # the ranking power of the predictions, irrespective of their absolute values.
 
 # %%
-plot_lorenz_curve(cv_predictions_bqr_50).interactive().properties(
+plot_lorenz_curve(cv_predictions_bqr, 1, quantile=0.50).interactive().properties(
     title="Lorenz curve for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_bqr_05).interactive().properties(
+plot_lorenz_curve(cv_predictions_bqr, 1, quantile=0.05).interactive().properties(
     title="Lorenz curve for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_bqr_95).interactive().properties(
+plot_lorenz_curve(cv_predictions_bqr, 1, quantile=0.95).interactive().properties(
     title="Lorenz curve for quantile 0.95 from cross-validation predictions"
 )
