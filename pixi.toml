@@ -55,8 +55,8 @@ create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
 scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
 copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
 copy-parallel-coordinates-plots = { cmd = "cp ./content/python_files/*.json ./content/notebooks/", depends-on = ["create-notebooks-dir"] }
-convert-to-notebooks = { cmd = "python utils/convert_to_notebooks.py --exclude prediction_intervals.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
-convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute --exclude prediction_intervals.py --exclude single_horizon_prediction.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
+convert-to-notebooks = { cmd = "python utils/convert_to_notebooks.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
+convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute --exclude single_horizon_prediction.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
 build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
 build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
 serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }

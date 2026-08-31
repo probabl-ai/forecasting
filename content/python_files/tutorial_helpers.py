@@ -241,7 +241,7 @@ def plot_reliability_diagram(
 
         mean_per_bins = (
             cv_predictions_i.group_by(
-                pl.col(pred_col).qcut(np.linspace(0, 1, n_bins))
+                pl.col(pred_col).qcut(np.linspace(0, 1, n_bins), allow_duplicates=True)
             )
             .agg(
                 [

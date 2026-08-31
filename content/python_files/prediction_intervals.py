@@ -455,14 +455,12 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
         self,
         estimator=None,
         n_bins=100,
-        quantile=0.5,
-        quantiles=None,
+        default_quantiles=(0.05, 0.5, 0.95),
         random_state=None,
     ):
         self.n_bins = n_bins
         self.estimator = estimator
-        self.quantile = quantile
-        self.quantiles = quantiles
+        self.default_quantiles = default_quantiles
         self.random_state = random_state
 
     def fit(self, X, y):
@@ -494,7 +492,9 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
         self.estimator_ = estimator.fit(X, y_binned)
         return self
 
-    def predict_quantiles(self, X, quantiles=(0.05, 0.5, 0.95)):
+    def predict(self, X, quantiles=None):
+        if quantiles is None:
+            quantiles = self.default_quantiles
         check_is_fitted(self, "estimator_")
         edges = self.target_binner_.bin_edges_[0]
         n_bins = edges.shape[0] - 1
@@ -514,16 +514,8 @@ class BinnedQuantileRegressor(BaseEstimator, RegressorMixin):
         # probabilities to continuous prediction.
         y_cdf = np.zeros(shape=(X.shape[0], edges.shape[0]))
         y_cdf[:, 1:] = np.cumsum(y_proba, axis=1)
-        return np.asarray([interp1d(y_cdf_i, edges)(quantiles) for y_cdf_i in y_cdf])
-
-    def predict(self, X):
-        if self.quantiles is not None:
-            preds = self.predict_quantiles(X, quantiles=self.quantiles)
-            return pl.DataFrame(
-                {f"q_{q}": preds[:, i] for i, q in enumerate(self.quantiles)}
-            )
-        return self.predict_quantiles(X, quantiles=(self.quantile,)).ravel()
-
+        result = np.asarray([interp1d(y_cdf_i, edges)(quantiles) for y_cdf_i in y_cdf])
+        return pl.DataFrame(result, schema=[f"q_{q}" for q in quantiles])
 
 # %%
 quantiles = (0.05, 0.5, 0.95)
@@ -536,7 +528,6 @@ bqr = BinnedQuantileRegressor(
         random_state=0,
     ),
     n_bins=30,
-    quantiles=quantiles,
 )
 bqr
 
@@ -548,8 +539,8 @@ def limit_train_size(df, size=9000, mode=skrub.eval_mode()):
     else:
         return df
 
-# We limit the training size and only predict the next 1 hour horizon for the quantile regression models.
-features = {1: features_24_horizons[1].skb.apply_func(limit_train_size)}
+# We limit the training size and predict all three horizons for the BQR model.
+features = {h: features_24_horizons[h].skb.apply_func(limit_train_size) for h in TIME_HORIZONS}
 y = y_24_horizons.skb.apply_func(limit_train_size)
 
 pred_24_horizons = make_multi_horizon_pred(features, y, regressor=bqr, quantile_regression=True).skb.apply_func(
@@ -594,26 +585,26 @@ altair.Chart(binned).mark_line(point=True).encode(
 ).properties(title=f"Binned coverage — {horizon}h horizon, 90% interval")
 
 
-# %% [markdown
+# %% [markdown]
 # Let's assess the calibration of the quantile regression model:
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_bqr, 1, forecast_quantile=0.50
+    cv_predictions_bqr[0], 1, forecast_quantile=0.50
 ).interactive().properties(
     title="Reliability diagram for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_bqr, 1, forecast_quantile=0.05
+    cv_predictions_bqr[0], 1, forecast_quantile=0.05
 ).interactive().properties(
     title="Reliability diagram for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
 plot_reliability_diagram(
-    cv_predictions_bqr, 1, forecast_quantile=0.95
+    cv_predictions_bqr[0], 1, forecast_quantile=0.95
 ).interactive().properties(
     title="Reliability diagram for quantile 0.95 from cross-validation predictions"
 )
@@ -624,16 +615,18 @@ plot_reliability_diagram(
 # the ranking power of the predictions, irrespective of their absolute values.
 
 # %%
-plot_lorenz_curve(cv_predictions_bqr, 1, quantile=0.50).interactive().properties(
+plot_lorenz_curve(cv_predictions_bqr[0], 1, quantile=0.50).interactive().properties(
     title="Lorenz curve for quantile 0.50 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_bqr, 1, quantile=0.05).interactive().properties(
+plot_lorenz_curve(cv_predictions_bqr[0], 1, quantile=0.05).interactive().properties(
     title="Lorenz curve for quantile 0.05 from cross-validation predictions"
 )
 
 # %%
-plot_lorenz_curve(cv_predictions_bqr, 1, quantile=0.95).interactive().properties(
+plot_lorenz_curve(cv_predictions_bqr[0], 1, quantile=0.95).interactive().properties(
     title="Lorenz curve for quantile 0.95 from cross-validation predictions"
 )
+
+# %%
