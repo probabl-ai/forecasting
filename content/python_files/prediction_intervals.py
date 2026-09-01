@@ -38,7 +38,6 @@ from tutorial_helpers import (
 from feature_engineering_lib import feature_engineering_outputs, time_range
 
 from next_horizon_prediction_lib import TimeSeriesSplitter
-from multiple_horizons_prediction_lib import make_multi_horizon_pred
 
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
@@ -69,21 +68,6 @@ def split_by_quantile(pred):
         q: pred.select(cols).rename(lambda c: c.split("__")[0])
         for q, cols in quantile_cols.items()
     }
-
-def post_process(pred, prediction_time, range_end, quantile_regression):
-    if range_end is not None:
-        return pred
-    pred_time = prediction_time["time"].to_list()[0]
-    horizons, q = zip(
-        *(re.match(r"(\d+)h(?:__(q_.*))?", c).groups() for c in pred.columns)
-    )
-    date = [pred_time + datetime.timedelta(hours=int(h)) for h in horizons]
-    load = pred.row()
-    if not quantile_regression:
-        return pl.DataFrame({"time": date, "load_mw": load})
-    return pl.DataFrame({"time": date, "load_mw": load, "quantile": q}).pivot(
-        on="quantile", values="load_mw", maintain_order=True, sort_columns=False
-    )
 
 
 def neg_mape(y_true, y_pred, quantile_regression=False):
@@ -130,12 +114,8 @@ def pinball_scorer(estimator, X, y):
     return pinball(y, estimator.predict(X))
 
 # %%
-# We focus on the 24 hour horison for the quantile regression models.
-TIME_HORIZONS = (1,12,24) 
-range_start = skrub.var("start", "2021-03-23")
-range_end = skrub.var("end",  "2025-05-31")
-features_24_horizons, y_24_horizons = feature_engineering_outputs(TIME_HORIZONS, TimeSeriesSplitter())
-prediction_time = skrub.deferred(time_range)(range_start, range_end)
+TIME_HORIZONS = (1,12,24)
+features, y = feature_engineering_outputs(TIME_HORIZONS, TimeSeriesSplitter())
 
 # %% [markdown]
 #
@@ -166,12 +146,13 @@ class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
         return self
 
     def predict(self, X):
-        return pl.DataFrame({f"q_{q}": e.predict(X) for q, e in self.estimators_.items()})
+        result = np.asarray([e.predict(X) for e in self.estimators_.values()])
+        result.sort(axis=0)
+        return pl.DataFrame(result, schema=[f"q_{q}" for q in self.quantiles_])
 
 
 quantiles=(0.05, 0.5, 0.95)
 
-quantiles_to_predict = skrub.as_data_op(quantiles).skb.set_name("quantiles")
 learning_rate = skrub.choose_float(
     0.01, 0.7, default=0.1, log=True, name="learning_rate"
 )
@@ -184,12 +165,33 @@ hgb_params = dict(
 
 hgb_q_regressor = HGBQuantileRegressor(quantiles=quantiles, hgb_params=hgb_params)
 
-pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons, regressor=hgb_q_regressor, quantile_regression=True).skb.apply_func(
-            post_process,
-            prediction_time,
-            range_end,
-            quantile_regression=True,
-        ).skb.with_scoring(
+# %%
+def concat_horizons(all_pred, mode=skrub.eval_mode()):
+    """
+    Consolidate predictions of models for different horizons in one dataframe.
+    """
+    if mode == "fit":
+        return all_pred
+    return pl.concat(
+        [v.rename(f"{h}h__{{}}".format) for h, v in all_pred.items()], how="horizontal"
+    )
+
+def make_multi_horizon_pred(features, y, regressor):
+    """
+    Create a full DataOp for predicting the specified horizons.
+    """
+    predictions = {
+        h: feat.skb.drop(["prediction_time", "target_time"])
+        .skb.apply(regressor, y=y[f"{h}h"])
+        .skb.set_name(f"pred_{h}h")
+        for h, feat in features.items()
+    }
+    return skrub.deferred(concat_horizons)(predictions)
+
+
+
+
+pred = make_multi_horizon_pred(features, y, regressor=hgb_q_regressor).skb.with_scoring(
             functools.partial(neg_mape_scorer, quantile_regression=True)
         ).skb.with_scoring(pinball_scorer)
 # %% [markdown]
@@ -214,13 +216,12 @@ def cross_val_predict(data_op, environment=None):
     all_predictions, all_scores = [], []
     for i, split in enumerate(data_op.skb.iter_cv_splits(environment=environment)):
         learner = data_op.skb.make_learner().fit(split["train"])
-        prediction = learner.predict(split["test"])
+        score, predictions = learner.score(split["test"], return_predictions=True)
         all_predictions.append(
             concat_X_y_predictions(
-                split["X_test"], split["y_test"], prediction
+                split["X_test"], split["y_test"], predictions["predict"]
             ).with_columns(split=pl.lit(i)),
         )
-        score = learner.score(split["test"])
         print(split["X_test"]["prediction_time"].min().isoformat())
         print(score)
         all_scores.append(score | {"split": i})
@@ -228,7 +229,7 @@ def cross_val_predict(data_op, environment=None):
     all_scores = pl.DataFrame(all_scores)
     return all_predictions, all_scores
 
-cv_predictions_hgbr = cross_val_predict(pred_24_horizons, 
+cv_predictions_hgbr = cross_val_predict(pred,
                                         environment={"start": "2023-01-01", "end": "2025-05-31"})
 
 # %% [markdown]
@@ -278,7 +279,7 @@ def plot_predictions(results, horizons=None, start="2025-03-01"):
     fig.update_layout(height=600, title=f"CV predicted load mw")
     return fig
 
-plot_predictions(cv_predictions_hgbr[0], horizons=[1, 12, 24], start="2023-01-01").show()
+plot_predictions(cv_predictions_hgbr[0], horizons=(12,), start="2023-01-01").show()
 
 # %% [markdown]
 # Now, let's collect the cross-validated predictions and plot the residual vs predicted
@@ -540,18 +541,13 @@ def limit_train_size(df, size=9000, mode=skrub.eval_mode()):
         return df
 
 # We limit the training size and predict all three horizons for the BQR model.
-features = {h: features_24_horizons[h].skb.apply_func(limit_train_size) for h in TIME_HORIZONS}
-y = y_24_horizons.skb.apply_func(limit_train_size)
+features = {h: features[h].skb.apply_func(limit_train_size) for h in TIME_HORIZONS}
+y = y.skb.apply_func(limit_train_size)
 
-pred_24_horizons = make_multi_horizon_pred(features, y, regressor=bqr, quantile_regression=True).skb.apply_func(
-            post_process,
-            prediction_time,
-            range_end,
-            quantile_regression=True,
-        ).skb.with_scoring(
+pred = make_multi_horizon_pred(features, y, regressor=bqr).skb.with_scoring(
             functools.partial(neg_mape_scorer, quantile_regression=True)
         ).skb.with_scoring(pinball_scorer)
-cv_predictions_bqr = cross_val_predict(pred_24_horizons, 
+cv_predictions_bqr = cross_val_predict(pred,
                                         environment={"start": "2023-01-01", "end": "2025-05-31"})
 
 # %%
