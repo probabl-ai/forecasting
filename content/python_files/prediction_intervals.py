@@ -138,10 +138,11 @@ class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
         self.hgb_params = hgb_params
 
     def fit(self, X, y):
+        self.quantiles_ = sorted(self.quantiles)
         params = (self.hgb_params or {}) | {"loss": "quantile"}
         self.estimators_ = {
             q: HistGradientBoostingRegressor(quantile=q, **params).fit(X, y)
-            for q in self.quantiles
+            for q in self.quantiles_
         }
         return self
 
