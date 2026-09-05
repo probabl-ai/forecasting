@@ -68,7 +68,7 @@ def lorenz_curve(observed_value, predicted_value, n_samples=1_000):
     )
 
 
-def plot_lorenz_curve(cv_predictions, horizon, n_samples=250):
+def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
     """Plot the Lorenz curve for a given cross-validation results containing
     observed and predicted values.
 
@@ -86,12 +86,13 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250):
         A chart with the Lorenz curve.
     """
 
+    pred_col = f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
     results = []
     for (fold_idx,), predictions in cv_predictions.group_by("split", maintain_order=True):
         results.append(
             lorenz_curve(
                 observed_value=predictions[f"{horizon}h"],
-                predicted_value=predictions[f"pred_{horizon}h"],
+                predicted_value=predictions[pred_col],
                 n_samples=n_samples,
             ).with_columns(
                 pl.lit(fold_idx).alias("fold_idx"),
@@ -174,7 +175,7 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250):
 
 
 def plot_reliability_diagram(
-    cv_predictions, horizon, kind="mean", quantile_level=0.5, n_bins=10
+    cv_predictions, horizon, kind="mean", quantile_level=0.5, n_bins=10, forecast_quantile=None
 ):
     """Plot the reliability diagram given cross-validation results containing
     observed and predicted values.
@@ -196,10 +197,16 @@ def plot_reliability_diagram(
     altair.Chart
         A chart with the reliability diagram.
     """
-    # min and max load over all predictions and observations for any folds:
-    all_loads = cv_predictions.select([f"{horizon}h",f"pred_{horizon}h"])
-    all_loads = pl.concat(all_loads)
-    min_load, max_load = all_loads.min(), all_loads.max()
+    pred_col = f"pred_{horizon}h" if forecast_quantile is None else f"pred_{horizon}h__q_{forecast_quantile}"
+    # min and max load over predictions/observations with a consistent float dtype.
+    all_loads = cv_predictions.select(
+        [
+            pl.col(f"{horizon}h").cast(pl.Float64),
+            pl.col(pred_col).cast(pl.Float64),
+        ]
+    )
+    min_load = min(v for v in all_loads.select(pl.all().min()).row(0) if v is not None)
+    max_load = max(v for v in all_loads.select(pl.all().max()).row(0) if v is not None)
     scale = altair.Scale(domain=[min_load, max_load])
     if kind == "mean":
         y_name = f"mean_load_{horizon}h"
@@ -239,15 +246,15 @@ def plot_reliability_diagram(
 
         mean_per_bins = (
             cv_predictions_i.group_by(
-                pl.col(f"pred_{horizon}h").qcut(np.linspace(0, 1, n_bins))
+                pl.col(pred_col).qcut(np.linspace(0, 1, n_bins), allow_duplicates=True)
             )
             .agg(
                 [
                     agg_expr.alias(y_name),
-                    pl.col(f"pred_{horizon}h").mean().alias(f"mean_predicted_load_{horizon}h"),
+                    pl.col(pred_col).mean().alias(f"mean_predicted_load_{horizon}h"),
                 ]
             )
-            .sort(f"pred_{horizon}h")
+            .sort(pred_col)
             .with_columns(pl.lit(fold_label).alias("fold_label"))
         )
 
@@ -267,7 +274,7 @@ def plot_reliability_diagram(
     return chart.resolve_scale(color="independent")
 
 
-def plot_residuals_vs_predicted(cv_predictions, horizon):
+def plot_residuals_vs_predicted(cv_predictions, horizon, quantile=None):
     """Plot residuals vs predicted values scatter plot for all CV folds.
 
     Parameters
@@ -275,12 +282,17 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
     cv_predictions : list of polars.DataFrame
         A list of polars DataFrames, each containing the observed and predicted values
         for a given fold. It is the output of the `collect_cv_predictions` function.
+    quantile : float or None, default=None
+        If set, use the quantile prediction column (e.g. ``pred_1h__q_0.05``).
+        If None, use the plain point-prediction column (e.g. ``pred_1h``).
 
     Returns
     -------
     altair.Chart
         A chart with the residuals vs predicted values scatter plot.
     """
+    pred_col = f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
+    pred_col_safe = pred_col.replace(".", "_")  # dots in names break Vega-Lite field paths
     all_scatter_plots = []
 
     x_title = "Predicted Load (MW)"
@@ -294,8 +306,10 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
 
         # Calculate residuals
         residuals_data = cv_prediction.with_columns(
-            [(pl.col(f"pred_{horizon}h") - pl.col(f"{horizon}h")).alias("residual")]
-        ).with_columns([pl.lit(fold_label).alias("fold_label")])
+            pl.col(pred_col).alias(pred_col_safe),
+            (pl.col(pred_col) - pl.col(f"{horizon}h")).alias("residual"),
+            pl.lit(fold_label).alias("fold_label"),
+        )
 
         # Create scatter plot for this CV fold
         scatter_plot = (
@@ -303,7 +317,7 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
             .mark_circle(opacity=0.6, size=20)
             .encode(
                 x=altair.X(
-                    f"pred_{horizon}h:Q",
+                    f"{pred_col_safe}:Q",
                     title=x_title,
                     scale=altair.Scale(zero=False),
                 ),
@@ -311,8 +325,7 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
                 color=altair.Color("fold_label:N", legend=None),
                 tooltip=[
                     "prediction_time:T",
-                    "load_mw:Q",
-                    f"pred_{horizon}h:Q",
+                    f"{pred_col_safe}:Q",
                     "residual:Q",
                     "fold_label:N",
                 ],
@@ -321,14 +334,14 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
 
         all_scatter_plots.append(scatter_plot)
 
-    all_predictions = cv_predictions[f"pred_{horizon}h"]
+    all_predictions = cv_predictions[pred_col]
     min_pred, max_pred = all_predictions.min(), all_predictions.max()
 
     perfect_line = (
         altair.Chart(
             pl.DataFrame(
                 {
-                    f"pred_{horizon}h": [min_pred, max_pred],
+                    pred_col_safe: [min_pred, max_pred],
                     "perfect_residual": [0, 0],
                     "label": ["Perfect"] * 2,
                 }
@@ -336,7 +349,7 @@ def plot_residuals_vs_predicted(cv_predictions, horizon):
         )
         .mark_line(strokeDash=[5, 5], opacity=0.8, color="black")
         .encode(
-            x=altair.X(f"pred_{horizon}h:Q", title=x_title),
+            x=altair.X(f"{pred_col_safe}:Q", title=x_title),
             y=altair.Y("perfect_residual:Q", title=y_title),
             color=altair.Color(
                 "label:N",
