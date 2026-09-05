@@ -198,10 +198,15 @@ def plot_reliability_diagram(
         A chart with the reliability diagram.
     """
     pred_col = f"pred_{horizon}h" if forecast_quantile is None else f"pred_{horizon}h__q_{forecast_quantile}"
-    # min and max load over all predictions and observations for any folds:
-    all_loads = cv_predictions.select([f"{horizon}h", pred_col])
-    all_loads = pl.concat(all_loads)
-    min_load, max_load = all_loads.min(), all_loads.max()
+    # min and max load over predictions/observations with a consistent float dtype.
+    all_loads = cv_predictions.select(
+        [
+            pl.col(f"{horizon}h").cast(pl.Float64),
+            pl.col(pred_col).cast(pl.Float64),
+        ]
+    )
+    min_load = min(v for v in all_loads.select(pl.all().min()).row(0) if v is not None)
+    max_load = max(v for v in all_loads.select(pl.all().max()).row(0) if v is not None)
     scale = altair.Scale(domain=[min_load, max_load])
     if kind == "mean":
         y_name = f"mean_load_{horizon}h"
