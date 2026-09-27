@@ -261,7 +261,11 @@ plt.ylabel("MAPE")
 ## Hyperparameter Tuning
 #
 # We load the dataop we dumped in the previous notebook and search for the best
-# hyperparameters with optuna.
+# hyperparameters with optuna. The feature graph also lets the search select
+# temperature, temperature plus wind speed, temperature and humidity with their
+# interaction, or all weather features.
+# The search also selects among temperature, temperature plus wind speed, and all
+# weather features.
 
 # %%
 env = {"start": "2021-03-23", "end": "2025-05-31"}
@@ -312,4 +316,30 @@ search.plot_results()
 # %%
 search.predict({"start": "2025-06-27T15:00:00", "end": None})
 
-    
+# %% [markdown]
+# ## Skrub report
+#
+# Precomputed reports: [Jupyter Book](../../_static/reports/multiple_horizons/index.html)
+# and [JupyterLite](../reports/multiple_horizons/index.html). On a local Python
+# installation, run the next cell to regenerate this report from the current pipeline.
+
+# %%
+import sys
+from IPython.display import FileLink, display
+
+if sys.platform == "emscripten":
+    print("Use the precomputed report link above in JupyterLite.")
+else:
+    repository_root = next(
+        parent for parent in (Path.cwd(), *Path.cwd().parents)
+        if (parent / "book").is_dir()
+    )
+    report = pred.skb.full_report(
+        open=False,
+        output_dir=repository_root / "book" / "_static" / "reports" / "multiple_horizons",
+        overwrite=True,
+        title="Multiple-horizon forecasting pipeline",
+    )
+    display(FileLink(str(report["report_path"])))
+
+

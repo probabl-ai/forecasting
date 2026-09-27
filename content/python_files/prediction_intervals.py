@@ -16,6 +16,7 @@ from datetime import datetime
 import functools
 import re
 import warnings
+from pathlib import Path
 
 import altair
 import skrub
@@ -149,7 +150,12 @@ class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
     def predict(self, X):
         result = np.asarray([e.predict(X) for e in self.estimators_.values()])
         result.sort(axis=0)
-        return pl.DataFrame(result, schema=[f"q_{q}" for q in self.quantiles_])
+        return pl.DataFrame(
+            {
+                f"q_{quantile}": result[index]
+                for index, quantile in enumerate(self.quantiles_)
+            }
+        )
 
 
 quantiles=(0.05, 0.5, 0.95)
@@ -160,6 +166,7 @@ learning_rate = skrub.choose_float(
 max_leaf_nodes = skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes")
 hgb_params = dict(
     random_state=0,
+    max_iter=300,
     learning_rate=learning_rate,
     max_leaf_nodes=max_leaf_nodes,
 )
@@ -195,6 +202,201 @@ def make_multi_horizon_pred(features, y, regressor):
 pred = make_multi_horizon_pred(features, y, regressor=hgb_q_regressor).skb.with_scoring(
             functools.partial(neg_mape_scorer, quantile_regression=True)
         ).skb.with_scoring(pinball_scorer)
+
+# %% [markdown]
+# ### Independent randomized search per quantile
+#
+# The baseline above shares hyperparameters across quantiles. Here, we search each
+# quantile independently using its own D² pinball score, then combine the selected
+# models' predictions on the same held-out folds. Each search also chooses among
+# temperature, temperature plus wind speed, and all weather features.
+
+# %%
+search_environment = {"start": "2023-01-01", "end": "2025-05-31"}
+outer_split = next(pred.skb.iter_cv_splits(environment=search_environment))
+quantile_searches = {}
+quantile_test_predictions = {}
+
+for quantile in quantiles:
+    quantile_name = f"q{quantile:g}".replace(".", "_")
+    quantile_regressor = HGBQuantileRegressor(
+        quantiles=(quantile,),
+        hgb_params={
+            "max_iter": skrub.choose_int(
+                100, 500, default=300, log=True,
+                name=f"max_iter_{quantile_name}",
+            ),
+            "learning_rate": skrub.choose_float(
+                0.01, 0.7, default=0.1, log=True,
+                name=f"learning_rate_{quantile_name}",
+            ),
+            "max_leaf_nodes": skrub.choose_int(
+                3, 300, default=30, log=True,
+                name=f"max_leaf_nodes_{quantile_name}",
+            ),
+        },
+    )
+    quantile_pred = make_multi_horizon_pred(
+        features, y, regressor=quantile_regressor
+    ).skb.with_scoring(pinball_scorer)
+    quantile_search = quantile_pred.skb.make_randomized_search(
+        backend="optuna",
+        n_iter=10,
+        n_jobs=1,
+        refit=f"d2_pinball_score__average__q_{quantile}",
+        study_name=f"quantile_{quantile_name}",
+    )
+    quantile_search.fit(outer_split["train"])
+    quantile_searches[quantile] = quantile_search
+    quantile_test_predictions[quantile] = quantile_search.predict(
+        outer_split["test"]
+    )
+
+def combine_quantile_predictions(predictions):
+    combined = pl.concat(predictions, how="horizontal")
+    for horizon in TIME_HORIZONS:
+        columns = [f"{horizon}h__q_{quantile}" for quantile in quantiles]
+        sorted_predictions = np.sort(combined.select(columns).to_numpy(), axis=1)
+        combined = combined.with_columns(
+            [
+                pl.Series(name=column, values=sorted_predictions[:, index])
+                for index, column in enumerate(columns)
+            ]
+        )
+    return combined
+
+
+combined_quantile_test_predictions = combine_quantile_predictions(
+    [quantile_test_predictions[q] for q in quantiles]
+)
+combined_quantile_test_predictions
+
+# %% [markdown]
+# ### Quantile prediction with a RandomForest
+#
+# [scikit-learn PR #32903](https://github.com/scikit-learn/scikit-learn/pull/32903)
+# proposes native pinball-loss splitting for `DecisionTreeRegressor` (and therefore
+# `RandomForestRegressor`), the same quantile loss `HistGradientBoostingRegressor`
+# already supports. As of writing, the PR is still an open, unmerged draft, so the
+# installed scikit-learn's `RandomForestRegressor` has no `quantile` parameter yet.
+#
+# As a working alternative, we implement a quantile regression forest
+# (Meinshausen, 2006): fit one standard `RandomForestRegressor`, then at predict
+# time pool the training targets that land in the same leaves as each test point
+# across all trees, and read off empirical quantiles from that weighted
+# distribution. A PR review noted that leaves smaller than `1 / min(alpha, 1 -
+# alpha)` samples bias the quantile estimate, so we size `min_samples_leaf`
+# accordingly for our most extreme quantile (5%).
+#
+# For computational reasons we evaluate this experiment on the same held-out
+# split used for the per-quantile randomized search above, rather than the full
+# walk-forward cross-validation.
+
+# %%
+from sklearn.ensemble import RandomForestRegressor
+
+
+class RandomForestQuantileRegressor(RegressorMixin, BaseEstimator):
+    """Quantile regression forest (Meinshausen, 2006).
+
+    Fits a single `RandomForestRegressor`; at predict time, empirical quantiles
+    are read off the pooled training targets found in the leaves reached by
+    each test sample across all trees.
+    """
+
+    def __init__(self, quantiles=(0.05, 0.5, 0.95), rf_params=None):
+        self.quantiles = quantiles
+        self.rf_params = rf_params
+
+    def fit(self, X, y):
+        self.quantiles_ = sorted(self.quantiles)
+        self.forest_ = RandomForestRegressor(**(self.rf_params or {})).fit(X, y)
+        y = np.asarray(y)
+        train_leaves = self.forest_.apply(X)
+        order = np.argsort(y)
+        self.sorted_y_ = y[order]
+        rank_of = np.empty(len(y), dtype=np.int64)
+        rank_of[order] = np.arange(len(y))
+        # per tree: leaf id -> ranks (in sorted_y_) of training samples in that leaf
+        self.leaf_ranks_ = [
+            {
+                leaf: rank_of[np.flatnonzero(tree_leaves == leaf)]
+                for leaf in np.unique(tree_leaves)
+            }
+            for tree_leaves in train_leaves.T
+        ]
+        return self
+
+    def predict(self, X):
+        test_leaves = self.forest_.apply(X)
+        n_test, n_estimators = test_leaves.shape
+        n_train = len(self.sorted_y_)
+        quantile_targets = np.asarray(self.quantiles_)
+        result = np.empty((n_test, len(self.quantiles_)))
+        for i in range(n_test):
+            weights = np.zeros(n_train)
+            for tree_idx, leaf in enumerate(test_leaves[i]):
+                ranks = self.leaf_ranks_[tree_idx].get(leaf)
+                if ranks is not None and len(ranks):
+                    weights[ranks] += 1.0 / len(ranks)
+            cumulative = np.cumsum(weights)
+            cumulative /= cumulative[-1]
+            positions = np.minimum(
+                np.searchsorted(cumulative, quantile_targets), n_train - 1
+            )
+            result[i] = self.sorted_y_[positions]
+        return pl.DataFrame(
+            {
+                f"q_{quantile}": result[:, index]
+                for index, quantile in enumerate(self.quantiles_)
+            }
+        )
+
+
+# Guideline from the PR review: leaves smaller than 1 / min(alpha, 1 - alpha)
+# bias the leaf-based quantile estimate.
+rf_min_samples_leaf = max(20, int(np.ceil(1 / min(min(quantiles), 1 - max(quantiles)))))
+rf_q_regressor = RandomForestQuantileRegressor(
+    quantiles=quantiles,
+    rf_params=dict(
+        n_estimators=200,
+        min_samples_leaf=rf_min_samples_leaf,
+        random_state=0,
+        n_jobs=-1,
+    ),
+)
+
+rf_pred = make_multi_horizon_pred(features, y, regressor=rf_q_regressor).skb.with_scoring(
+    pinball_scorer
+)
+rf_learner = rf_pred.skb.make_learner().fit(outer_split["train"])
+rf_test_predictions = rf_learner.predict(outer_split["test"])
+
+hgb_learner = pred.skb.make_learner().fit(outer_split["train"])
+hgb_test_predictions = hgb_learner.predict(outer_split["test"])
+
+from tutorial_helpers import coverage, mean_width
+
+rf_vs_hgb_results = []
+for horizon in TIME_HORIZONS:
+    y_test_horizon = outer_split["y_test"][f"{horizon}h"].to_numpy()
+    for model_name, predictions in (
+        ("RandomForestQuantileRegressor", rf_test_predictions),
+        ("HGBQuantileRegressor", hgb_test_predictions),
+    ):
+        lower = predictions[f"{horizon}h__q_0.05"].to_numpy()
+        upper = predictions[f"{horizon}h__q_0.95"].to_numpy()
+        rf_vs_hgb_results.append(
+            {
+                "horizon": f"{horizon}h",
+                "model": model_name,
+                "coverage": coverage(y_test_horizon, lower, upper),
+                "mean_width_mw": mean_width(y_test_horizon, lower, upper),
+            }
+        )
+
+pl.DataFrame(rf_vs_hgb_results)
+
 # %% [markdown]
 #
 # Let's first collect all the cross-validated predictions to make further inspection.
@@ -334,7 +536,7 @@ plot_residuals_vs_predicted(cv_predictions_hgbr[0],1,quantile=0.95).interactive(
 
 
 # %%
-from tutorial_helpers import coverage, binned_coverage
+from tutorial_helpers import coverage, mean_width, binned_coverage
 import altair
 
 preds = cv_predictions_hgbr[0]
@@ -348,6 +550,194 @@ for (split_idx,), fold_df in preds.group_by("split", maintain_order=True):
         fold_df[f"pred_{horizon}h__q_0.95"].to_numpy(),
     )
     print(f"Split {split_idx}: {cov:.1%} coverage (90% interval)")
+
+# %% [markdown]
+# ### Post-hoc interval recalibration
+#
+# We use conformalized quantile regression (CQR) to adjust the 90% interval after
+# fitting. The earliest half of the chronological cross-validation folds estimates
+# the correction; the later folds are held out to compare raw and calibrated coverage
+# and width, after an embargo equal to the maximum forecast horizon. This is a
+# time-series experiment, so temporal drift can limit the calibration guarantees of
+# exchangeable conformal prediction.
+
+# %%
+def conformalize_interval(calibration, evaluation, horizon, alpha=0.1):
+    target_col = f"{horizon}h"
+    lower_col = f"pred_{horizon}h__q_0.05"
+    upper_col = f"pred_{horizon}h__q_0.95"
+
+    y_calibration = calibration[target_col].to_numpy()
+    lower_calibration = calibration[lower_col].to_numpy()
+    upper_calibration = calibration[upper_col].to_numpy()
+    scores = np.maximum(
+        lower_calibration - y_calibration,
+        y_calibration - upper_calibration,
+    )
+    rank = int(np.ceil((len(scores) + 1) * (1 - alpha)))
+    correction = (
+        float(np.partition(scores, rank - 1)[rank - 1])
+        if rank <= len(scores)
+        else np.inf
+    )
+
+    calibrated = evaluation.with_columns(
+        (pl.col(lower_col) - correction).alias(f"calibrated_{lower_col}"),
+        (pl.col(upper_col) + correction).alias(f"calibrated_{upper_col}"),
+    )
+    return calibrated, correction
+
+
+split_ids = sorted(preds["split"].unique().to_list())
+calibration_fold_count = len(split_ids) // 2
+if calibration_fold_count == 0:
+    raise ValueError("Post-hoc recalibration requires at least two CV folds")
+
+calibration_fold_ids = split_ids[:calibration_fold_count]
+evaluation_fold_ids = split_ids[calibration_fold_count:]
+calibration_predictions = preds.filter(pl.col("split").is_in(calibration_fold_ids))
+calibration_target_end = calibration_predictions["prediction_time"].max() + timedelta(
+    hours=max(TIME_HORIZONS)
+)
+evaluation_predictions = preds.filter(
+    pl.col("split").is_in(evaluation_fold_ids)
+    & (pl.col("prediction_time") > calibration_target_end)
+)
+if evaluation_predictions.is_empty():
+    raise ValueError("No evaluation predictions remain after the forecast-horizon embargo")
+calibrated_evaluation = evaluation_predictions
+calibration_results = []
+
+for horizon in TIME_HORIZONS:
+    calibrated_evaluation, correction = conformalize_interval(
+        calibration_predictions, calibrated_evaluation, horizon
+    )
+    y_evaluation = calibrated_evaluation[f"{horizon}h"].to_numpy()
+    raw_lower = calibrated_evaluation[f"pred_{horizon}h__q_0.05"].to_numpy()
+    raw_upper = calibrated_evaluation[f"pred_{horizon}h__q_0.95"].to_numpy()
+    calibrated_lower = calibrated_evaluation[
+        f"calibrated_pred_{horizon}h__q_0.05"
+    ].to_numpy()
+    calibrated_upper = calibrated_evaluation[
+        f"calibrated_pred_{horizon}h__q_0.95"
+    ].to_numpy()
+    calibration_results.append(
+        {
+            "horizon": horizon,
+            "correction_mw": correction,
+            "raw_coverage": coverage(y_evaluation, raw_lower, raw_upper),
+            "calibrated_coverage": coverage(
+                y_evaluation, calibrated_lower, calibrated_upper
+            ),
+            "raw_mean_width_mw": mean_width(y_evaluation, raw_lower, raw_upper),
+            "calibrated_mean_width_mw": mean_width(
+                y_evaluation, calibrated_lower, calibrated_upper
+            ),
+        }
+    )
+
+pl.DataFrame(calibration_results)
+
+# %% [markdown]
+# ### Coverage versus interval width
+#
+# We sweep several CQR target coverages and compare them with the raw 90% interval
+# on the same assessment rows. For each horizon, the Pareto frontier keeps intervals
+# that are not dominated by another interval with at least as much coverage and no
+# greater width.
+
+# %%
+pareto_points = []
+target_miscoverage_levels = (0.5, 0.3, 0.2, 0.1, 0.05, 0.02)
+
+for horizon in TIME_HORIZONS:
+    y_evaluation = evaluation_predictions[f"{horizon}h"].to_numpy()
+    raw_lower = evaluation_predictions[f"pred_{horizon}h__q_0.05"].to_numpy()
+    raw_upper = evaluation_predictions[f"pred_{horizon}h__q_0.95"].to_numpy()
+    pareto_points.append(
+        {
+            "horizon": f"{horizon}h",
+            "interval": "raw 90%",
+            "nominal_coverage": 0.9,
+            "coverage": coverage(y_evaluation, raw_lower, raw_upper),
+            "mean_width_mw": float(np.abs(raw_upper - raw_lower).mean()),
+        }
+    )
+
+    for alpha in target_miscoverage_levels:
+        calibrated, _ = conformalize_interval(
+            calibration_predictions, evaluation_predictions, horizon, alpha=alpha
+        )
+        calibrated_lower = calibrated[
+            f"calibrated_pred_{horizon}h__q_0.05"
+        ].to_numpy()
+        calibrated_upper = calibrated[
+            f"calibrated_pred_{horizon}h__q_0.95"
+        ].to_numpy()
+        pareto_points.append(
+            {
+                "horizon": f"{horizon}h",
+                "interval": f"CQR {1 - alpha:.0%}",
+                "nominal_coverage": 1 - alpha,
+                "coverage": coverage(
+                    y_evaluation, calibrated_lower, calibrated_upper
+                ),
+                "mean_width_mw": float(
+                    np.abs(calibrated_upper - calibrated_lower).mean()
+                ),
+            }
+        )
+
+pareto_frontier = []
+for horizon in (f"{h}h" for h in TIME_HORIZONS):
+    horizon_points = [
+        point for point in pareto_points if point["horizon"] == horizon
+    ]
+    for point in horizon_points:
+        point["on_pareto_front"] = not any(
+            other["coverage"] >= point["coverage"]
+            and other["mean_width_mw"] <= point["mean_width_mw"]
+            and (
+                other["coverage"] > point["coverage"]
+                or other["mean_width_mw"] < point["mean_width_mw"]
+            )
+            for other in horizon_points
+        )
+        if point["on_pareto_front"]:
+            same_frontier_point = any(
+                other["coverage"] == point["coverage"]
+                and other["mean_width_mw"] == point["mean_width_mw"]
+                for other in pareto_frontier
+                if other["horizon"] == horizon
+            )
+            if not same_frontier_point:
+                pareto_frontier.append(point)
+
+points_chart = altair.Chart(altair.Data(values=pareto_points)).mark_point(
+    filled=True, size=90
+).encode(
+    x=altair.X("mean_width_mw:Q", title="Mean interval width (MW)"),
+    y=altair.Y(
+        "coverage:Q",
+        title="Empirical coverage",
+        scale=altair.Scale(domain=[0, 1]),
+    ),
+    color=altair.Color("horizon:N", title="Forecast horizon"),
+    shape=altair.Shape("interval:N", title="Interval setting"),
+    tooltip=["horizon:N", "interval:N", "nominal_coverage:Q", "coverage:Q", "mean_width_mw:Q"],
+)
+frontier_chart = altair.Chart(altair.Data(values=pareto_frontier)).mark_line(
+    point=True, strokeWidth=2
+).encode(
+    x="mean_width_mw:Q",
+    y="coverage:Q",
+    color=altair.Color("horizon:N", title="Forecast horizon"),
+    detail="horizon:N",
+    order=altair.Order("mean_width_mw:Q"),
+)
+(points_chart + frontier_chart).properties(
+    title="Coverage versus interval width by horizon"
+)
 
 # --- Binned coverage plot ---
 folds = [
@@ -407,3 +797,32 @@ plot_lorenz_curve(cv_predictions_hgbr[0], 1, quantile=0.05).interactive().proper
 plot_lorenz_curve(cv_predictions_hgbr[0], 1, quantile=0.95).interactive().properties(
     title="Lorenz curve for quantile 0.95 from cross-validation predictions"
 )
+
+# %%
+
+# %% [markdown]
+# ## Skrub report
+#
+# Precomputed reports: [Jupyter Book](../../_static/reports/prediction_intervals/index.html)
+# and [JupyterLite](../reports/prediction_intervals/index.html). On a local Python
+# installation, run the next cell to regenerate this report from the current pipeline.
+
+# %%
+import sys
+from pathlib import Path
+from IPython.display import FileLink, display
+
+if sys.platform == "emscripten":
+    print("Use the precomputed report link above in JupyterLite.")
+else:
+    repository_root = next(
+        parent for parent in (Path.cwd(), *Path.cwd().parents)
+        if (parent / "book").is_dir()
+    )
+    report = pred.skb.full_report(
+        open=False,
+        output_dir=repository_root / "book" / "_static" / "reports" / "prediction_intervals",
+        overwrite=True,
+        title="Quantile prediction intervals pipeline",
+    )
+    display(FileLink(str(report["report_path"])))
