@@ -1,10 +1,10 @@
 import datetime
 
+import altair
 import numpy as np
 import pandas as pd
 import polars as pl
 import polars.selectors as cs
-import altair
 import skrub
 
 
@@ -86,9 +86,13 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
         A chart with the Lorenz curve.
     """
 
-    pred_col = f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
+    pred_col = (
+        f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
+    )
     results = []
-    for (fold_idx,), predictions in cv_predictions.group_by("split", maintain_order=True):
+    for (fold_idx,), predictions in cv_predictions.group_by(
+        "split", maintain_order=True
+    ):
         results.append(
             lorenz_curve(
                 observed_value=predictions[f"{horizon}h"],
@@ -175,7 +179,12 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
 
 
 def plot_reliability_diagram(
-    cv_predictions, horizon, kind="mean", quantile_level=0.5, n_bins=10, forecast_quantile=None
+    cv_predictions,
+    horizon,
+    kind="mean",
+    quantile_level=0.5,
+    n_bins=10,
+    forecast_quantile=None,
 ):
     """Plot the reliability diagram given cross-validation results containing
     observed and predicted values.
@@ -197,7 +206,11 @@ def plot_reliability_diagram(
     altair.Chart
         A chart with the reliability diagram.
     """
-    pred_col = f"pred_{horizon}h" if forecast_quantile is None else f"pred_{horizon}h__q_{forecast_quantile}"
+    pred_col = (
+        f"pred_{horizon}h"
+        if forecast_quantile is None
+        else f"pred_{horizon}h__q_{forecast_quantile}"
+    )
     # min and max load over predictions/observations with a consistent float dtype.
     all_loads = cv_predictions.select(
         [
@@ -239,7 +252,9 @@ def plot_reliability_diagram(
         )
     )
 
-    for (fold_idx,), cv_predictions_i in cv_predictions.group_by("split", maintain_order=True):
+    for (fold_idx,), cv_predictions_i in cv_predictions.group_by(
+        "split", maintain_order=True
+    ):
         min_date = cv_predictions_i["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
         fold_label = f"#{fold_idx} - {min_date} to {max_date}"
@@ -291,8 +306,12 @@ def plot_residuals_vs_predicted(cv_predictions, horizon, quantile=None):
     altair.Chart
         A chart with the residuals vs predicted values scatter plot.
     """
-    pred_col = f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
-    pred_col_safe = pred_col.replace(".", "_")  # dots in names break Vega-Lite field paths
+    pred_col = (
+        f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
+    )
+    pred_col_safe = pred_col.replace(
+        ".", "_"
+    )  # dots in names break Vega-Lite field paths
     all_scatter_plots = []
 
     x_title = "Predicted Load (MW)"

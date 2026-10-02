@@ -42,6 +42,12 @@ ipykernel = "*"
 [feature.lint.dependencies]
 ruff = "*"
 black = "*"
+pre-commit = ">=4.6.2,<5"
+
+[feature.lint.tasks]
+lint = "ruff check . && black --check ."
+format = "ruff check --fix . && black ."
+install-pre-commit = "pre-commit install"
 
 [feature.doc.dependencies]
 jupyter-book = "*"

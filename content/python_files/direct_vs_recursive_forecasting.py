@@ -34,8 +34,9 @@
 
 # %%
 from time import perf_counter
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import tzdata  # noqa: F401
 
@@ -117,23 +118,24 @@ _ = data_test.iloc[: SEGMENT_LENGTH * 10].plot(
 )
 
 # %%
+import warnings
+
+import threadpoolctl
 from mlforecast import MLForecast
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import SplineTransformer, PolynomialFeatures
-from sklearn.kernel_approximation import Nystroem
 from mlforecast.lag_transforms import (
     RollingMax,
-    RollingMin,
     RollingMean,
+    RollingMin,
     RollingStd,
 )
 from mlforecast.target_transforms import Differences
-from sklearn.linear_model import Ridge
-from sklearn.ensemble import RandomForestRegressor, HistGradientBoostingRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.feature_selection import SelectKBest
+from sklearn.kernel_approximation import Nystroem
+from sklearn.linear_model import Ridge
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures, SplineTransformer
 from sklearn.tree import DecisionTreeRegressor
-import warnings
-import threadpoolctl
 
 # Workaround a performance problem with HistGradientBoostingRegressor on small datasets.
 threadpoolctl.threadpool_limits(limits=1, user_api="openmp")

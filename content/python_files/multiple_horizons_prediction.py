@@ -11,28 +11,30 @@
 # %pip install -q skrub altair holidays plotly nbformat polars
 
 # %%
-import re
 import datetime
+import re
 import warnings
 from pathlib import Path
 
 import altair
 import cloudpickle
-import pyarrow  # noqa: F401
-import tzdata  # noqa: F401
-import skrub
 import numpy as np
 import polars as pl
-
+import pyarrow  # noqa: F401
+import skrub
+import tzdata  # noqa: F401
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-
-from feature_engineering_lib import feature_engineering_outputs, load_electricity_history_data
-
-from next_horizon_prediction_lib import TimeSeriesSplitter, get_regressor, get_cv_results
-
+from feature_engineering_lib import (
+    feature_engineering_outputs,
+    load_electricity_history_data,
+)
+from next_horizon_prediction_lib import (
+    TimeSeriesSplitter,
+    get_cv_results,
+    get_regressor,
+)
 from tutorial_helpers import plot_horizon_forecast
-
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
@@ -43,19 +45,22 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # We now have a pipeline that makes predictions for 1 horizon. To predict
 # multiple horizons, we just need to make one prediction for each horizon and
-# group them in a single dataframe. This follows the strategy of 
+# group them in a single dataframe. This follows the strategy of
 # [Direct multi-step forecasting](https://skforecast.org/latest/introduction-forecasting/introduction-forecasting#direct-multi-step-forecasting)
-# where an independent model is trained for each horizon. 
+# where an independent model is trained for each horizon.
 # ![Direct multi-step forecasting](https://skforecast.org/latest/img/diagram-direct-multi-step-forecasting.png)
 
 
 # %%
+
 
 def concat_horizons(predictions):
     """
     Consolidate predictions of models for different horizons in one dataframe.
     """
     return pl.DataFrame({f"{h}h": v for h, v in predictions.items()})
+
+
 def make_multi_horizon_pred(features, y):
     """
     Create a full DataOp for predicting the specified horizons.
@@ -69,6 +74,7 @@ def make_multi_horizon_pred(features, y):
     }
     return skrub.deferred(concat_horizons)(predictions)
 
+
 # %% [markdown]
 #
 # We inspect the pipeline on an example with only 3 horizons so that it is fast
@@ -76,8 +82,10 @@ def make_multi_horizon_pred(features, y):
 # all horizons between 1 and 25 hours.
 
 # %%
-TIME_HORIZONS = (1,12,24)
-features, y = feature_engineering_outputs(TIME_HORIZONS, cv_splitter=TimeSeriesSplitter())
+TIME_HORIZONS = (1, 12, 24)
+features, y = feature_engineering_outputs(
+    TIME_HORIZONS, cv_splitter=TimeSeriesSplitter()
+)
 
 pred = make_multi_horizon_pred(features, y)
 pred
@@ -103,8 +111,9 @@ predicted_y_test
 # %%
 from sklearn.metrics import mean_absolute_percentage_error
 
-mean_absolute_percentage_error(split["y_test"], predicted_y_test, multioutput="raw_values")
-
+mean_absolute_percentage_error(
+    split["y_test"], predicted_y_test, multioutput="raw_values"
+)
 
 
 # %% [markdown]
@@ -116,6 +125,7 @@ mean_absolute_percentage_error(split["y_test"], predicted_y_test, multioutput="r
 # that takes an estimator, X and y. Scorers can return a single score, or a
 # dictionary mapping metric names (in our case 'neg_mape_1h', 'neg_mape_2h', ...) to
 # scores.
+
 
 # %%
 def neg_mape(y_true, y_pred):
@@ -153,15 +163,17 @@ history_dates = electricity_load_history["time"]
 history_dates.max()
 
 # %%
-new_date = (
-    (history_dates - datetime.timedelta(seconds=1)).dt.truncate("1h")
-).max()
+new_date = ((history_dates - datetime.timedelta(seconds=1)).dt.truncate("1h")).max()
 new_date
 
 # %%
 # fit a model for 24 horizons on all available data
-features_24_horizons, y_24_horizons = feature_engineering_outputs(range(1, 25), TimeSeriesSplitter())
-pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons).skb.with_scoring(neg_mape_scorer)
+features_24_horizons, y_24_horizons = feature_engineering_outputs(
+    range(1, 25), TimeSeriesSplitter()
+)
+pred_24_horizons = make_multi_horizon_pred(
+    features_24_horizons, y_24_horizons
+).skb.with_scoring(neg_mape_scorer)
 learner = pred_24_horizons.skb.make_learner(fitted=True)
 future_pred = learner.predict({"start": new_date, "end": None})
 future_pred
@@ -178,6 +190,7 @@ def plot_line(x, y):
         name=y.name,
         hovertemplate="%{x|%Y-%m-%dT%H} (%{x|%A}): %{y}<extra></extra>",
     )
+
 
 def transpose_pred(prediction_date, prediction):
     date = [
@@ -209,6 +222,7 @@ fig.update_layout(height=700)
 cv_predictions, cv_scores = get_cv_results(pred)
 
 # %%
+
 
 def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
     if start is not None:
@@ -286,16 +300,16 @@ outer_split["X_test"]
 # print(f"optuna version: {optuna.__version__}")
 
 # %%
-#storage = f"sqlite:///{results_dir / 'optuna.sqlite'}"
-#print(f"Check search progress with:\noptuna-dashboard {storage}")
-study_name = f"randomized_search"
+# storage = f"sqlite:///{results_dir / 'optuna.sqlite'}"
+# print(f"Check search progress with:\noptuna-dashboard {storage}")
+study_name = "randomized_search"
 
 search = pred.skb.make_randomized_search(
     backend="optuna",
     n_iter=10,
     n_jobs=1,
     refit="neg_mape_average",
-    storage=None,#storage,
+    storage=None,  # storage,
     study_name=study_name,
 )
 
@@ -306,10 +320,8 @@ search.score(outer_split["test"])
 search.plot_results()
 
 # %% [markdown]
-# 
+#
 # Make an example prediction
 
 # %%
 search.predict({"start": "2025-06-27T15:00:00", "end": None})
-
-    

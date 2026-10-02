@@ -7,7 +7,7 @@
 # We build a pipeline that for a given prediction time, predicts the future
 # electricity load. We start by doing it for 1 horizon, then we extend to
 # predicting multiple horizons in the same pipeline.
-# This means that for each prediction time, it outputs predicted loads 
+# This means that for each prediction time, it outputs predicted loads
 # for 1 or several horizons.
 
 # Features (and targets) from different data sources are used:
@@ -20,12 +20,12 @@
 # 2025.
 
 # Exogenous features derived from the weather and calendar data can
-# be used to engineer "future covariates". Since the load data is our prediction target, 
-# we can also use it to engineer  "past covariates" such as lagged features and rolling 
-# aggregations. 
+# be used to engineer "future covariates". Since the load data is our prediction target,
+# we can also use it to engineer  "past covariates" such as lagged features and rolling
+# aggregations.
 
-# The future values of the load data (with respect to the prediction time) are 
-# used as targets for the forecasting model. 
+# The future values of the load data (with respect to the prediction time) are
+# used as targets for the forecasting model.
 
 #
 # ## Environment setup
@@ -44,16 +44,15 @@
 # TODO: remove those workarounds once pyodide enables again the package:
 # xref: https://github.com/pyodide/pyodide-recipes/blob/0.29.X/packages/polars/meta.yaml
 
- # %%
-import tzdata  # noqa: F401
-import pandas as pd
+# %%
 import datetime
-from pyarrow.parquet import read_table
 
 import altair
+import pandas as pd
 import polars as pl
 import skrub
-
+import tzdata  # noqa: F401
+from pyarrow.parquet import read_table
 
 # %% [markdown]
 # ## Shared time range for all historical data sources
@@ -77,6 +76,7 @@ import skrub
 
 
 # %%
+
 
 def time_range(start, end=None):
     """
@@ -103,6 +103,7 @@ def time_range(start, end=None):
         .alias("time"),
     )
 
+
 range_start = skrub.var("start", "2021-03-23")
 range_end = skrub.var("end", "2025-05-31")
 
@@ -118,10 +119,12 @@ prediction_time
 # Let's now load the data records for the time range defined above.
 #
 # To avoid network issues when running this notebook, the necessary data files
-# have already been downloaded and saved in the `datasets` folder. 
+# have already been downloaded and saved in the `datasets` folder.
 
 # %%
 from pathlib import Path
+
+
 def get_data_dir():
     return Path(".").resolve().parent / "datasets"
 
@@ -135,8 +138,8 @@ for data_file in sorted(get_data_dir().iterdir()):
 # ## Electricity load data
 #
 # We load the electricity load data. This data will both be used as a
-# target variable but also to craft the data pipeline. We build a pipeline that 
-# for a given prediction time, predicts the future electricity load. 
+# target variable but also to craft the data pipeline. We build a pipeline that
+# for a given prediction time, predicts the future electricity load.
 # We start by doing it for 1 horizon, then we extend to
 # predicting multiple horizons in the same pipeline.
 #
@@ -151,10 +154,13 @@ for data_file in sorted(get_data_dir().iterdir()):
 #
 # %%
 
+
 def load_electricity_history_data(data_dir=get_data_dir()):
     """Load and aggregate historical load data from the raw CSV files."""
     return (
-        pl.read_csv(get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
+        pl.read_csv(
+            get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"]
+        )
         .drop_nulls()
         .select(
             pl.col("Time (UTC)")
@@ -165,6 +171,7 @@ def load_electricity_history_data(data_dir=get_data_dir()):
             pl.col("Actual Total Load [MW] - BZN|FR").alias("load_mw"),
         )
     )
+
 
 def resample(electricity_history_data):
     """
@@ -185,11 +192,12 @@ def resample(electricity_history_data):
         all_times.min(), (all_times.max() + datetime.timedelta(hours=48))
     ).join(averaged, on="time", how="left", maintain_order="left")
 
+
 # %%
 
-raw_electricity_load_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
-    "electricity_history_data"
-)()
+raw_electricity_load_history = skrub.as_data_op(
+    load_electricity_history_data
+).skb.set_name("electricity_history_data")()
 raw_electricity_load_history
 
 # %%
@@ -213,7 +221,9 @@ electricity_load_history
 
 
 # %%
-def get_X_y(prediction_time, electricity_load_history, horizons, mode=skrub.eval_mode()):
+def get_X_y(
+    prediction_time, electricity_load_history, horizons, mode=skrub.eval_mode()
+):
     """
     Compute input and target variables.
 
@@ -249,16 +259,21 @@ def get_X_y(prediction_time, electricity_load_history, horizons, mode=skrub.eval
         return {
             "X": X_y.select(pl.col("prediction_time")),
             "y": (
-                X_y[f"{horizons[0]}h"] if single_horizon else X_y.drop("prediction_time")
+                X_y[f"{horizons[0]}h"]
+                if single_horizon
+                else X_y.drop("prediction_time")
             ),
         }
     else:
         # In predict mode there is no y and we return unmodified query
         return {"X": prediction_time}
 
+
 # Example output for 1 hours
 EXAMPLE_TIME_HORIZON = 1
-X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON)
+X_y = prediction_time.skb.apply_func(
+    get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON
+)
 X = X_y["X"].skb.mark_as_X()
 y = X_y["y"].skb.mark_as_y()
 X
@@ -288,13 +303,16 @@ y
 # add it to the dataframe of features we are building up.
 
 # %%
+import holidays
 from polars import selectors as cs
-import holidays 
+
 
 def add_target_time(df, horizon):
     return df.with_columns(
         (pl.col("prediction_time") + pl.duration(hours=horizon)).alias("target_time")
     )
+
+
 def add_lagged_features(df, electricity_load_history, horizon):
     """
     Build lagged features for the given horizon.
@@ -333,8 +351,11 @@ def add_lagged_features(df, electricity_load_history, horizon):
         how="left",
         maintain_order="left",
     )
+
+
 def fetch_city_weather(city, data_dir=get_data_dir()):
     return pl.read_parquet(get_data_dir() / f"weather_{city}.parquet")
+
 
 def add_weather(
     df,
@@ -351,18 +372,18 @@ def add_weather(
     del horizon
     if isinstance(cities, str):
         assert cities == "all"
-        cities =  (
-                    "paris",
-                    "lyon",
-                    "marseille",
-                    "toulouse",
-                    "lille",
-                    "limoges",
-                    "nantes",
-                    "strasbourg",
-                    "brest",
-                    "bayonne",
-                )
+        cities = (
+            "paris",
+            "lyon",
+            "marseille",
+            "toulouse",
+            "lille",
+            "limoges",
+            "nantes",
+            "strasbourg",
+            "brest",
+            "bayonne",
+        )
     with_weather = df
     for city in cities:
         with_weather = with_weather.join(
@@ -384,6 +405,7 @@ def add_weather(
         )
     return with_weather
 
+
 def add_calendar_and_holidays(target_time):
     """Add calendar features and holiday information."""
     fr_time = pl.col("target_time").dt.convert_time_zone("Europe/Paris")
@@ -399,8 +421,9 @@ def add_calendar_and_holidays(target_time):
         fr_time.dt.year().alias("cal_year"),
         fr_time.dt.date().is_in(holidays_fr.keys()).alias("cal_is_holiday"),
     )
-    
-# %%    
+
+
+# %%
 
 with_target_time = X.skb.apply_func(add_target_time, EXAMPLE_TIME_HORIZON)
 with_target_time
@@ -429,7 +452,7 @@ with_lags
 #
 # ## Weather Data
 
-# %% 
+# %%
 fetch_city_weather("paris")
 
 # %% [markdown]
@@ -475,9 +498,7 @@ altair.Chart(lag_window).transform_fold(
         "lag_1_width_168_iqr",
     ],
     as_=["key", "value"],
-).mark_line(
-    tooltip=True
-).encode(
+).mark_line(tooltip=True).encode(
     x="target_time:T", y="value:Q", color="key:N"
 ).interactive()
 
@@ -494,16 +515,14 @@ weather_cols = [
 altair.Chart(weather_window).transform_fold(
     weather_cols,
     as_=["key", "value"],
-).mark_line(
-    tooltip=True
-).encode(
+).mark_line(tooltip=True).encode(
     x="target_time:T", y="value:Q", color="key:N"
 ).interactive()
 
 # %% [markdown]
 #
 # ## Calendar and holidays features
-# 
+#
 # We leverage the `holidays` package to enrich the time range with some
 # calendar features such as public holidays in France. We also add some
 # features that are useful for time series forecasting such as the day of the
@@ -535,7 +554,9 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
         "lag_24_width_24_iqr",
     ],
     as_=["key", "load_mw"],
-).mark_line(tooltip=True).encode(x="target_time:T", y="load_mw:Q", color="key:N").interactive()
+).mark_line(tooltip=True).encode(
+    x="target_time:T", y="load_mw:Q", color="key:N"
+).interactive()
 
 # %% [markdown]
 #
@@ -544,18 +565,25 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
 # Now we are done with all the feature engineering steps. For later reuse we
 # group the steps we just created into one function:
 
-# %%  
+# %%
 
 
-def add_features(df, horizon, electricity_load_history, cities, temperature_only, city_weather_fetcher):
+def add_features(
+    df,
+    horizon,
+    electricity_load_history,
+    cities,
+    temperature_only,
+    city_weather_fetcher,
+):
     df = add_target_time(df, horizon=horizon)
     df = add_lagged_features(df, electricity_load_history, horizon=horizon)
     df = add_weather(
-    df,
-    horizon,
-    cities=cities,
-    temperature_only=temperature_only,
-    city_weather_fetcher=city_weather_fetcher,
+        df,
+        horizon,
+        cities=cities,
+        temperature_only=temperature_only,
+        city_weather_fetcher=city_weather_fetcher,
     )
     df = add_calendar_and_holidays(df)
     return df
@@ -563,11 +591,13 @@ def add_features(df, horizon, electricity_load_history, cities, temperature_only
 
 def feature_engineering_outputs(horizons, cv_splitter=None):
     range_start = skrub.var("start", "2021-03-23")
-    range_end = skrub.var("end",  "2025-05-31")
+    range_end = skrub.var("end", "2025-05-31")
 
     prediction_time = skrub.deferred(time_range)(range_start, range_end)
     resampled_history = skrub.var(
-        "electricity_history_loader", load_electricity_history_data, becomes_default=True
+        "electricity_history_loader",
+        load_electricity_history_data,
+        becomes_default=True,
     )().skb.apply_func(resample)
     X_y = prediction_time.skb.apply_func(get_X_y, resampled_history, horizons)
     X = X_y["X"].skb.mark_as_X(cv=cv_splitter)
@@ -578,7 +608,7 @@ def feature_engineering_outputs(horizons, cv_splitter=None):
         "city_weather_fetcher", fetch_city_weather, becomes_default=True
     )
     if isinstance(horizons, int):
-        single_horizon=True
+        single_horizon = True
         horizons = (horizons,)
     else:
         single_horizon = False

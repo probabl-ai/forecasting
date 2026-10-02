@@ -1,6 +1,5 @@
 # /usr/bin/env python
 
-import argparse
 import ast
 import sys
 from pathlib import Path
@@ -16,7 +15,9 @@ def extract_defs(source):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             import_snippets.append("".join(lines[node.lineno - 1 : node.end_lineno]))
         elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            lineno = node.decorator_list[0].lineno if node.decorator_list else node.lineno
+            lineno = (
+                node.decorator_list[0].lineno if node.decorator_list else node.lineno
+            )
             def_snippets.append("".join(lines[lineno - 1 : node.end_lineno]))
     out = "".join(sorted(set(import_snippets))) + "\n\n" + "\n\n".join(def_snippets)
     return out

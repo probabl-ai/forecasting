@@ -15,11 +15,11 @@
 
 # %%
 from pathlib import Path
-from ipyleaflet import Map, Marker
-import openmeteo_requests
 
+import openmeteo_requests
 import pandas as pd
 import requests_cache
+from ipyleaflet import Map, Marker
 from retry_requests import retry
 
 # %% [markdown]
