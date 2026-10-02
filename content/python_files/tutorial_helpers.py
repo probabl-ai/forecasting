@@ -86,13 +86,9 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
         A chart with the Lorenz curve.
     """
 
-    pred_col = (
-        f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
-    )
+    pred_col = f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
     results = []
-    for (fold_idx,), predictions in cv_predictions.group_by(
-        "split", maintain_order=True
-    ):
+    for (fold_idx,), predictions in cv_predictions.group_by("split", maintain_order=True):
         results.append(
             lorenz_curve(
                 observed_value=predictions[f"{horizon}h"],
@@ -131,9 +127,7 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
     )
 
     results = results.join(gini_stats, on="model").with_columns(
-        pl.format("{} (Gini: {} +/- {})", "model", "gini_mean", "gini_std_dev").alias(
-            "model_label"
-        )
+        pl.format("{} (Gini: {} +/- {})", "model", "gini_mean", "gini_std_dev").alias("model_label")
     )
 
     model_chart = (
@@ -145,9 +139,7 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
                 title="Fraction of observations sorted by predicted label",
             ),
             y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
-            color=altair.Color(
-                "model_label:N", legend=altair.Legend(title="Models"), sort=None
-            ),
+            color=altair.Color("model_label:N", legend=altair.Legend(title="Models"), sort=None),
             detail="fold_idx:N",
         )
     )
@@ -169,9 +161,7 @@ def plot_lorenz_curve(cv_predictions, horizon, n_samples=250, quantile=None):
                 title="Fraction of observations sorted by predicted label",
             ),
             y=altair.Y("cum_observed:Q", title="Cumulative observed load proportion"),
-            color=altair.Color(
-                "model_label:N", legend=altair.Legend(title="Models"), sort=None
-            ),
+            color=altair.Color("model_label:N", legend=altair.Legend(title="Models"), sort=None),
         )
     )
 
@@ -252,9 +242,7 @@ def plot_reliability_diagram(
         )
     )
 
-    for (fold_idx,), cv_predictions_i in cv_predictions.group_by(
-        "split", maintain_order=True
-    ):
+    for (fold_idx,), cv_predictions_i in cv_predictions.group_by("split", maintain_order=True):
         min_date = cv_predictions_i["prediction_time"].min().strftime("%Y-%m-%d")
         max_date = cv_predictions_i["prediction_time"].max().strftime("%Y-%m-%d")
         fold_label = f"#{fold_idx} - {min_date} to {max_date}"
@@ -306,12 +294,8 @@ def plot_residuals_vs_predicted(cv_predictions, horizon, quantile=None):
     altair.Chart
         A chart with the residuals vs predicted values scatter plot.
     """
-    pred_col = (
-        f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
-    )
-    pred_col_safe = pred_col.replace(
-        ".", "_"
-    )  # dots in names break Vega-Lite field paths
+    pred_col = f"pred_{horizon}h" if quantile is None else f"pred_{horizon}h__q_{quantile}"
+    pred_col_safe = pred_col.replace(".", "_")  # dots in names break Vega-Lite field paths
     all_scatter_plots = []
 
     x_title = "Predicted Load (MW)"
@@ -505,9 +489,7 @@ def plot_binned_residuals(cv_predictions, horizon, by="hour"):
     for line in all_mean_lines[1:]:
         combined_lines += line
 
-    return (combined_iqr + combined_lines + perfect_line).resolve_scale(
-        color="independent"
-    )
+    return (combined_iqr + combined_lines + perfect_line).resolve_scale(color="independent")
 
 
 @skrub.deferred
@@ -585,9 +567,7 @@ def plot_horizon_forecast(
         .mark_line(tooltip=True)
         .encode(x="prediction_time:T", y="Forecast load:Q", color="key:N")
     )
-    return (
-        true_values_past_chart + true_values_future_chart + forecast_values_chart
-    ).interactive()
+    return (true_values_past_chart + true_values_future_chart + forecast_values_chart).interactive()
 
 
 def coverage(y_true, y_quantile_low, y_quantile_high):
@@ -611,9 +591,7 @@ def coverage(y_true, y_quantile_low, y_quantile_high):
     y_quantile_low = np.asarray(y_quantile_low)
     y_quantile_high = np.asarray(y_quantile_high)
     return float(
-        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high)
-        .mean()
-        .round(4)
+        np.logical_and(y_true >= y_quantile_low, y_true <= y_quantile_high).mean().round(4)
     )
 
 
@@ -679,9 +657,7 @@ def binned_coverage(y_true_folds, y_quantile_low, y_quantile_high, n_bins=10):
         fold_high = y_quantile_high[fold_idx]
 
         # Assign each sample in this fold to a bin
-        fold_bins = (
-            np.digitize(fold_true, bins=[b[0] for b in bin_boundaries] + [np.inf]) - 1
-        )
+        fold_bins = np.digitize(fold_true, bins=[b[0] for b in bin_boundaries] + [np.inf]) - 1
 
         for bin_idx, (bin_left, bin_right) in enumerate(bin_boundaries):
             # Get samples from this fold that fall into this bin
@@ -732,9 +708,7 @@ def collect_cv_predictions(
 
     results = []
 
-    for (_, test_idx), pipeline in zip(
-        cv_splitter.split(prediction_time.skb.eval()), pipelines
-    ):
+    for (_, test_idx), pipeline in zip(cv_splitter.split(prediction_time.skb.eval()), pipelines):
         split = predictions.skb.train_test_split(
             predictions.skb.get_data(),
             split_func=split_func,

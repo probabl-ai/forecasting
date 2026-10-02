@@ -83,9 +83,7 @@ def make_multi_horizon_pred(features, y):
 
 # %%
 TIME_HORIZONS = (1, 12, 24)
-features, y = feature_engineering_outputs(
-    TIME_HORIZONS, cv_splitter=TimeSeriesSplitter()
-)
+features, y = feature_engineering_outputs(TIME_HORIZONS, cv_splitter=TimeSeriesSplitter())
 
 pred = make_multi_horizon_pred(features, y)
 pred
@@ -111,9 +109,7 @@ predicted_y_test
 # %%
 from sklearn.metrics import mean_absolute_percentage_error
 
-mean_absolute_percentage_error(
-    split["y_test"], predicted_y_test, multioutput="raw_values"
-)
+mean_absolute_percentage_error(split["y_test"], predicted_y_test, multioutput="raw_values")
 
 
 # %% [markdown]
@@ -171,9 +167,9 @@ new_date
 features_24_horizons, y_24_horizons = feature_engineering_outputs(
     range(1, 25), TimeSeriesSplitter()
 )
-pred_24_horizons = make_multi_horizon_pred(
-    features_24_horizons, y_24_horizons
-).skb.with_scoring(neg_mape_scorer)
+pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons).skb.with_scoring(
+    neg_mape_scorer
+)
 learner = pred_24_horizons.skb.make_learner(fitted=True)
 future_pred = learner.predict({"start": new_date, "end": None})
 future_pred
@@ -241,9 +237,7 @@ def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
     for i, h in enumerate(horizons):
         target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=h)
         if i == 0:
-            fig.add_trace(
-                plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load"))
-            )
+            fig.add_trace(plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load")))
         fig.add_trace(plot_line(target_time, cv_predictions[f"pred_{h}h"]))
     fig.update_layout(height=700)
     return fig

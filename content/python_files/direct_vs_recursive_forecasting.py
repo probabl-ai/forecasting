@@ -71,22 +71,14 @@ def generate_synthetic_1(
     for segment_type in segment_types:
         if segment_type == "a":
             # Prefix is centered around 0 with low variance
-            segments.append(
-                rng.normal(loc=0, scale=low_noise_level, size=prefix_length)
-            )
+            segments.append(rng.normal(loc=0, scale=low_noise_level, size=prefix_length))
             # Suffix is centered around 1 with low variance
-            segments.append(
-                rng.normal(loc=1, scale=low_noise_level, size=suffix_length)
-            )
+            segments.append(rng.normal(loc=1, scale=low_noise_level, size=suffix_length))
         elif segment_type == "b":
             # Prefix is also centered around 0 but with high variance
-            segments.append(
-                rng.normal(loc=0, scale=high_noise_level, size=prefix_length)
-            )
+            segments.append(rng.normal(loc=0, scale=high_noise_level, size=prefix_length))
             # Suffix is centered around -1 with low variance
-            segments.append(
-                rng.normal(loc=-1, scale=low_noise_level, size=suffix_length)
-            )
+            segments.append(rng.normal(loc=-1, scale=low_noise_level, size=suffix_length))
     return pd.DataFrame(
         {
             "time": np.arange(total_length),
@@ -215,9 +207,7 @@ def collect_predictions(mlf, data_test, test_offset=0):
 
         new_predictions = mlf.predict(PREDICTION_HORIZON)
         new_predictions["horizon"] = np.arange(new_predictions.shape[0]) + 1
-        new_predictions = new_predictions.merge(
-            data_test, on=["time", "series_id"], how="left"
-        )
+        new_predictions = new_predictions.merge(data_test, on=["time", "series_id"], how="left")
         all_predictions.append(new_predictions)
 
         # Update the forecaster with the new observations
@@ -256,9 +246,7 @@ print(f"Direct forecasting prediction time: {perf_counter() - tic:.1f} seconds")
 def score_predictions(all_predictions, model_name):
     """Compute the mean absolute error of the predictions."""
     all_predictions = pd.concat(all_predictions)
-    all_predictions["absolute_error"] = np.abs(
-        all_predictions["y"] - all_predictions[model_name]
-    )
+    all_predictions["absolute_error"] = np.abs(all_predictions["y"] - all_predictions[model_name])
     return all_predictions.dropna().groupby("horizon")
 
 
@@ -285,9 +273,7 @@ def plot_some_predictions(all_predictions, data_test, model_name, nrows=12, titl
     for row_idx, predictions in enumerate(all_predictions):
         predictions = predictions.drop("y", axis=1)
         merged_data = data_test.copy()
-        merged_data = merged_data.merge(
-            predictions, on=["time", "series_id"], how="left"
-        )
+        merged_data = merged_data.merge(predictions, on=["time", "series_id"], how="left")
         merged_data.drop(["series_id"], axis=1).iloc[: SEGMENT_LENGTH * 3].plot(
             x="time", y=["y", model_name], ax=axes[row_idx]
         )

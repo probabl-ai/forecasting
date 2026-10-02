@@ -63,8 +63,7 @@ def split_by_quantile(pred):
     for c in pred.columns:
         quantile_cols.setdefault(c.split("__")[1], []).append(c)
     return {
-        q: pred.select(cols).rename(lambda c: c.split("__")[0])
-        for q, cols in quantile_cols.items()
+        q: pred.select(cols).rename(lambda c: c.split("__")[0]) for q, cols in quantile_cols.items()
     }
 
 
@@ -100,10 +99,7 @@ def pinball(y_true, y_pred):
         )
         detail = d2_pinball_score(y_true, q_pred, multioutput="raw_values")
         scores.update(
-            {
-                f"d2_pinball_score__{c}__{q}": float(s)
-                for c, s in zip(y_true.columns, detail)
-            }
+            {f"d2_pinball_score__{c}__{q}": float(s) for c, s in zip(y_true.columns, detail)}
         )
     return scores
 
@@ -154,9 +150,7 @@ class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
 
 quantiles = (0.05, 0.5, 0.95)
 
-learning_rate = skrub.choose_float(
-    0.01, 0.7, default=0.1, log=True, name="learning_rate"
-)
+learning_rate = skrub.choose_float(0.01, 0.7, default=0.1, log=True, name="learning_rate")
 max_leaf_nodes = skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes")
 hgb_params = dict(
     random_state=0,
@@ -251,8 +245,7 @@ import plotly.graph_objects as go
 def plot_predictions(results, horizons=None, start="2025-03-01"):
     if start is not None:
         results = results.filter(
-            pl.col("prediction_time")
-            > datetime.fromisoformat(start).replace(tzinfo=UTC)
+            pl.col("prediction_time") > datetime.fromisoformat(start).replace(tzinfo=UTC)
         )
     if horizons is None:
         horizons = sorted(
@@ -311,30 +304,18 @@ cv_predictions_hgbr[0].head(5)
 # values for the different models.
 
 # %%
-plot_residuals_vs_predicted(
-    cv_predictions_hgbr[0], 1, quantile=0.05
-).interactive().properties(
-    title=(
-        "Residuals vs Predicted Values from cross-validation predictions"
-        " for quantile 0.05"
-    )
+plot_residuals_vs_predicted(cv_predictions_hgbr[0], 1, quantile=0.05).interactive().properties(
+    title=("Residuals vs Predicted Values from cross-validation predictions" " for quantile 0.05")
 )
 
 # %%
-plot_residuals_vs_predicted(
-    cv_predictions_hgbr[0], 1, quantile=0.5
-).interactive().properties(
+plot_residuals_vs_predicted(cv_predictions_hgbr[0], 1, quantile=0.5).interactive().properties(
     title=("Residuals vs Predicted Values from cross-validation predictions for median")
 )
 
 # %%
-plot_residuals_vs_predicted(
-    cv_predictions_hgbr[0], 1, quantile=0.95
-).interactive().properties(
-    title=(
-        "Residuals vs Predicted Values from cross-validation predictions"
-        " for quantile 0.95"
-    )
+plot_residuals_vs_predicted(cv_predictions_hgbr[0], 1, quantile=0.95).interactive().properties(
+    title=("Residuals vs Predicted Values from cross-validation predictions" " for quantile 0.95")
 )
 
 # %% [markdown]

@@ -158,9 +158,7 @@ for data_file in sorted(get_data_dir().iterdir()):
 def load_electricity_history_data(data_dir=get_data_dir()):
     """Load and aggregate historical load data from the raw CSV files."""
     return (
-        pl.read_csv(
-            get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"]
-        )
+        pl.read_csv(get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
         .drop_nulls()
         .select(
             pl.col("Time (UTC)")
@@ -188,16 +186,16 @@ def resample(electricity_history_data):
         pl.col("load_mw").mean()
     )
     all_times = averaged["time"]
-    return time_range(
-        all_times.min(), (all_times.max() + datetime.timedelta(hours=48))
-    ).join(averaged, on="time", how="left", maintain_order="left")
+    return time_range(all_times.min(), (all_times.max() + datetime.timedelta(hours=48))).join(
+        averaged, on="time", how="left", maintain_order="left"
+    )
 
 
 # %%
 
-raw_electricity_load_history = skrub.as_data_op(
-    load_electricity_history_data
-).skb.set_name("electricity_history_data")()
+raw_electricity_load_history = skrub.as_data_op(load_electricity_history_data).skb.set_name(
+    "electricity_history_data"
+)()
 raw_electricity_load_history
 
 # %%
@@ -221,9 +219,7 @@ electricity_load_history
 
 
 # %%
-def get_X_y(
-    prediction_time, electricity_load_history, horizons, mode=skrub.eval_mode()
-):
+def get_X_y(prediction_time, electricity_load_history, horizons, mode=skrub.eval_mode()):
     """
     Compute input and target variables.
 
@@ -258,11 +254,7 @@ def get_X_y(
         )
         return {
             "X": X_y.select(pl.col("prediction_time")),
-            "y": (
-                X_y[f"{horizons[0]}h"]
-                if single_horizon
-                else X_y.drop("prediction_time")
-            ),
+            "y": (X_y[f"{horizons[0]}h"] if single_horizon else X_y.drop("prediction_time")),
         }
     else:
         # In predict mode there is no y and we return unmodified query
@@ -271,9 +263,7 @@ def get_X_y(
 
 # Example output for 1 hours
 EXAMPLE_TIME_HORIZON = 1
-X_y = prediction_time.skb.apply_func(
-    get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON
-)
+X_y = prediction_time.skb.apply_func(get_X_y, electricity_load_history, EXAMPLE_TIME_HORIZON)
 X = X_y["X"].skb.mark_as_X()
 y = X_y["y"].skb.mark_as_y()
 X
@@ -332,17 +322,15 @@ def add_lagged_features(df, electricity_load_history, horizon):
 
     def rolling(e, name):
         return [
-            e.rolling(
-                index_column="time", period=f"{width}h", offset=f"{-width -lag}h"
-            ).alias(f"lag_{lag}_width_{width}_{name}")
+            e.rolling(index_column="time", period=f"{width}h", offset=f"{-width -lag}h").alias(
+                f"lag_{lag}_width_{width}_{name}"
+            )
             for lag in rolling_lags
             for width in rolling_widths
         ]
 
     medians = rolling(pl.col("load_mw").median(), "median")
-    iqr = rolling(
-        (pl.col("load_mw").quantile(0.75) - pl.col("load_mw").quantile(0.25)), "iqr"
-    )
+    iqr = rolling((pl.col("load_mw").quantile(0.75) - pl.col("load_mw").quantile(0.25)), "iqr")
     features = electricity_load_history.select(pl.col("time"), *lags, *medians, *iqr)
     return df.join(
         features,
@@ -390,9 +378,7 @@ def add_weather(
             city_weather_fetcher(city)
             .with_columns(pl.col("time").dt.cast_time_unit("us"))
             .select(
-                (pl.col("time"), cs.matches(".*temperature.*"))
-                if temperature_only
-                else pl.all()
+                (pl.col("time"), cs.matches(".*temperature.*")) if temperature_only else pl.all()
             )
             .select(
                 pl.col("time"),
@@ -411,9 +397,7 @@ def add_calendar_and_holidays(target_time):
     fr_time = pl.col("target_time").dt.convert_time_zone("Europe/Paris")
     fr_year_min = target_time.select(fr_time.dt.year().min()).item()
     fr_year_max = target_time.select(fr_time.dt.year().max()).item()
-    holidays_fr = holidays.country_holidays(
-        "FR", years=range(fr_year_min, fr_year_max + 1)
-    )
+    holidays_fr = holidays.country_holidays("FR", years=range(fr_year_min, fr_year_max + 1))
     return target_time.with_columns(
         fr_time.dt.hour().alias("cal_hour_of_day"),
         fr_time.dt.weekday().alias("cal_day_of_week"),
@@ -467,9 +451,7 @@ fetch_city_weather("paris")
 # city names and of temperature only vs all features.
 
 # %%
-city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name(
-    "city_weather_fetcher"
-)
+city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name("city_weather_fetcher")
 
 temperature_only = skrub.choose_bool(name="temperature_only", default=True)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
@@ -498,9 +480,7 @@ altair.Chart(lag_window).transform_fold(
         "lag_1_width_168_iqr",
     ],
     as_=["key", "value"],
-).mark_line(tooltip=True).encode(
-    x="target_time:T", y="value:Q", color="key:N"
-).interactive()
+).mark_line(tooltip=True).encode(x="target_time:T", y="value:Q", color="key:N").interactive()
 
 # %%
 weather_window = with_weather.filter(
@@ -515,9 +495,9 @@ weather_cols = [
 altair.Chart(weather_window).transform_fold(
     weather_cols,
     as_=["key", "value"],
-).mark_line(tooltip=True).encode(
-    x="target_time:T", y="value:Q", color="key:N"
-).interactive()
+).mark_line(
+    tooltip=True
+).encode(x="target_time:T", y="value:Q", color="key:N").interactive()
 
 # %% [markdown]
 #
@@ -554,9 +534,7 @@ altair.Chart(with_calendar.tail(100).skb.preview()).transform_fold(
         "lag_24_width_24_iqr",
     ],
     as_=["key", "load_mw"],
-).mark_line(tooltip=True).encode(
-    x="target_time:T", y="load_mw:Q", color="key:N"
-).interactive()
+).mark_line(tooltip=True).encode(x="target_time:T", y="load_mw:Q", color="key:N").interactive()
 
 # %% [markdown]
 #
