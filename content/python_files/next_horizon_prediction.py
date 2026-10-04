@@ -108,22 +108,18 @@ class TimeSeriesSplitter:
 
         first_allowed = min_date + relativedelta(days=min_train_days) + datetime.timedelta(days=self.train_test_gap_days)
 
-        # Align to the first day of the first full month available.
-        start_date = first_allowed.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if start_date < first_allowed:
-            start_date = start_date + relativedelta(months=1)
-        
-        test_start_dates = []
-        current_test_start = start_date
+        current_test_end = max_date.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        ) + relativedelta(months=1)
+        folds = []
+        while True:
+            test_start = current_test_end - relativedelta(months=blocks)
+            if test_start < first_allowed:
+                break
+            folds.append((test_start, current_test_end))
+            current_test_end = test_start
 
-        while current_test_start < max_date:
-            test_start_dates.append(current_test_start)
-            # advance by 3 months (quarter)
-            # Using relativedelta for correct month arithmetic:
-            current_test_start = current_test_start + relativedelta(months=blocks)
-
-        for test_start in test_start_dates:
-            test_end = test_start + relativedelta(months=blocks)  
+        for test_start, test_end in reversed(folds):
             train, test = _split_indices(X, test_start, test_end, gap_days=self.train_test_gap_days)
             if len(train) and len(test):
                 yield train, test
@@ -535,3 +531,55 @@ randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
 
 # %%
 # nested_cv_results_ridge.round(3)
+
+# %% [markdown]
+# ## Skrub report
+#
+# Precomputed reports: [Jupyter Book](../../_static/reports/next_horizon/index.html)
+# and [JupyterLite](../reports/next_horizon/index.html). On a local Python
+# installation, run the next cell to regenerate this report from the main HGB pipeline.
+
+# %%
+import sys
+from IPython.display import FileLink, display
+
+if sys.platform == "emscripten":
+    print("Use the precomputed report link above in JupyterLite.")
+else:
+    repository_root = next(
+        parent for parent in (Path.cwd(), *Path.cwd().parents)
+        if (parent / "book").is_dir()
+    )
+    report = pred.skb.full_report(
+        open=False,
+        output_dir=repository_root / "book" / "_static" / "reports" / "next_horizon",
+        overwrite=True,
+        title="Next-horizon forecasting pipeline",
+    )
+    display(FileLink(str(report["report_path"])))
+
+# %% [markdown]
+# ## Skrub report
+#
+# Precomputed reports: [Jupyter Book](../../_static/reports/next_horizon/index.html)
+# and [JupyterLite](../reports/next_horizon/index.html). On a local Python
+# installation, run the next cell to regenerate this report from the main HGB pipeline.
+
+# %%
+import sys
+from IPython.display import FileLink, display
+
+if sys.platform == "emscripten":
+    print("Use the precomputed report link above in JupyterLite.")
+else:
+    repository_root = next(
+        parent for parent in (Path.cwd(), *Path.cwd().parents)
+        if (parent / "book").is_dir()
+    )
+    report = pred.skb.full_report(
+        open=False,
+        output_dir=repository_root / "book" / "_static" / "reports" / "next_horizon",
+        overwrite=True,
+        title="Next-horizon forecasting pipeline",
+    )
+    display(FileLink(str(report["report_path"])))
