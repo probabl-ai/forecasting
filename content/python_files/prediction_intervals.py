@@ -212,8 +212,9 @@ pred = make_multi_horizon_pred(features, y, regressor=hgb_q_regressor).skb.with_
 # temperature, temperature plus wind speed, and all weather features.
 
 # %%
-search_environment = {"start": "2023-01-01", "end": "2025-05-31"}
-outer_split = next(pred.skb.iter_cv_splits(environment=search_environment))
+search_environment = {"start": "2022-01-01", "end": "2025-05-31"}
+outer_splits = list(pred.skb.iter_cv_splits(environment=search_environment))
+outer_split = outer_splits[-1]
 quantile_searches = {}
 quantile_test_predictions = {}
 
