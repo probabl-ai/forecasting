@@ -12,4 +12,5 @@ parts:
   - file: content/notebooks/single_horizon_prediction
   - file: content/notebooks/multiple_horizons_prediction
   - file: content/notebooks/prediction_intervals
+  - file: content/notebooks/prediction_intervals_tabicl
   - file: content/notebooks/direct_vs_recursive_forecasting
