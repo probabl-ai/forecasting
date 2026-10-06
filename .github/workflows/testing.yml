@@ -24,8 +24,8 @@ jobs:
 
       - name: Run tests
         run: |
-            pixi run -e doc convert-to-executed-notebooks
+            pixi run convert-to-executed-notebooks
 
       - name: Test if we can build the documentation
         if: matrix.os == 'ubuntu-latest'
-        run: pixi run -e doc build-book
+        run: pixi run build-book

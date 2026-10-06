@@ -19,4 +19,4 @@ jobs:
           environments: lint
 
       - name: Run linting and formatting checks
-        run: pixi run -e lint lint
+        run: pixi run lint
