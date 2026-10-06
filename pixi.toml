@@ -15,6 +15,9 @@ convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --
 build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions"] }
 build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
 serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }
+lint = "ruff check . && black --check ."
+format = "ruff check --fix . && black ."
+install-pre-commit = "pre-commit install"
 
 [dependencies]
 notebook = ">=7.4.3,<8"
@@ -41,6 +44,7 @@ optuna = ">=4.0.0,<5"
 ipykernel = "*"
 ruff = "*"
 black = "*"
+pre-commit = ">=4.6.2,<5"
 jupyter-book = "*"
 jupyterlite = "*"
 jupyterlite-pyodide-kernel = "*"

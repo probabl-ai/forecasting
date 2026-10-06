@@ -6,7 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 KERNEL_NAME = "pixi-doc-python"
 KERNEL_DISPLAY_NAME = "Python 3 (pixi doc)"
 
