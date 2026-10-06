@@ -29,7 +29,7 @@ from feature_engineering_lib import (
     feature_engineering_outputs,
     load_electricity_history_data,
 )
-from next_horizon_prediction_lib import (
+from single_horizon_prediction_lib import (
     TimeSeriesSplitter,
     get_cv_results,
     get_regressor,

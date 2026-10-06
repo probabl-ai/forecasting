@@ -25,7 +25,7 @@ import tutorial_helpers
 
 importlib.reload(tutorial_helpers)
 from feature_engineering_lib import feature_engineering_outputs
-from next_horizon_prediction_lib import TimeSeriesSplitter
+from single_horizon_prediction_lib import TimeSeriesSplitter
 from prediction_intervals_lib import (
     concat_horizons,
     cross_val_predict,

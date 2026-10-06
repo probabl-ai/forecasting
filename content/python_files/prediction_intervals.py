@@ -28,7 +28,7 @@ import tutorial_helpers
 importlib.reload(tutorial_helpers)
 
 from feature_engineering_lib import feature_engineering_outputs, time_range
-from next_horizon_prediction_lib import TimeSeriesSplitter
+from single_horizon_prediction_lib import TimeSeriesSplitter
 from tutorial_helpers import (
     binned_coverage,
     collect_cv_predictions,
