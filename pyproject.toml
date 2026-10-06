@@ -31,7 +31,7 @@ ignore = [
 known-first-party = [
     "tutorial_helpers",
     "feature_engineering_lib",
-    "next_horizon_prediction_lib",
+    "single_horizon_prediction_lib",
     "prediction_intervals_lib",
 ]
 
