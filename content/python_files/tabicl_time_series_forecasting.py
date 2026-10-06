@@ -9,22 +9,21 @@ Time series forecasting with TabICL on electricity load
 # %pip install "tabicl[forecast]"
 
 # %%
-from datetime import UTC, datetime, timedelta
 import functools
+import importlib
 import re
 import warnings
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import plotly.graph_objects as go
-import skrub
 import polars as pl
-
+import skrub
 from tabicl import TabICLRegressor
 
 import tutorial_helpers
-import importlib
+
 importlib.reload(tutorial_helpers)
-from tutorial_helpers import plot_lorenz_curve, plot_reliability_diagram
 from feature_engineering_lib import feature_engineering_outputs
 from next_horizon_prediction_lib import TimeSeriesSplitter
 from prediction_intervals_lib import (
@@ -36,6 +35,7 @@ from prediction_intervals_lib import (
     pinball_scorer,
     plot_predictions,
 )
+from tutorial_helpers import plot_lorenz_curve, plot_reliability_diagram
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
@@ -114,9 +114,7 @@ cv_predictions_tabicl = cross_val_predict(
 )
 
 # %%
-plot_predictions(
-    cv_predictions_tabicl[0], horizons=(12,), start="2023-01-01"
-).show()
+plot_predictions(cv_predictions_tabicl[0], horizons=(12,), start="2023-01-01").show()
 
 # %%
 plot_reliability_diagram(

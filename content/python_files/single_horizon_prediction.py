@@ -19,16 +19,15 @@ import cloudpickle
 import pyarrow  # noqa: F401
 import skrub
 import tzdata  # noqa: F401
-from plotly.io import write_json, read_json  # noqa: F401
+from plotly.io import read_json, write_json  # noqa: F401
 
 from tutorial_helpers import (
+    collect_cv_predictions,
+    plot_binned_residuals,
     plot_lorenz_curve,
     plot_reliability_diagram,
     plot_residuals_vs_predicted,
-    plot_binned_residuals,
-    collect_cv_predictions,
 )
-
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
@@ -69,9 +68,8 @@ target
 # cross-validated randomized search.
 
 # %%
-from sklearn.ensemble import HistGradientBoostingRegressor
 import skrub.selectors as s
-
+from sklearn.ensemble import HistGradientBoostingRegressor
 
 features_with_dropped_cols = features.skb.apply(
     skrub.DropCols(
@@ -99,12 +97,8 @@ hgbr_predictions = features_with_dropped_cols.skb.apply(
     HistGradientBoostingRegressor(
         random_state=0,
         loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
-        learning_rate=skrub.choose_float(
-            0.01, 1, default=0.1, log=True, name="learning_rate"
-        ),
-        max_leaf_nodes=skrub.choose_int(
-            3, 300, default=30, log=True, name="max_leaf_nodes"
-        ),
+        learning_rate=skrub.choose_float(0.01, 1, default=0.1, log=True, name="learning_rate"),
+        max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
     ),
     y=target,
 )
@@ -174,24 +168,16 @@ hgbr_predictions.skb.full_report()
 # %%
 from sklearn.model_selection import TimeSeriesSplit
 
-
 max_train_size = 2 * 52 * 24 * 7  # max ~2 years of training data
 test_size = 24 * 7 * 24  # 24 weeks of test data
 gap = 7 * 24  # 1 week gap between train and test sets
-ts_cv_5 = TimeSeriesSplit(
-    n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap
-)
+ts_cv_5 = TimeSeriesSplit(n_splits=5, max_train_size=max_train_size, test_size=test_size, gap=gap)
 
-for fold_idx, (train_idx, test_idx) in enumerate(
-    ts_cv_5.split(prediction_time.skb.eval())
-):
+for fold_idx, (train_idx, test_idx) in enumerate(ts_cv_5.split(prediction_time.skb.eval())):
     print(f"CV iteration #{fold_idx}")
     train_datetimes = prediction_time.skb.eval()[train_idx]
     test_datetimes = prediction_time.skb.eval()[test_idx]
-    print(
-        f"Train: {train_datetimes.shape[0]} rows, "
-        f"Test: {test_datetimes.shape[0]} rows"
-    )
+    print(f"Train: {train_datetimes.shape[0]} rows, " f"Test: {test_datetimes.shape[0]} rows")
     print(f"Train time range: {train_datetimes[0, 0]} to " f"{train_datetimes[-1, 0]} ")
     print(f"Test time range: {test_datetimes[0, 0]} to " f"{test_datetimes[-1, 0]} ")
     print()
@@ -221,9 +207,11 @@ for fold_idx, (train_idx, test_idx) in enumerate(
 
 # %%
 from sklearn.metrics import (
-    make_scorer, mean_absolute_percentage_error, get_scorer, d2_tweedie_score
+    d2_tweedie_score,
+    get_scorer,
+    make_scorer,
+    mean_absolute_percentage_error,
 )
-
 
 hgbr_cv_results = hgbr_predictions.skb.cross_validate(
     cv=ts_cv_5,
@@ -275,15 +263,9 @@ hgbr_cv_predictions[0]
 # visualization to the last 7 days of the fold.
 
 # %%
-altair.Chart(
-    hgbr_cv_predictions[0].tail(24 * 7)
-).transform_fold(
+altair.Chart(hgbr_cv_predictions[0].tail(24 * 7)).transform_fold(
     ["load_mw", "predicted_load_mw"],
-).mark_line(
-    tooltip=True
-).encode(
-    x="prediction_time:T", y="value:Q", color="key:N"
-).interactive()
+).mark_line(tooltip=True).encode(x="prediction_time:T", y="value:Q", color="key:N").interactive()
 
 # %% [markdown]
 #
@@ -353,17 +335,15 @@ plot_binned_residuals(hgbr_cv_predictions, by="month").interactive().properties(
 )
 
 # %%
-ts_cv_2 = TimeSeriesSplit(
-    n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24
-)
+ts_cv_2 = TimeSeriesSplit(n_splits=2, test_size=test_size, max_train_size=max_train_size, gap=24)
 randomized_search_hgbr = hgbr_predictions.skb.make_randomized_search(
-     cv=ts_cv_2,
-     scoring="r2",
-     n_iter=100,
-     fitted=True,
-     verbose=1,
-     n_jobs=-1,
- )
+    cv=ts_cv_2,
+    scoring="r2",
+    n_iter=100,
+    fitted=True,
+    verbose=1,
+    n_jobs=-1,
+)
 
 # %%
 randomized_search_hgbr.results_.round(3)
@@ -378,25 +358,25 @@ fig.update_layout(margin=dict(l=200))
 
 # %%
 nested_cv_results = skrub.cross_validate(
-     environment=hgbr_predictions.skb.get_data(),
-     learner=randomized_search_hgbr,
-     cv=ts_cv_5,
-     scoring={
-         "r2": get_scorer("r2"),
-         "mape": make_scorer(mean_absolute_percentage_error),
-     },
-     n_jobs=-1,
-     return_learner=True,
- ).round(3)
+    environment=hgbr_predictions.skb.get_data(),
+    learner=randomized_search_hgbr,
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": make_scorer(mean_absolute_percentage_error),
+    },
+    n_jobs=-1,
+    return_learner=True,
+).round(3)
 nested_cv_results
 
 # %%
 for outer_fold_idx in range(len(nested_cv_results)):
-     print(
-         nested_cv_results.loc[outer_fold_idx, "learner"]
-         .results_.loc[:, "mean_test_score"]
-         .round(3)
-         .to_dict()
+    print(
+        nested_cv_results.loc[outer_fold_idx, "learner"]
+        .results_.loc[:, "mean_test_score"]
+        .round(3)
+        .to_dict()
     )
 
 # %% [markdown]
@@ -431,8 +411,8 @@ for outer_fold_idx in range(len(nested_cv_results)):
 # Here we provide all the imports for creating the predictive model.
 from sklearn.feature_selection import SelectKBest, VarianceThreshold
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import Ridge
 from sklearn.kernel_approximation import Nystroem
+from sklearn.linear_model import Ridge
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import SplineTransformer
 
@@ -456,17 +436,11 @@ predictions_ridge = features_with_dropped_cols.skb.apply(
         SimpleImputer(add_indicator=True),
         SplineTransformer(sparse_output=True),
         VarianceThreshold(threshold=1e-6),
-        SelectKBest(
-            k=skrub.choose_int(100, 1_000, log=True, name="n_selected_splines")
-        ),
+        SelectKBest(k=skrub.choose_int(100, 1_000, log=True, name="n_selected_splines")),
         Nystroem(
-            n_components=skrub.choose_int(
-                10, 200, log=True, name="n_components", default=150
-            )
+            n_components=skrub.choose_int(10, 200, log=True, name="n_components", default=150)
         ),
-        Ridge(
-            alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)
-        ),
+        Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
     ),
     y=target,
 )
@@ -540,11 +514,7 @@ cv_predictions_ridge = collect_cv_predictions(
 # %%
 altair.Chart(cv_predictions_ridge[0].tail(24 * 7)).transform_fold(
     ["load_mw", "predicted_load_mw"],
-).mark_line(
-    tooltip=True
-).encode(
-    x="prediction_time:T", y="value:Q", color="key:N"
-).interactive()
+).mark_line(tooltip=True).encode(x="prediction_time:T", y="value:Q", color="key:N").interactive()
 
 # %% [markdown]
 #
@@ -580,13 +550,13 @@ plot_reliability_diagram(cv_predictions_ridge).interactive().properties(
 
 # %%
 randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
-     cv=ts_cv_2,
-     scoring="r2",
-     n_iter=100,
-     fitted=True,
-     verbose=1,
-     n_jobs=-1,
- )
+    cv=ts_cv_2,
+    scoring="r2",
+    n_iter=100,
+    fitted=True,
+    verbose=1,
+    n_jobs=-1,
+)
 
 # %%
 fig = randomized_search_ridge.plot_results().update_layout(margin=dict(l=200))
@@ -610,16 +580,16 @@ fig.update_layout(margin=dict(l=200))
 
 # %%
 nested_cv_results_ridge = skrub.cross_validate(
-     environment=predictions_ridge.skb.get_data(),
-     learner=randomized_search_ridge,
-     cv=ts_cv_5,
-     scoring={
-         "r2": get_scorer("r2"),
-         "mape": make_scorer(mean_absolute_percentage_error),
-     },
-     n_jobs=-1,
-     return_learner=True,
- ).round(3)
+    environment=predictions_ridge.skb.get_data(),
+    learner=randomized_search_ridge,
+    cv=ts_cv_5,
+    scoring={
+        "r2": get_scorer("r2"),
+        "mape": make_scorer(mean_absolute_percentage_error),
+    },
+    n_jobs=-1,
+    return_learner=True,
+).round(3)
 
 # %%
 nested_cv_results_ridge.round(3)
