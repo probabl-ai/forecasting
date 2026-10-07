@@ -584,7 +584,7 @@ def add_features(
         temperature_only=temperature_only,
         weather_fetcher=weather_fetcher,
     )
-    df = add_calendar_and_holidays(df, holidays_fetcher)
+    df = add_calendar_and_holidays(df, holidays_fetcher=holidays_fetcher)
     return df
 
 
