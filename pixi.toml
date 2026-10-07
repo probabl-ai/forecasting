@@ -11,7 +11,7 @@ create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
 scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
 copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
 convert-to-notebooks = { cmd = "python utils/convert_to_notebooks.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions"] }
-convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute --exclude single_horizon_prediction.py --exclude tabicl_time_series_forecasting.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions"] }
+convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions"] }
 build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions"] }
 build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
 serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }
@@ -54,3 +54,13 @@ python-libarchive-c = "*"
 openmeteo-requests = ">=1.5.0, <2"
 requests-cache = ">=1.2.1, <2"
 retry-requests = ">=2.0.0, <3"
+
+[target.linux-64.pypi-dependencies]
+tabicl = "==2.2.0"
+torch = { version = ">=2.2", index = "https://download.pytorch.org/whl/cpu" }
+
+[target.osx-arm64.pypi-dependencies]
+tabicl = "==2.2.0"
+
+[target.win-64.pypi-dependencies]
+tabicl = "==2.2.0"
