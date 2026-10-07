@@ -46,7 +46,11 @@ def tabicl_quantiles_to_df(prediction, quantiles, mode=skrub.eval_mode()):
     return pl.DataFrame(prediction, schema=[f"q_{q}" for q in quantiles])
 
 
-def limit_train_size(df, size=9000, mode=skrub.eval_mode()):
+def limit_train_size(
+    df,
+    size=tutorial_helpers.TABICL_TRAIN_SIZE,  # 9000 by default, 1500 in CI
+    mode=skrub.eval_mode(),
+):
     if mode in ("fit", "fit_transform", "preview"):
         return df.tail(size)
     return df
