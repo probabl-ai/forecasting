@@ -1,4 +1,5 @@
 import datetime
+import os
 
 import altair
 import numpy as np
@@ -6,6 +7,8 @@ import pandas as pd
 import polars as pl
 import polars.selectors as cs
 import skrub
+
+TABICL_TRAIN_SIZE = int(os.environ.get("TABICL_TRAIN_SIZE", "9000"))
 
 
 def lorenz_curve(observed_value, predicted_value, n_samples=1_000):

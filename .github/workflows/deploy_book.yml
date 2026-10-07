@@ -10,6 +10,8 @@ jobs:
     permissions:
       contents: write
     runs-on: ubuntu-latest
+    env:
+      TABICL_TRAIN_SIZE: "1500"
     steps:
       - uses: actions/checkout@v4
         with:
