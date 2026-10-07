@@ -3,30 +3,27 @@
 #
 # The purpose of this notebook is to demonstrate how to use `skrub` and
 # `polars` to perform feature engineering for electricity load forecasting.
-
-# We build a pipeline that for a given prediction time, predicts the future
-# electricity load. We start by doing it for 1 horizon, then we extend to
-# predicting multiple horizons in the same pipeline.
-# This means that for each prediction time, it outputs predicted loads
-# for 1 or several horizons.
-
-# Features (and targets) from different data sources are used:
-
+#
+# We will build a set of features (and targets) from different data sources:
+#
 # - Historical weather data for 10 medium to large urban areas in France;
 # - Historical electricity load data for the whole of France;
 # - Holidays and standard calendar features for France.
-
+#
 # All these data sources cover a time range from March 23, 2021 to May 31,
 # 2025.
-
-# Exogenous features derived from the weather and calendar data can
-# be used to engineer "future covariates". Since the load data is our prediction target,
-# we can also use it to engineer  "past covariates" such as lagged features and rolling
-# aggregations.
-
-# The future values of the load data (with respect to the prediction time) are
-# used as targets for the forecasting model.
-
+#
+# Since our maximum forecasting horizon is 24 hours, we consider that the
+# future weather data is known at a chosen prediction time. Similarly, the
+# holidays and calendar features are known at prediction time for any point in
+# the future.
+#
+# Therefore, exogenous features derived from the weather and calendar data can
+# be used to engineer "future covariates". Since the load (demand) data is our
+# prediction target, we will can also use it to engineer "past covariates" such
+# as lagged features and rolling aggregations. The future values of the load
+# data (with respect to the prediction time) are used as targets for the
+# forecasting model.
 #
 # ## Environment setup
 #
@@ -57,12 +54,6 @@ from polars import selectors as cs
 
 # %% [markdown]
 #
-# If you run the above locally with pydot and graphviz installed, you can
-# visualize the expression graph of the `time` variable by expanding the "Show
-# graph" button.
-#
-# Let's now load the data records for the time range defined above.
-#
 # To avoid network issues when running this notebook, the necessary data files
 # have already been downloaded and saved in the `datasets` folder.
 
@@ -78,43 +69,60 @@ for data_file in sorted(get_data_dir().iterdir()):
 
 # %% [markdown]
 #
-# ## Electricity load data
+# ## Electricity demand data
 #
-# We load the electricity load data. This data will both be used as a
-# target variable but also to craft the data pipeline. We build a pipeline that
-# for a given prediction time, predicts the future electricity load.
-# We start by doing it for 1 horizon, then we extend to
-# predicting multiple horizons in the same pipeline.
+# We fetch the electricity demand data from our local data folder. This data
+# will both be used as a target variable but also to craft the data pipeline.
+#
+# All the operations we perform, from data loading to the final prediction,
+# will be tracked in a skrub DataOp graph, rather than executed immediately.
+# This will allow us to fit the whole pipeline and apply it to unseen data, and
+# also to cross-validate it and tune hyperparameters.
+#
+# Inputs to the computation graph are declared with `skrub.var()`. As we may
+# want to change the data source when using a fitted pipeline, we make the
+# function that loads the historical data a variable, so that another fetcher
+# can be passed instead if needed.
+
+# %%
+def fetch_demand_history():
+    """Load and aggregate historical load data from the raw CSV files."""
+    return (
+        pl.read_csv(get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
+        .drop_nulls()
+        .select(
+            pl.col("Time (UTC)")
+            .str.split(by=" - ")
+            .list.first()
+            .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
+            .alias("time"),
+            pl.col("Actual Total Load [MW] - BZN|FR").alias("load_mw"),
+        )
+    )
+
+history_fetcher = skrub.var("history_fetcher", fetch_demand_history, becomes_default=True)
+raw_demand_history = history_fetcher()
+
+# %% [markdown]
+#
+# As we can see, we have started building our learning pipeline. It contains
+# only 2 nodes for now, that load the historical data. Skrub shows eager
+# previews of the intermediate results as we build the pipeline, so we can
+# check the results as we go.
+
+# %% [markdown]
 #
 # The historical data is sampled irregularly, sometimes every hour, sometimes
 # every 15 min, and with missing rows. We define a function to resample it on a
 # regular 1h-spaced grid.
 #
-# As this will serve as the basis for our lagged features, we add a buffer of
-# empty rows beyond the range of our data. We do not have the actual load for
-# those rows, but lagged loads can be defined for them and joined onto the
-# feature set we are building.
-#
-
-# %% [markdown]
-# ## Shared time range for all historical data sources
+# We start by defining the function that builds our grid of prediction times
+# given a start and end date.
 #
 # Let's define a hourly time range from March 23, 2021 to May 31, 2025 that
 # will be used to join the electricity load data and the weather data. The time
 # range is in UTC timezone to avoid any ambiguity when joining with the weather
 # data that is also in UTC.
-#
-# We wrap the resulting polars dataframe in a `skrub` expression so we can
-# inspect eager previews in the notebook while keeping the computation as a
-# reusable expression graph. The `skrub` expression system is also useful for
-# other reasons: all
-# operations in this notebook are chained together in a directed
-# acyclic graph that is automatically tracked by `skrub`. This allows us to
-# extract the resulting pipeline and apply it to new data later on, exactly
-# like a trained scikit-learn pipeline. The main difference is that we do so
-# incrementally and while eagerly executing and inspecting the results of each
-# step as is customary when working with dataframe libraries such as polars and
-# pandas in Jupyter notebooks.
 
 
 # %%
@@ -151,23 +159,15 @@ prediction_time = skrub.deferred(time_range)(range_start, range_end)
 prediction_time
 
 
+# %% [markdown]
+#
+# Now we define the function that resamples the historical data to this regular
+# grid. As this will serve as the basis for our lagged features, we add a
+# buffer of empty rows beyond the range of our data. We do not have the actual
+# electricity demand for those rows, but lagged loads can be defined for them
+# and joined onto the feature set we are building.
+
 # %%
-def fetch_demand_history():
-    """Load and aggregate historical load data from the raw CSV files."""
-    return (
-        pl.read_csv(get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
-        .drop_nulls()
-        .select(
-            pl.col("Time (UTC)")
-            .str.split(by=" - ")
-            .list.first()
-            .str.to_datetime("%d.%m.%Y %H:%M", time_zone="UTC")
-            .alias("time"),
-            pl.col("Actual Total Load [MW] - BZN|FR").alias("load_mw"),
-        )
-    )
-
-
 def resample(demand_history):
     """
     Resample the load history on a regular time grid to have exactly 1 row every hour.
@@ -189,20 +189,20 @@ def resample(demand_history):
 
 
 # %%
-history_fetcher = skrub.var("history_fetcher", fetch_demand_history, becomes_default=True)
-demand_history = history_fetcher().skb.apply_func(resample)
+demand_history = raw_demand_history.skb.apply_func(resample)
 demand_history
 
 # %% [markdown]
 #
 # ## Building the training dataset
-# The prediction time range we built above is the input query to our system.
-# For each row, it outputs a prediction.
 #
-# We use it to build the ground truth y, by shifting the historical load by the
-# horizon. To account for missing data in the ground truth, we restrict the data to
-# timestamps for which we have a ground truth. At inference, when making a
-# prediction we keep all the query timestamps.
+# The prediction time range we built above is the input query to our system.
+# For each row, our final pipeline will output a prediction.
+#
+# We use this time range to build the ground truth y, by shifting the
+# historical demand by the horizon. To account for missing data in the ground
+# truth, we restrict the data to timestamps for which we have a ground truth.
+# At inference, when making a prediction we keep all the query timestamps.
 #
 # This function is almost the same for handling single or multiple horizons so
 # we anticipate a little bit the need for multiple horizons and make it general
@@ -268,21 +268,20 @@ y
 # ## Feature engineering
 #
 # Now that we have our query and the ground-truth answers for it, we can start
-# building the rest of our predictive pipeline: creating the features and
-# adding a supervised predictor.
-#
-# We already marked X and y with `.skb.mark_as_X()` and `.skb.mark_as_y()`.
-# Doing this early lets us reuse the same expressions later with
-# `train_test_split` or `cross_validate` without extra wiring.
+# building the rest of our predictive pipeline: creating the features (in this
+# notebook) and adding a supervised predictor (in subsequent parts of the
+# tutorial).
 #
 # Feature engineering takes _target time_ into account. In X we have the
 # prediction time, the time at which we make the prediction. We also want to
 # take into account the target time, i.e., the time about which we make a
-# prediction. For example if we are predicting what the load will be on Tuesday
-# at 3pm, we want to know what the weather will be, whether Tuesday is a
-# holiday, and what the load was on Monday at 3pm and the previous Tuesday at
-# 3pm. Those features are driven by the target time. So our first step is to
+# prediction. For example if we are predicting what the demand will be on Monday
+# at 22:00, we want to know what the weather will be, whether Monday is a
+# holiday, and what the electricity demand was on the previous Monday at
+# 22:00. Those features are driven by the target time. So our first step is to
 # add it to the dataframe of features we are building up.
+#
+# ![](horizons.svg)
 
 
 # %%
@@ -300,14 +299,14 @@ with_target_time
 #
 # ## Lagged features
 #
-# Next we have a function for adding lagged features (such as load on the same
+# Next we have a function for adding lagged features (such as demand on the same
 # day of the previous week). It needs the input dataframe (which so far only
 # contains prediction and target time), the historical data that will be used
 # to build the lagged features and join them to the input. The horizon
 # (difference between target and prediction time) is also needed to ensure that
 # we do not include lags that would not be available after deployment: for
 # example if we are creating a pipeline for a 12 h horizon we cannot include
-# the 3-hour lagged load (because it would only become available 9 hours after
+# the 3-hour lagged demand (because it would only become available 9 hours after
 # the deadline for our prediction).
 
 
@@ -356,11 +355,19 @@ with_lags = with_target_time.skb.apply_func(
 )
 with_lags
 
+# %% [markdown]
+#
+# Let us plot some of the features we just created.
+# To obtain the preview result displayed by skrub (as a python object) we can use .skb.preview()
+#
+# TODO: move this code into a function in tutorial_helpers?
+# TODO: both plots seems redundant, keep only 1?
+
 # %%
-lag_window = with_lags.filter(
+lag_window = with_lags.skb.preview().filter(
     (pl.col("target_time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
     & (pl.col("target_time") < pl.datetime(2021, 12, 31, time_zone="UTC"))
-).skb.eval()
+)
 
 altair.Chart(lag_window).transform_fold(
     [
@@ -392,6 +399,16 @@ altair.Chart(with_lags.tail(100).skb.preview()).transform_fold(
 # %% [markdown]
 #
 # ## Weather Data
+#
+# As the weather has a strong influence on electricity demand, we add it to our
+# feature set.
+#
+# We define a list of 10 medium to large urban areas to approximately cover
+# most regions in France with a slight focus on most populated regions that are
+# likely to drive electricity demand.
+#
+# As for the historical data, we make the exact function that loads this data
+# an input to our pipeline so we can change it after fitting if needed.
 
 
 # %%
@@ -402,6 +419,15 @@ def fetch_weather(city):
 weather_fetcher = skrub.var("weather_fetcher", fetch_weather, becomes_default=True)
 weather_fetcher("paris")
 
+# %% [markdown]
+#
+# Now we define the function that actually adds those features to the dataframe
+# we are building up.
+#
+# We are not sure if it is best to use all cities or only a few big ones. Also,
+# we don't know which features to use, temperature is probably the most
+# important one so we may want to try using all features or the temperature
+# only. Therefore the function we define has parameters for controlling that.
 
 # %%
 def add_weather(
@@ -453,11 +479,6 @@ def add_weather(
 
 # %% [markdown]
 #
-# We are not sure if it is best to use all cities or only a few big ones. Also,
-# we don't know which features to use, temperature is probably the most
-# important one so we may want to try using all features or the temperature
-# only. Therefore the function we define has parameters for controlling that.
-#
 # Skrub lets us create "choice" objects, nodes in our pipeline that can take
 # different values for hyperparameter search. We use this for the choice of
 # city names and of temperature only vs all features.
@@ -478,10 +499,10 @@ with_weather
 
 
 # %%
-weather_window = with_weather.filter(
+weather_window = with_weather.skb.preview().filter(
     (pl.col("target_time") > pl.datetime(2021, 12, 1, time_zone="UTC"))
     & (pl.col("target_time") < pl.datetime(2021, 12, 10, time_zone="UTC"))
-).skb.eval()
+)
 
 weather_cols = [
     c for c in weather_window.columns if c.startswith("weather_") and "temperature" in c
