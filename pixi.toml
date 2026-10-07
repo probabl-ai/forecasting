@@ -49,18 +49,9 @@ jupyter-book = ">=1.0.4,<2"
 jupyterlite = "*"
 jupyterlite-pyodide-kernel = "*"
 python-libarchive-c = "*"
+tabicl = ">=2.2.0"
 
 [pypi-dependencies]
 openmeteo-requests = ">=1.5.0, <2"
 requests-cache = ">=1.2.1, <2"
 retry-requests = ">=2.0.0, <3"
-
-[target.linux-64.pypi-dependencies]
-tabicl = "==2.2.0"
-torch = { version = ">=2.2", index = "https://download.pytorch.org/whl/cpu" }
-
-[target.osx-arm64.pypi-dependencies]
-tabicl = "==2.2.0"
-
-[target.win-64.pypi-dependencies]
-tabicl = "==2.2.0"
