@@ -27,7 +27,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 
 from feature_engineering_lib import (
     feature_engineering_outputs,
-    load_electricity_history_data,
+    fetch_demand_history,
 )
 from single_horizon_prediction_lib import (
     TimeSeriesSplitter,
@@ -154,7 +154,7 @@ pred.skb.make_learner().fit(split["train"]).score(split["test"])
 # up or did the cross-validation.
 
 # %%
-electricity_load_history = load_electricity_history_data()
+electricity_load_history = fetch_demand_history()
 history_dates = electricity_load_history["time"]
 history_dates.max()
 
