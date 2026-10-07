@@ -20,7 +20,7 @@
 #
 # Therefore, exogenous features derived from the weather and calendar data can
 # be used to engineer "future covariates". Since the load (demand) data is our
-# prediction target, we will can also use it to engineer "past covariates" such
+# prediction target, we can also use it to engineer "past covariates" such
 # as lagged features and rolling aggregations. The future values of the load
 # data (with respect to the prediction time) are used as targets for the
 # forecasting model.
@@ -84,9 +84,10 @@ for data_file in sorted(get_data_dir().iterdir()):
 # function that loads the historical data a variable, so that another fetcher
 # can be passed instead if needed.
 
+
 # %%
 def fetch_demand_history():
-    """Load and aggregate historical load data from the raw CSV files."""
+    """Load historical electricity demand from the raw CSV files."""
     return (
         pl.read_csv(get_data_dir() / "Total Load - Day Ahead*.csv", null_values=["N/A", "-"])
         .drop_nulls()
@@ -100,15 +101,15 @@ def fetch_demand_history():
         )
     )
 
+
 history_fetcher = skrub.var("history_fetcher", fetch_demand_history, becomes_default=True)
 raw_demand_history = history_fetcher()
 
 # %% [markdown]
 #
-# As we can see, we have started building our learning pipeline. It contains
-# only 2 nodes for now, that load the historical data. Skrub shows eager
-# previews of the intermediate results as we build the pipeline, so we can
-# check the results as we go.
+# Our pipeline has 2 nodes so far, which load the historical data. Skrub shows
+# a preview of each intermediate result as we build the pipeline, so we can
+# check our work as we go.
 
 # %% [markdown]
 #
@@ -167,6 +168,7 @@ prediction_time
 # electricity demand for those rows, but lagged loads can be defined for them
 # and joined onto the feature set we are building.
 
+
 # %%
 def resample(demand_history):
     """
@@ -196,17 +198,15 @@ demand_history
 #
 # ## Building the training dataset
 #
-# The prediction time range we built above is the input query to our system.
-# For each row, our final pipeline will output a prediction.
+# The prediction time range we built above is the input query to our system:
+# for each row, the final pipeline outputs a prediction.
 #
-# We use this time range to build the ground truth y, by shifting the
-# historical demand by the horizon. To account for missing data in the ground
-# truth, we restrict the data to timestamps for which we have a ground truth.
-# At inference, when making a prediction we keep all the query timestamps.
+# We build the ground truth y by shifting the historical demand by the horizon,
+# and keep only the timestamps for which a ground truth exists. At inference,
+# we keep all the query timestamps.
 #
-# This function is almost the same for handling single or multiple horizons so
-# we anticipate a little bit the need for multiple horizons and make it general
-# enough to accomodate both.
+# The same function handles a single horizon or several, as we will need the
+# latter in later parts of the tutorial.
 
 
 # %%
@@ -220,8 +220,8 @@ def get_X_y(prediction_time, demand_history, horizons, mode=skrub.eval_mode()):
     Returns a dictionary with keys X and y, ready to be split for
     cross-validation or used to fit a model.
 
-    For prediction, simply returns `target_time` in a dictionary with a
-    single key X.
+    For prediction, simply returns the query (a dataframe with a single
+    `prediction_time` column) in a dictionary with a single key X.
     """
     if isinstance(horizons, int):
         single_horizon = True
@@ -267,19 +267,16 @@ y
 #
 # ## Feature engineering
 #
-# Now that we have our query and the ground-truth answers for it, we can start
-# building the rest of our predictive pipeline: creating the features (in this
-# notebook) and adding a supervised predictor (in subsequent parts of the
-# tutorial).
+# With our query and its ground truth in place, we can build the rest of the
+# pipeline: the features (this notebook) and a supervised predictor (later
+# parts of the tutorial).
 #
-# Feature engineering takes _target time_ into account. In X we have the
-# prediction time, the time at which we make the prediction. We also want to
-# take into account the target time, i.e., the time about which we make a
-# prediction. For example if we are predicting what the demand will be on Monday
-# at 22:00, we want to know what the weather will be, whether Monday is a
-# holiday, and what the electricity demand was on the previous Monday at
-# 22:00. Those features are driven by the target time. So our first step is to
-# add it to the dataframe of features we are building up.
+# X contains the _prediction time_, when the prediction is made. Features,
+# however, are driven by the _target time_: the time being predicted. To
+# predict demand on Monday at 22:00, we want the weather forecast for that
+# time, whether Monday is a holiday, and the demand on the previous Monday at
+# 22:00. Our first step is therefore to add the target time to the dataframe
+# of features we are building.
 #
 # ![](horizons.svg)
 
@@ -299,15 +296,14 @@ with_target_time
 #
 # ## Lagged features
 #
-# Next we have a function for adding lagged features (such as demand on the same
-# day of the previous week). It needs the input dataframe (which so far only
-# contains prediction and target time), the historical data that will be used
-# to build the lagged features and join them to the input. The horizon
-# (difference between target and prediction time) is also needed to ensure that
-# we do not include lags that would not be available after deployment: for
-# example if we are creating a pipeline for a 12 h horizon we cannot include
-# the 3-hour lagged demand (because it would only become available 9 hours after
-# the deadline for our prediction).
+# Next, a function that adds lagged features (such as the demand on the same
+# day of the previous week). It takes the input dataframe (so far only
+# prediction and target time), the historical demand used to build the lags,
+# and the horizon (the difference between target and prediction time).
+#
+# The horizon ensures we only use lags that would be available at deployment.
+# For a 12 h horizon, for example, we cannot use the 3-hour lagged demand: it
+# would only become available 9 hours after the prediction time.
 
 
 # %%
@@ -429,20 +425,16 @@ weather_fetcher("paris")
 # important one so we may want to try using all features or the temperature
 # only. Therefore the function we define has parameters for controlling that.
 
+
 # %%
 def add_weather(
     df,
-    horizon,
-    cities="all",
-    temperature_only=True,
-    weather_fetcher=fetch_weather,
+    *,
+    cities,
+    temperature_only,
+    weather_fetcher,
 ):
     """Add weather information for the required cities."""
-    # NOTE: here ideally we should retrieve the exact weather forecast
-    # corresponding to the horizon. But we do not have it available in the
-    # historical data. Therefore we just take the only forecast we have and
-    # ignore the horizon.
-    del horizon
     if isinstance(cities, str):
         assert cities == "all"
         cities = (
@@ -490,7 +482,6 @@ cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities
 
 with_weather = with_lags.skb.apply_func(
     add_weather,
-    EXAMPLE_TIME_HORIZON,
     cities=cities,
     temperature_only=temperature_only,
     weather_fetcher=weather_fetcher,
@@ -546,11 +537,11 @@ holidays_fetcher([2024, 2025])
 
 
 # %%
-def add_calendar_and_holidays(df, holidays_fetcher=fetch_holidays):
+def add_calendar_and_holidays(df, *, holidays_fetcher):
     fr_time = pl.col("target_time").dt.convert_time_zone("Europe/Paris")
     fr_year_min = df.select(fr_time.dt.year().min()).item()
     fr_year_max = df.select(fr_time.dt.year().max()).item()
-    holidays_fr = fetch_holidays(years=range(fr_year_min, fr_year_max + 1))
+    holidays_fr = holidays_fetcher(years=range(fr_year_min, fr_year_max + 1))
     return df.with_columns(
         fr_time.dt.hour().alias("cal_hour_of_day"),
         fr_time.dt.weekday().alias("cal_day_of_week"),
@@ -589,7 +580,6 @@ def add_features(
     df = add_lagged_features(df, demand_history, horizon=horizon)
     df = add_weather(
         df,
-        horizon,
         cities=cities,
         temperature_only=temperature_only,
         weather_fetcher=weather_fetcher,
