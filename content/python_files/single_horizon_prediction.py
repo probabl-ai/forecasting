@@ -482,15 +482,17 @@ plot_reliability_diagram(cv_predictions_ridge, TIME_HORIZON).interactive().prope
 )
 
 # %% [markdown]
-#
-# Now, let's perform a randomized search on the hyper-parameters of the model. The code
-# to perform the search is shown below. Since it will be pretty computationally
-# expensive, we are reloading the results of the parallel coordinates plot.
+# To keep the notebook fast we reload an existing search that has 100
+# iterations (specified by storage and study_name), and resume it to add 2 more
+# iterations.
 
 # %%
 randomized_search_ridge = predictions_ridge.skb.make_randomized_search(
+    backend="optuna",
+    storage="sqlite:///single_horizon_prediction_ridge.optuna",
+    study_name="randomized_search",
     refit="r2",
-    n_iter=50,
+    n_iter=2,
     fitted=True,
     verbose=1,
     n_jobs=-1,

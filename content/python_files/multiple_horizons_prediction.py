@@ -293,18 +293,19 @@ outer_split["X_test"]
 # import optuna
 # print(f"optuna version: {optuna.__version__}")
 
-# %%
-# storage = f"sqlite:///{results_dir / 'optuna.sqlite'}"
-# print(f"Check search progress with:\noptuna-dashboard {storage}")
-study_name = "randomized_search"
+# %% [markdown]
+# To keep the notebook fast we reload an existing search that has 100
+# iterations (specified by storage and study_name), and resume it to add 2 more
+# iterations.
 
+# %%
 search = pred.skb.make_randomized_search(
     backend="optuna",
-    n_iter=10,
+    storage="sqlite:///multiple_horizons_prediction.optuna",
+    study_name="randomized_search",
+    n_iter=2,
     n_jobs=1,
     refit="neg_mape_average",
-    storage=None,  # storage,
-    study_name=study_name,
 )
 
 search.fit(outer_split["train"])
