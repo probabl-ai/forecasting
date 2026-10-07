@@ -25,7 +25,6 @@ import tutorial_helpers
 
 importlib.reload(tutorial_helpers)
 from feature_engineering_lib import feature_engineering_outputs
-from next_horizon_prediction_lib import TimeSeriesSplitter
 from prediction_intervals_lib import (
     concat_horizons,
     cross_val_predict,
@@ -35,6 +34,7 @@ from prediction_intervals_lib import (
     pinball_scorer,
     plot_predictions,
 )
+from single_horizon_prediction_lib import TimeSeriesSplitter
 from tutorial_helpers import plot_lorenz_curve, plot_reliability_diagram
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")

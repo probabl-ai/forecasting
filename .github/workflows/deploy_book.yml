@@ -17,21 +17,20 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.8.10
         with:
           pixi-version: v0.48.2
-          environments: doc
 
       - name: Convert Python file to notebooks for JupyterLite
         run: |
           # to create the predictions and validation curves cache
-          pixi run -e doc convert-to-executed-notebooks
+          pixi run convert-to-executed-notebooks
           # to clean the output
-          pixi run -e doc convert-to-notebooks
+          pixi run convert-to-notebooks
 
       - name: Build the JupyterLite site
         run: |
-          pixi run -e doc build-jupyterlite
+          pixi run build-jupyterlite
 
       - name: Build and publish the book
-        run: pixi run -e doc build-book
+        run: pixi run build-book
 
       - name: Copy jupyterlite site under the book directory
         run: |

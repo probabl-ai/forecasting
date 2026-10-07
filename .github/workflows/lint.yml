@@ -16,7 +16,6 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.10.0
         with:
           pixi-version: v0.68.0
-          environments: lint
 
       - name: Run linting and formatting checks
-        run: pixi run -e lint lint
+        run: pixi run lint

@@ -7,6 +7,17 @@ channels = ["conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
+create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
+scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
+copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
+convert-to-notebooks = { cmd = "python utils/convert_to_notebooks.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions"] }
+convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute --exclude single_horizon_prediction.py --exclude tabicl_time_series_forecasting.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions"] }
+build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions"] }
+build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
+serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }
+lint = "ruff check . && black --check ."
+format = "ruff check --fix . && black ."
+install-pre-commit = "pre-commit install"
 
 [dependencies]
 notebook = ">=7.4.3,<8"
@@ -30,44 +41,16 @@ setuptools = "<81"
 plotly = ">=6.2.0,<7"
 cloudpickle = ">=3.0.0,<3.1"
 optuna = ">=4.0.0,<5"
+ipykernel = "*"
+ruff = "*"
+black = "*"
+pre-commit = ">=4.6.2,<5"
+jupyter-book = ">=1.0.4,<2"
+jupyterlite = "*"
+jupyterlite-pyodide-kernel = "*"
+python-libarchive-c = "*"
 
 [pypi-dependencies]
 openmeteo-requests = ">=1.5.0, <2"
 requests-cache = ">=1.2.1, <2"
 retry-requests = ">=2.0.0, <3"
-
-[feature.dev.dependencies]
-ipykernel = "*"
-
-[feature.lint.dependencies]
-ruff = "*"
-black = "*"
-pre-commit = ">=4.6.2,<5"
-
-[feature.lint.tasks]
-lint = "ruff check . && black --check ."
-format = "ruff check --fix . && black ."
-install-pre-commit = "pre-commit install"
-
-[feature.doc.dependencies]
-jupyter-book = "*"
-jupyterlite = "*"
-jupyterlite-pyodide-kernel = "*"
-python-libarchive-c = "*"
-ipykernel = "*"
-
-[feature.doc.tasks]
-create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
-scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
-copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
-copy-parallel-coordinates-plots = { cmd = "cp ./content/python_files/*.json ./content/notebooks/", depends-on = ["create-notebooks-dir"] }
-convert-to-notebooks = { cmd = "python utils/convert_to_notebooks.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
-convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute --exclude single_horizon_prediction.py --exclude tabicl_time_series_forecasting.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
-build-book = { cmd = "jupyter-book build book", depends-on = ["convert-to-notebooks", "copy-tutorial-helpers", "scrape-function-definitions", "copy-parallel-coordinates-plots"] }
-build-jupyterlite = { cmd = "jupyter lite build --contents content --output-dir dist", cwd = "jupyterlite", depends-on = ["convert-to-notebooks"] }
-serve-jupyterlite = { cmd = "python -m http.server", cwd = "jupyterlite/dist", depends-on = ["build-jupyterlite"] }
-
-[environments]
-lint = ["lint"]
-doc = ["doc"]
-dev = ["dev", "doc", "lint"]
