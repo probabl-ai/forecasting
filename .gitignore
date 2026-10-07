@@ -86,6 +86,7 @@ book/_build
 content/notebooks
 content/python_files/*_lib.py
 content/python_files/*.ipynb
+content/python_files/*.optuna
 
 # jupyterlite build
 jupyterlite/.jupyterlite.doit.db
