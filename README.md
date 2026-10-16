@@ -36,7 +36,7 @@ Python file as notebook, you need to right click on the file and select `Open wi
 Alternatively, you can generate notebooks as well:
 
 ```bash
-pixi run -e doc convert-to-notebooks
+pixi run convert-to-notebooks
 ```
 
 This will convert the Python files into notebooks in the folder `content/notebooks`.
@@ -46,7 +46,7 @@ This will convert the Python files into notebooks in the folder `content/noteboo
 Test the deployment locally:
 
 ```bash
-pixi run -e doc serve-jupyterlite
+pixi run serve-jupyterlite
 ```
 
 Then open http://[::]:8000/ in a web browser.
