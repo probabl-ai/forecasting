@@ -434,7 +434,7 @@ def cross_val_predict(data_op, environment=None):
     return all_predictions, all_scores
 
 cv_predictions_hgbr = cross_val_predict(pred,
-                                        environment={"start": "2023-01-01", "end": "2025-05-31"})
+                                        environment={"start": "2022-01-01", "end": "2025-05-31"})
 
 # %% [markdown]
 # Now, we can inspect the cross-validated predictions and plot them for the different quantiles.
