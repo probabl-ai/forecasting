@@ -570,7 +570,7 @@ def add_features(
     horizon,
     electricity_load_history,
     cities,
-    temperature_only,
+    weather_feature_set,
     city_weather_fetcher,
 ):
     df = add_target_time(df, horizon=horizon)
@@ -579,7 +579,7 @@ def add_features(
         df,
         horizon,
         cities=cities,
-        temperature_only=temperature_only,
+        weather_feature_set=weather_feature_set,
         city_weather_fetcher=city_weather_fetcher,
     )
     df = add_calendar_and_holidays(df)
