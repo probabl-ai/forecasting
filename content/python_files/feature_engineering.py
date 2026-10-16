@@ -349,7 +349,7 @@ def add_weather(
     df,
     horizon,
     cities="all",
-    temperature_only=True,
+    weather_feature_set="temperature",
     city_weather_fetcher=fetch_city_weather,
 ):
     """Add weather information for the required cities."""
@@ -374,13 +374,25 @@ def add_weather(
         )
     with_weather = df
     for city in cities:
-        with_weather = with_weather.join(
-            city_weather_fetcher(city)
-            .with_columns(pl.col("time").dt.cast_time_unit("us"))
-            .select(
-                (pl.col("time"), cs.matches(".*temperature.*")) if temperature_only else pl.all()
+        weather = city_weather_fetcher(city).with_columns(pl.col("time").dt.cast_time_unit("us"))
+        if weather_feature_set == "temperature":
+            weather = weather.select(pl.col("time"), cs.matches(".*temperature.*"))
+        elif weather_feature_set == "temperature_and_wind_speed":
+            weather = weather.select(pl.col("time"), cs.matches(".*(temperature|wind_speed).*"))
+        elif weather_feature_set == "temperature_humidity_interaction":
+            weather = weather.with_columns(
+                (pl.col("temperature_2m") * pl.col("relative_humidity_2m")).alias(
+                    "temperature_x_relative_humidity"
+                )
+            ).select(
+                pl.col("time"),
+                cs.matches(".*(temperature|relative_humidity|temperature_x_relative_humidity).*"),
             )
-            .select(
+        elif weather_feature_set != "all":
+            raise ValueError(f"Unknown weather feature set: {weather_feature_set}")
+
+        with_weather = with_weather.join(
+            weather.select(
                 pl.col("time"),
                 (~cs.by_name("time")).as_expr().name.map(f"weather_{{}}_{city}".format),
             ),
@@ -441,19 +453,26 @@ fetch_city_weather("paris")
 
 # %% [markdown]
 #
-# We are not sure if it is best to use all cities or only a few big ones. Also,
-# we don't know which features to use, temperature is probably the most
-# important one so we may want to try using all features or the temperature
-# only. Therefore the function we define has parameters for controlling that.
+# We are not sure which weather features are most useful, so the pipeline lets
+# randomized search compare temperature, temperature plus wind speed,
+# temperature and relative humidity with their interaction, and all features.
 #
 # Skrub lets us create "choice" objects, nodes in our pipeline that can take
 # different values for hyperparameter search. We use this for the choice of
-# city names and of temperature only vs all features.
+# city names and weather feature set.
 
 # %%
 city_weather_fetcher = skrub.as_data_op(fetch_city_weather).skb.set_name("city_weather_fetcher")
 
-temperature_only = skrub.choose_bool(name="temperature_only", default=True)
+weather_feature_set = skrub.choose_from(
+    (
+        "temperature",
+        "temperature_and_wind_speed",
+        "temperature_humidity_interaction",
+        "all",
+    ),
+    name="weather_feature_set",
+)
 cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
 
 
@@ -461,7 +480,7 @@ with_weather = with_lags.skb.apply_func(
     add_weather,
     EXAMPLE_TIME_HORIZON,
     cities=cities,
-    temperature_only=temperature_only,
+    weather_feature_set=weather_feature_set,
     city_weather_fetcher=city_weather_fetcher,
 )
 with_weather
@@ -551,7 +570,7 @@ def add_features(
     horizon,
     electricity_load_history,
     cities,
-    temperature_only,
+    weather_feature_set,
     city_weather_fetcher,
 ):
     df = add_target_time(df, horizon=horizon)
@@ -560,7 +579,7 @@ def add_features(
         df,
         horizon,
         cities=cities,
-        temperature_only=temperature_only,
+        weather_feature_set=weather_feature_set,
         city_weather_fetcher=city_weather_fetcher,
     )
     df = add_calendar_and_holidays(df)
@@ -580,7 +599,15 @@ def feature_engineering_outputs(horizons, cv_splitter=None):
     X_y = prediction_time.skb.apply_func(get_X_y, resampled_history, horizons)
     X = X_y["X"].skb.mark_as_X(cv=cv_splitter)
     y = X_y["y"].skb.mark_as_y()
-    temperature_only = skrub.choose_bool(name="temperature_only", default=True)
+    weather_feature_set = skrub.choose_from(
+        (
+            "temperature",
+            "temperature_and_wind_speed",
+            "temperature_humidity_interaction",
+            "all",
+        ),
+        name="weather_feature_set",
+    )
     cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
     city_weather_fetcher = skrub.var(
         "city_weather_fetcher", fetch_city_weather, becomes_default=True
@@ -595,7 +622,7 @@ def feature_engineering_outputs(horizons, cv_splitter=None):
         all_features[h] = X.skb.apply_func(
             add_features,
             horizon=h,
-            temperature_only=temperature_only,
+            weather_feature_set=weather_feature_set,
             cities=cities,
             electricity_load_history=resampled_history,
             city_weather_fetcher=city_weather_fetcher,
