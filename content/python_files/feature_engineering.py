@@ -374,24 +374,19 @@ def add_weather(
         )
     with_weather = df
     for city in cities:
-        weather = city_weather_fetcher(city).with_columns(
-            pl.col("time").dt.cast_time_unit("us")
-        )
+        weather = city_weather_fetcher(city).with_columns(pl.col("time").dt.cast_time_unit("us"))
         if weather_feature_set == "temperature":
             weather = weather.select(pl.col("time"), cs.matches(".*temperature.*"))
         elif weather_feature_set == "temperature_and_wind_speed":
-            weather = weather.select(
-                pl.col("time"), cs.matches(".*(temperature|wind_speed).*")
-            )
+            weather = weather.select(pl.col("time"), cs.matches(".*(temperature|wind_speed).*"))
         elif weather_feature_set == "temperature_humidity_interaction":
             weather = weather.with_columns(
-                (
-                    pl.col("temperature_2m")
-                    * pl.col("relative_humidity_2m")
-                ).alias("temperature_x_relative_humidity")
+                (pl.col("temperature_2m") * pl.col("relative_humidity_2m")).alias(
+                    "temperature_x_relative_humidity"
+                )
             ).select(
                 pl.col("time"),
-                cs.matches(".*(temperature|relative_humidity|temperature_x_relative_humidity).*")
+                cs.matches(".*(temperature|relative_humidity|temperature_x_relative_humidity).*"),
             )
         elif weather_feature_set != "all":
             raise ValueError(f"Unknown weather feature set: {weather_feature_set}")

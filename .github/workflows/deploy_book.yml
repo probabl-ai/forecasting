@@ -19,7 +19,6 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.10.0
         with:
           pixi-version: v0.68.0
-          environments: doc
 
       - name: Convert Python file to notebooks for JupyterLite
         run: |

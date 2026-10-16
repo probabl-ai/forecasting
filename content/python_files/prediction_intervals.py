@@ -16,8 +16,8 @@ import functools
 import importlib
 import re
 import warnings
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 import altair
 import numpy as np
@@ -147,10 +147,7 @@ class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
         result = np.asarray([e.predict(X) for e in self.estimators_.values()])
         result.sort(axis=0)
         return pl.DataFrame(
-            {
-                f"q_{quantile}": result[index]
-                for index, quantile in enumerate(self.quantiles_)
-            }
+            {f"q_{quantile}": result[index] for index, quantile in enumerate(self.quantiles_)}
         )
 
 
@@ -193,11 +190,11 @@ def make_multi_horizon_pred(features, y, regressor):
     return skrub.deferred(concat_horizons)(predictions)
 
 
-
-
-pred = make_multi_horizon_pred(features, y, regressor=hgb_q_regressor).skb.with_scoring(
-            functools.partial(neg_mape_scorer, quantile_regression=True)
-        ).skb.with_scoring(pinball_scorer)
+pred = (
+    make_multi_horizon_pred(features, y, regressor=hgb_q_regressor)
+    .skb.with_scoring(functools.partial(neg_mape_scorer, quantile_regression=True))
+    .skb.with_scoring(pinball_scorer)
+)
 
 # %% [markdown]
 # ### Independent randomized search per quantile
@@ -220,15 +217,24 @@ for quantile in quantiles:
         quantiles=(quantile,),
         hgb_params={
             "max_iter": skrub.choose_int(
-                100, 500, default=300, log=True,
+                100,
+                500,
+                default=300,
+                log=True,
                 name=f"max_iter_{quantile_name}",
             ),
             "learning_rate": skrub.choose_float(
-                0.01, 0.7, default=0.1, log=True,
+                0.01,
+                0.7,
+                default=0.1,
+                log=True,
                 name=f"learning_rate_{quantile_name}",
             ),
             "max_leaf_nodes": skrub.choose_int(
-                3, 300, default=30, log=True,
+                3,
+                300,
+                default=30,
+                log=True,
                 name=f"max_leaf_nodes_{quantile_name}",
             ),
         },
@@ -245,9 +251,8 @@ for quantile in quantiles:
     )
     quantile_search.fit(outer_split["train"])
     quantile_searches[quantile] = quantile_search
-    quantile_test_predictions[quantile] = quantile_search.predict(
-        outer_split["test"]
-    )
+    quantile_test_predictions[quantile] = quantile_search.predict(outer_split["test"])
+
 
 def combine_quantile_predictions(predictions):
     combined = pl.concat(predictions, how="horizontal")
@@ -316,10 +321,7 @@ class RandomForestQuantileRegressor(RegressorMixin, BaseEstimator):
         rank_of[order] = np.arange(len(y))
         # per tree: leaf id -> ranks (in sorted_y_) of training samples in that leaf
         self.leaf_ranks_ = [
-            {
-                leaf: rank_of[np.flatnonzero(tree_leaves == leaf)]
-                for leaf in np.unique(tree_leaves)
-            }
+            {leaf: rank_of[np.flatnonzero(tree_leaves == leaf)] for leaf in np.unique(tree_leaves)}
             for tree_leaves in train_leaves.T
         ]
         return self
@@ -338,15 +340,10 @@ class RandomForestQuantileRegressor(RegressorMixin, BaseEstimator):
                     weights[ranks] += 1.0 / len(ranks)
             cumulative = np.cumsum(weights)
             cumulative /= cumulative[-1]
-            positions = np.minimum(
-                np.searchsorted(cumulative, quantile_targets), n_train - 1
-            )
+            positions = np.minimum(np.searchsorted(cumulative, quantile_targets), n_train - 1)
             result[i] = self.sorted_y_[positions]
         return pl.DataFrame(
-            {
-                f"q_{quantile}": result[:, index]
-                for index, quantile in enumerate(self.quantiles_)
-            }
+            {f"q_{quantile}": result[:, index] for index, quantile in enumerate(self.quantiles_)}
         )
 
 
@@ -431,8 +428,10 @@ def cross_val_predict(data_op, environment=None):
     all_scores = pl.DataFrame(all_scores)
     return all_predictions, all_scores
 
-cv_predictions_hgbr = cross_val_predict(pred,
-                                        environment={"start": "2022-01-01", "end": "2025-05-31"})
+
+cv_predictions_hgbr = cross_val_predict(
+    pred, environment={"start": "2022-01-01", "end": "2025-05-31"}
+)
 
 # %% [markdown]
 # Now, we can inspect the cross-validated predictions and plot them for the different quantiles.
@@ -531,8 +530,9 @@ plot_residuals_vs_predicted(cv_predictions_hgbr[0], 1, quantile=0.95).interactiv
 
 
 # %%
-from tutorial_helpers import coverage, mean_width, binned_coverage
 import altair
+
+from tutorial_helpers import binned_coverage, coverage, mean_width
 
 preds = cv_predictions_hgbr[0]
 horizon = 1
@@ -556,6 +556,7 @@ for (split_idx,), fold_df in preds.group_by("split", maintain_order=True):
 # time-series experiment, so temporal drift can limit the calibration guarantees of
 # exchangeable conformal prediction.
 
+
 # %%
 def conformalize_interval(calibration, evaluation, horizon, alpha=0.1):
     target_col = f"{horizon}h"
@@ -570,11 +571,7 @@ def conformalize_interval(calibration, evaluation, horizon, alpha=0.1):
         y_calibration - upper_calibration,
     )
     rank = int(np.ceil((len(scores) + 1) * (1 - alpha)))
-    correction = (
-        float(np.partition(scores, rank - 1)[rank - 1])
-        if rank <= len(scores)
-        else np.inf
-    )
+    correction = float(np.partition(scores, rank - 1)[rank - 1]) if rank <= len(scores) else np.inf
 
     calibrated = evaluation.with_columns(
         (pl.col(lower_col) - correction).alias(f"calibrated_{lower_col}"),
@@ -610,20 +607,14 @@ for horizon in TIME_HORIZONS:
     y_evaluation = calibrated_evaluation[f"{horizon}h"].to_numpy()
     raw_lower = calibrated_evaluation[f"pred_{horizon}h__q_0.05"].to_numpy()
     raw_upper = calibrated_evaluation[f"pred_{horizon}h__q_0.95"].to_numpy()
-    calibrated_lower = calibrated_evaluation[
-        f"calibrated_pred_{horizon}h__q_0.05"
-    ].to_numpy()
-    calibrated_upper = calibrated_evaluation[
-        f"calibrated_pred_{horizon}h__q_0.95"
-    ].to_numpy()
+    calibrated_lower = calibrated_evaluation[f"calibrated_pred_{horizon}h__q_0.05"].to_numpy()
+    calibrated_upper = calibrated_evaluation[f"calibrated_pred_{horizon}h__q_0.95"].to_numpy()
     calibration_results.append(
         {
             "horizon": horizon,
             "correction_mw": correction,
             "raw_coverage": coverage(y_evaluation, raw_lower, raw_upper),
-            "calibrated_coverage": coverage(
-                y_evaluation, calibrated_lower, calibrated_upper
-            ),
+            "calibrated_coverage": coverage(y_evaluation, calibrated_lower, calibrated_upper),
             "raw_mean_width_mw": mean_width(y_evaluation, raw_lower, raw_upper),
             "calibrated_mean_width_mw": mean_width(
                 y_evaluation, calibrated_lower, calibrated_upper
@@ -663,31 +654,21 @@ for horizon in TIME_HORIZONS:
         calibrated, _ = conformalize_interval(
             calibration_predictions, evaluation_predictions, horizon, alpha=alpha
         )
-        calibrated_lower = calibrated[
-            f"calibrated_pred_{horizon}h__q_0.05"
-        ].to_numpy()
-        calibrated_upper = calibrated[
-            f"calibrated_pred_{horizon}h__q_0.95"
-        ].to_numpy()
+        calibrated_lower = calibrated[f"calibrated_pred_{horizon}h__q_0.05"].to_numpy()
+        calibrated_upper = calibrated[f"calibrated_pred_{horizon}h__q_0.95"].to_numpy()
         pareto_points.append(
             {
                 "horizon": f"{horizon}h",
                 "interval": f"CQR {1 - alpha:.0%}",
                 "nominal_coverage": 1 - alpha,
-                "coverage": coverage(
-                    y_evaluation, calibrated_lower, calibrated_upper
-                ),
-                "mean_width_mw": float(
-                    np.abs(calibrated_upper - calibrated_lower).mean()
-                ),
+                "coverage": coverage(y_evaluation, calibrated_lower, calibrated_upper),
+                "mean_width_mw": float(np.abs(calibrated_upper - calibrated_lower).mean()),
             }
         )
 
 pareto_frontier = []
 for horizon in (f"{h}h" for h in TIME_HORIZONS):
-    horizon_points = [
-        point for point in pareto_points if point["horizon"] == horizon
-    ]
+    horizon_points = [point for point in pareto_points if point["horizon"] == horizon]
     for point in horizon_points:
         point["on_pareto_front"] = not any(
             other["coverage"] >= point["coverage"]
@@ -708,31 +689,33 @@ for horizon in (f"{h}h" for h in TIME_HORIZONS):
             if not same_frontier_point:
                 pareto_frontier.append(point)
 
-points_chart = altair.Chart(altair.Data(values=pareto_points)).mark_point(
-    filled=True, size=90
-).encode(
-    x=altair.X("mean_width_mw:Q", title="Mean interval width (MW)"),
-    y=altair.Y(
-        "coverage:Q",
-        title="Empirical coverage",
-        scale=altair.Scale(domain=[0, 1]),
-    ),
-    color=altair.Color("horizon:N", title="Forecast horizon"),
-    shape=altair.Shape("interval:N", title="Interval setting"),
-    tooltip=["horizon:N", "interval:N", "nominal_coverage:Q", "coverage:Q", "mean_width_mw:Q"],
+points_chart = (
+    altair.Chart(altair.Data(values=pareto_points))
+    .mark_point(filled=True, size=90)
+    .encode(
+        x=altair.X("mean_width_mw:Q", title="Mean interval width (MW)"),
+        y=altair.Y(
+            "coverage:Q",
+            title="Empirical coverage",
+            scale=altair.Scale(domain=[0, 1]),
+        ),
+        color=altair.Color("horizon:N", title="Forecast horizon"),
+        shape=altair.Shape("interval:N", title="Interval setting"),
+        tooltip=["horizon:N", "interval:N", "nominal_coverage:Q", "coverage:Q", "mean_width_mw:Q"],
+    )
 )
-frontier_chart = altair.Chart(altair.Data(values=pareto_frontier)).mark_line(
-    point=True, strokeWidth=2
-).encode(
-    x="mean_width_mw:Q",
-    y="coverage:Q",
-    color=altair.Color("horizon:N", title="Forecast horizon"),
-    detail="horizon:N",
-    order=altair.Order("mean_width_mw:Q"),
+frontier_chart = (
+    altair.Chart(altair.Data(values=pareto_frontier))
+    .mark_line(point=True, strokeWidth=2)
+    .encode(
+        x="mean_width_mw:Q",
+        y="coverage:Q",
+        color=altair.Color("horizon:N", title="Forecast horizon"),
+        detail="horizon:N",
+        order=altair.Order("mean_width_mw:Q"),
+    )
 )
-(points_chart + frontier_chart).properties(
-    title="Coverage versus interval width by horizon"
-)
+(points_chart + frontier_chart).properties(title="Coverage versus interval width by horizon")
 
 # --- Binned coverage plot ---
 folds = [fold_df for (_,), fold_df in preds.group_by("split", maintain_order=True)]
@@ -802,14 +785,14 @@ plot_lorenz_curve(cv_predictions_hgbr[0], 1, quantile=0.95).interactive().proper
 # %%
 import sys
 from pathlib import Path
+
 from IPython.display import FileLink, display
 
 if sys.platform == "emscripten":
     print("Use the precomputed report link above in JupyterLite.")
 else:
     repository_root = next(
-        parent for parent in (Path.cwd(), *Path.cwd().parents)
-        if (parent / "book").is_dir()
+        parent for parent in (Path.cwd(), *Path.cwd().parents) if (parent / "book").is_dir()
     )
     report = pred.skb.full_report(
         open=False,

@@ -334,14 +334,14 @@ search.predict({"start": "2025-06-27T15:00:00", "end": None})
 
 # %%
 import sys
+
 from IPython.display import FileLink, display
 
 if sys.platform == "emscripten":
     print("Use the precomputed report link above in JupyterLite.")
 else:
     repository_root = next(
-        parent for parent in (Path.cwd(), *Path.cwd().parents)
-        if (parent / "book").is_dir()
+        parent for parent in (Path.cwd(), *Path.cwd().parents) if (parent / "book").is_dir()
     )
     report = pred.skb.full_report(
         open=False,
@@ -350,5 +350,3 @@ else:
         title="Multiple-horizon forecasting pipeline",
     )
     display(FileLink(str(report["report_path"])))
-
-
