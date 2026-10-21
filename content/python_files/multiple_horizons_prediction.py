@@ -34,7 +34,7 @@ from single_horizon_prediction_lib import (
     get_cv_results,
     get_regressor,
 )
-from tutorial_helpers import plot_horizon_forecast
+from tutorial_helpers import plot_predictions, plot_multi_horizon_prediction
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
@@ -61,11 +61,13 @@ def concat_horizons(predictions):
     return pl.DataFrame({f"{h}h": v for h, v in predictions.items()})
 
 
-def make_multi_horizon_pred(features, y):
+def make_multi_horizon_pred(features, y, max_iter=100):
     """
     Create a full DataOp for predicting the specified horizons.
+
+    increase max_iter for better predictions
     """
-    regressor = get_regressor()
+    regressor = get_regressor(max_iter=max_iter)
     predictions = {
         h: feat.skb.drop(["prediction_time", "target_time"])
         .skb.apply(regressor, y=y[f"{h}h"])
@@ -91,39 +93,12 @@ pred
 # %% [markdown]
 #
 # We want to define a scorer that will produce the Mean Absolute Percentage
-# Error (MAPE) for each of the horizons, and also averaged across horizons. To
-# easily try our metric function on actual values and debug it, we collect
-# ground truth and predictions on an example train/test split.
-
-# %%
-split = pred.skb.train_test_split()
-learner = pred.skb.make_learner().fit(split["train"])
-predicted_y_test = learner.predict(split["test"])
-predicted_y_test
-
-# %% [markdown]
+# Error (MAPE) for each of the horizons, and also averaged across horizons.
 #
-# For multioutput regression, we can `mean_absolute_percentage_error` to return
-# the error for each target, without averaging:
 
 # %%
 from sklearn.metrics import mean_absolute_percentage_error
 
-mean_absolute_percentage_error(split["y_test"], predicted_y_test, multioutput="raw_values")
-
-
-# %% [markdown]
-# We will therefore use `multioutput='raw_values'` and return all the errors in
-# a dictionary, after adding the averaged error.
-#
-# Once we have defined this function of true and predicted electricity loads,
-# (what scikit-learn calls a 'metric'), we wrap it in a 'scorer', a function
-# that takes an estimator, X and y. Scorers can return a single score, or a
-# dictionary mapping metric names (in our case 'neg_mape_1h', 'neg_mape_2h', ...) to
-# scores.
-
-
-# %%
 def neg_mape(y_true, y_pred):
     average = mean_absolute_percentage_error(y_true, y_pred)
     detail = mean_absolute_percentage_error(y_true, y_pred, multioutput="raw_values")
@@ -141,75 +116,6 @@ pred = make_multi_horizon_pred(features, y).skb.with_scoring(neg_mape_scorer)
 
 
 # %% [markdown]
-# Now that we have configured the scorer, we can check the score of our
-# pipeline on the example split:
-
-# %%
-pred.skb.make_learner().fit(split["train"]).score(split["test"])
-
-# %% [markdown]
-## **Out-of-sample check:**
-# it is always good that our pipeline can make a prediction on some truly
-# left-out data, as a sanity check which could find bugs in the way we set it
-# up or did the cross-validation.
-
-# %%
-electricity_load_history = fetch_demand_history()
-history_dates = electricity_load_history["time"]
-history_dates.max()
-
-# %%
-new_date = ((history_dates - datetime.timedelta(seconds=1)).dt.truncate("1h")).max()
-new_date
-
-# %%
-# fit a model for 24 horizons on all available data
-features_24_horizons, y_24_horizons = feature_engineering_outputs(
-    range(1, 25), TimeSeriesSplitter()
-)
-pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons).skb.with_scoring(
-    neg_mape_scorer
-)
-learner = pred_24_horizons.skb.make_learner(fitted=True)
-future_pred = learner.predict({"start": new_date, "end": None})
-future_pred
-
-# %%
-import plotly.graph_objects as go
-
-
-def plot_line(x, y):
-    return go.Scatter(
-        x=x,
-        y=y,
-        mode="lines+markers",
-        name=y.name,
-        hovertemplate="%{x|%Y-%m-%dT%H} (%{x|%A}): %{y}<extra></extra>",
-    )
-
-
-def transpose_pred(prediction_date, prediction):
-    date = [
-        prediction_date + datetime.timedelta(hours=int(c.removesuffix("h")))
-        for c in prediction.columns
-    ]
-    load = prediction.row(0)
-    return pl.DataFrame({"time": date, "load_mw": load})
-
-
-future_pred_tall = transpose_pred(new_date, future_pred)
-
-# %%
-history_tail = electricity_load_history.filter(
-    pl.col("time") > new_date - datetime.timedelta(days=8)
-)
-
-fig = go.Figure()
-fig.add_trace(plot_line(history_tail["time"], history_tail["load_mw"]))
-fig.add_trace(plot_line(future_pred_tall["time"], future_pred_tall["load_mw"]))
-fig.update_layout(height=700)
-
-# %% [markdown]
 # Now we make the predictions and plot them. We notice that the 1h horizon
 # qualitatively seems to stick better to the ground truth, which is expected
 # and also corresponds to what we see in the MAPE.
@@ -218,32 +124,41 @@ fig.update_layout(height=700)
 cv_predictions, cv_scores = get_cv_results(pred)
 
 # %%
-
-
-def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
-    if start is not None:
-        cv_predictions = cv_predictions.filter(
-            pl.col("prediction_time")
-            > datetime.datetime.fromisoformat(start).astimezone(datetime.UTC)
-        )
-
-    if horizons is None:
-        horizons = [
-            int(m.group(1))
-            for c in cv_predictions.columns
-            if (m := re.match(r"^pred_(\d+)h$", c)) is not None
-        ]
-    fig = go.Figure()
-    for i, h in enumerate(horizons):
-        target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=h)
-        if i == 0:
-            fig.add_trace(plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load")))
-        fig.add_trace(plot_line(target_time, cv_predictions[f"pred_{h}h"]))
-    fig.update_layout(height=700)
-    return fig
-
-
 plot_predictions(cv_predictions)
+
+# %% [markdown]
+#
+# ## Evaluating and plotting the 24-horizon pipeline
+
+# %%
+features_24_horizons, y_24_horizons = feature_engineering_outputs(
+    range(1, 25), TimeSeriesSplitter()
+)
+pred_24_horizons = make_multi_horizon_pred(features_24_horizons, y_24_horizons).skb.with_scoring(
+    neg_mape_scorer
+)
+
+# %% [markdown]
+#
+# We can plot the prediction for the first 24 hours past the end of our data
+#
+# It is always good that our pipeline can make a prediction on some truly
+# left-out data, as a sanity check which could find bugs in the way we set it
+# up or did the cross-validation.
+
+# %%
+history = fetch_demand_history()
+history_dates = history["time"]
+new_date = ((history_dates - datetime.timedelta(seconds=1)).dt.truncate("1h")).max()
+new_date
+
+# %%
+learner = pred_24_horizons.skb.make_learner(fitted=True)
+prediction = learner.predict({"start": new_date, "end": None})
+prediction
+
+# %%
+plot_multi_horizon_prediction(history, new_date, prediction)
 
 # %% [markdown]
 # Finally, we run the cross-validation for all 24 horizons
@@ -279,9 +194,7 @@ env = {"start": "2021-03-23", "end": "2025-05-31"}
 # which to validate the selected pipeline.
 
 # %%
-for outer_split in pred.skb.iter_cv_splits(env):
-    pass
-
+outer_split = pred.skb.train_test_split(env)
 outer_split["X_test"]
 
 # %% [markdown]
@@ -313,10 +226,3 @@ search.score(outer_split["test"])
 
 # %%
 search.plot_results()
-
-# %% [markdown]
-#
-# Make an example prediction
-
-# %%
-search.predict({"start": "2025-06-27T15:00:00", "end": None})

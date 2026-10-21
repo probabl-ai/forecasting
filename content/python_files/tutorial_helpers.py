@@ -1,5 +1,6 @@
 import datetime
 import os
+import re
 
 import altair
 import numpy as np
@@ -7,6 +8,7 @@ import pandas as pd
 import polars as pl
 import polars.selectors as cs
 import skrub
+import plotly.graph_objects as go
 
 TABICL_TRAIN_SIZE = int(os.environ.get("TABICL_TRAIN_SIZE", "9000"))
 
@@ -495,82 +497,58 @@ def plot_binned_residuals(cv_predictions, horizon, by="hour"):
     return (combined_iqr + combined_lines + perfect_line).resolve_scale(color="independent")
 
 
-@skrub.deferred
-def plot_horizon_forecast(
-    horizon,
-    targets,
-    named_predictions,
-    plot_at_time,
-    target_column_name_pattern,
-    past_hours=7 * 24,
-):
-    """Plot the true target and the forecast values for different horizons.
+def plot_line(x, y):
+    return go.Scatter(
+        x=x,
+        y=y,
+        mode="lines+markers",
+        name=y.name,
+        hovertemplate="%{x|%Y-%m-%dT%H} (%{x|%A}): %{y}<extra></extra>",
+    )
 
-    Parameters
-    ----------
-    targets : polars.DataFrame
-        A DataFrame containing the true target values.
-    named_predictions : polars.DataFrame
-        A DataFrame containing the predicted values.
-    plot_at_time : datetime.datetime
-        The time at which to plot the forecast.
-    target_column_name_pattern : str
-        The pattern to use for the target column names.
-    past_hours : int, default=7 * 24
-        The number of past hours to include in the plot.
 
-    Returns
-    -------
-    altair.Chart
-        A chart with the true target and the forecast values for different horizons.
-    """
-    merged_data = pl.concat(
-        [
-            targets.select(pl.col("prediction_time"), pl.col(f"{horizon}h")),
-            named_predictions,
-        ],
-        how="horizontal",
+def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
+    if start is not None:
+        cv_predictions = cv_predictions.filter(
+            pl.col("prediction_time")
+            > datetime.datetime.fromisoformat(start).astimezone(datetime.UTC)
+        )
+
+    if horizons is None:
+        horizons = [
+            int(m.group(1))
+            for c in cv_predictions.columns
+            if (m := re.match(r"^pred_(\d+)h$", c)) is not None
+        ]
+    fig = go.Figure()
+    for i, h in enumerate(horizons):
+        target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=h)
+        if i == 0:
+            fig.add_trace(plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load")))
+        fig.add_trace(plot_line(target_time, cv_predictions[f"pred_{h}h"]))
+    fig.update_layout(height=700)
+    return fig
+
+
+def transpose_pred(prediction_date, prediction):
+    date = [
+        prediction_date + datetime.timedelta(hours=int(c.removesuffix("h")))
+        for c in prediction.columns
+    ]
+    load = prediction.row(0)
+    return pl.DataFrame({"time": date, "load_mw": load})
+
+
+def plot_multi_horizon_prediction(history, prediction_date, prediction):
+    history_tail = history.filter(
+        pl.col("time") > prediction_date - datetime.timedelta(days=8)
     )
-    start_time = plot_at_time - datetime.timedelta(hours=past_hours)
-    end_time = plot_at_time + datetime.timedelta(hours=named_predictions.shape[1])
-    true_values_past = merged_data.filter(
-        pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
-    ).rename({f"{horizon}h": "Past true load"})
-    true_values_future = merged_data.filter(
-        pl.col("prediction_time").is_between(plot_at_time, end_time, closed="right")
-    ).rename({f"{horizon}h": "Future true load"})
-    predicted_record = merged_data.select(cs.starts_with("predict")).row(
-        by_predicate=pl.col("prediction_time") == plot_at_time, named=True
-    )
-    forecast_values = pl.DataFrame(
-        {
-            "prediction_time": predicted_record["prediction_time"]
-            + datetime.timedelta(hours=horizon),
-            "Forecast load": predicted_record[
-                "predicted_" + target_column_name_pattern.format(horizon=horizon)
-            ],
-        }
-        for horizon in range(1, len(predicted_record))
-    )
-    true_values_past_chart = (
-        altair.Chart(true_values_past)
-        .transform_fold(["Past true load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Past true load:Q", color="key:N")
-    )
-    true_values_future_chart = (
-        altair.Chart(true_values_future)
-        .transform_fold(["Future true load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Future true load:Q", color="key:N")
-    )
-    forecast_values_chart = (
-        altair.Chart(forecast_values)
-        .transform_fold(["Forecast load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Forecast load:Q", color="key:N")
-    )
-    return (true_values_past_chart + true_values_future_chart + forecast_values_chart).interactive()
+    prediction_tall = transpose_pred(prediction_date, prediction)
+    fig = go.Figure()
+    fig.add_trace(plot_line(history_tail["time"], history_tail["load_mw"]))
+    fig.add_trace(plot_line(prediction_tall["time"], prediction_tall["load_mw"]))
+    fig.update_layout(height=700)
+    return fig
 
 
 def coverage(y_true, y_quantile_low, y_quantile_high):
