@@ -146,14 +146,10 @@ features, y = feature_engineering_outputs(horizons=TIME_HORIZON, cv_splitter=Tim
 # demand.
 
 # %%
-def get_regressor(max_iter=100):
-    # max_iter = 100 for fast notebook but should set to 1000 or more for best results
-    loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
-
-    return HistGradientBoostingRegressor(
+def get_hgb_params(max_iter=100):
+    return dict(
         random_state=0,
-        loss=loss,
-        max_iter=max_iter,
+        loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
         early_stopping=True,
         n_iter_no_change=50,
         max_depth=None,
@@ -161,6 +157,11 @@ def get_regressor(max_iter=100):
         max_leaf_nodes=skrub.choose_int(2, 128, default=31, log=True, name="max_leaf_nodes"),
         min_samples_leaf = skrub.choose_int(2, 128, default=20, log=True, name="min_samples_leaf")
     )
+
+
+def get_regressor(max_iter=100):
+    # max_iter = 100 for fast notebook but should set to 1000 or more for best results
+    return HistGradientBoostingRegressor(**get_hgb_params(max_iter=max_iter))
 
 
 pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])

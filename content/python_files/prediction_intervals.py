@@ -28,7 +28,7 @@ import tutorial_helpers
 importlib.reload(tutorial_helpers)
 
 from feature_engineering_lib import feature_engineering_outputs, time_range
-from single_horizon_prediction_lib import TimeSeriesSplitter
+from single_horizon_prediction_lib import TimeSeriesSplitter, get_hgb_params
 from tutorial_helpers import (
     binned_coverage,
     collect_cv_predictions,
@@ -150,13 +150,7 @@ class HGBQuantileRegressor(RegressorMixin, BaseEstimator):
 
 quantiles = (0.05, 0.5, 0.95)
 
-learning_rate = skrub.choose_float(0.01, 0.7, default=0.1, log=True, name="learning_rate")
-max_leaf_nodes = skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes")
-hgb_params = dict(
-    random_state=0,
-    learning_rate=learning_rate,
-    max_leaf_nodes=max_leaf_nodes,
-)
+hgb_params = get_hgb_params()
 
 hgb_q_regressor = HGBQuantileRegressor(quantiles=quantiles, hgb_params=hgb_params)
 
