@@ -252,8 +252,8 @@ def get_X_y(prediction_time, demand_history, horizons, mode=skrub.eval_mode()):
         return {"X": prediction_time}
 
 
-# Example output for 12-hour horizon
-EXAMPLE_TIME_HORIZON = 12
+# Example output for 24-hour horizon
+EXAMPLE_TIME_HORIZON = 24
 
 X_y = prediction_time.skb.apply_func(get_X_y, demand_history, EXAMPLE_TIME_HORIZON)
 X = X_y["X"].skb.mark_as_X()
