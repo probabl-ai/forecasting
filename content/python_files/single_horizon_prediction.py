@@ -368,22 +368,26 @@ from sklearn.preprocessing import SplineTransformer
 #
 
 # %%
-predictions_ridge = features.skb.apply(
-    make_pipeline(
-        SimpleImputer(add_indicator=True),
-        SplineTransformer(sparse_output=True),
-        VarianceThreshold(threshold=1e-6),
-        SelectKBest(
-            score_func=partial(f_regression, force_finite=True),
-            k=skrub.choose_int(100, 400, log=True, name="n_selected_splines"),
+def make_ridge_predictions(features, y):
+    return features.skb.apply(
+        make_pipeline(
+            SimpleImputer(add_indicator=True),
+            SplineTransformer(sparse_output=True),
+            VarianceThreshold(threshold=1e-6),
+            SelectKBest(
+                score_func=partial(f_regression, force_finite=True),
+                k=skrub.choose_int(100, 400, log=True, name="n_selected_splines"),
+            ),
+            Nystroem(
+                n_components=skrub.choose_int(10, 200, log=True, name="n_components", default=150)
+            ),
+            Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
         ),
-        Nystroem(
-            n_components=skrub.choose_int(10, 200, log=True, name="n_components", default=150)
-        ),
-        Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
-    ),
-    y=y,
-).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
+        y=y,
+    ).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
+
+
+predictions_ridge = make_ridge_predictions(features, y)
 predictions_ridge
 
 # %% [markdown]

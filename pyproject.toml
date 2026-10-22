@@ -32,6 +32,7 @@ known-first-party = [
     "tutorial_helpers",
     "feature_engineering_lib",
     "single_horizon_prediction_lib",
+    "multiple_horizons_prediction_lib",
     "prediction_intervals_lib",
 ]
 
