@@ -507,25 +507,62 @@ def plot_line(x, y):
     )
 
 
-def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
+def plot_predictions(cv_predictions, horizon, start="2025-03-01"):
+    """Plot observed values and cross-validated predictions for a single horizon.
+
+    The observed values are in column `{horizon}h`. The predictions are either a
+    single column `pred_{horizon}h` or one column per quantile
+    `pred_{horizon}h__q_{quantile}` (the `pred_` prefix is optional). In the latter case, the median (quantile
+    0.5) is drawn as a line and the area between the lowest and highest
+    quantiles is shaded.
+    """
     if start is not None:
         cv_predictions = cv_predictions.filter(
             pl.col("prediction_time")
-            > datetime.datetime.fromisoformat(start).astimezone(datetime.UTC)
+            > datetime.datetime.fromisoformat(start).replace(tzinfo=datetime.UTC)
         )
 
-    if horizons is None:
-        horizons = [
-            int(m.group(1))
-            for c in cv_predictions.columns
-            if (m := re.match(r"^pred_(\d+)h$", c)) is not None
-        ]
+    target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=horizon)
     fig = go.Figure()
-    for i, h in enumerate(horizons):
-        target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=h)
-        if i == 0:
-            fig.add_trace(plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load")))
-        fig.add_trace(plot_line(target_time, cv_predictions[f"pred_{h}h"]))
+    fig.add_trace(plot_line(target_time, cv_predictions[f"{horizon}h"].rename("true_load")))
+
+    prediction_color = "#EF553B"
+    quantile_cols = {}
+    for col in cv_predictions.columns:
+        m = re.match(rf"^(?:pred_)?{horizon}h__q_(\d*\.?\d+)$", col)
+        if m is not None:
+            quantile_cols[float(m.group(1))] = col
+    if not quantile_cols:
+        fig.add_trace(
+            plot_line(target_time, cv_predictions[f"pred_{horizon}h"]).update(
+                line={"color": prediction_color}
+            )
+        )
+    else:
+        quantiles = sorted(quantile_cols)
+        low, high = quantiles[0], quantiles[-1]
+        if low != high:
+            # The upper bound is drawn first so that the lower bound can fill up to it.
+            for q, name in [(high, "upper"), (low, "lower")]:
+                fig.add_trace(
+                    go.Scatter(
+                        x=target_time,
+                        y=cv_predictions[quantile_cols[q]],
+                        mode="lines",
+                        line={"width": 0},
+                        fill=None if name == "upper" else "tonexty",
+                        fillcolor="rgba(239, 85, 59, 0.25)",
+                        name=f"pred_{horizon}h: quantiles {low} - {high}",
+                        showlegend=name == "lower",
+                        hovertemplate=f"q{q}: " + "%{y}<extra></extra>",
+                    )
+                )
+        if 0.5 in quantile_cols:
+            fig.add_trace(
+                plot_line(target_time, cv_predictions[quantile_cols[0.5]]).update(
+                    line={"color": prediction_color}, name=f"pred_{horizon}h: median"
+                )
+            )
     fig.update_layout(height=700)
     return fig
 

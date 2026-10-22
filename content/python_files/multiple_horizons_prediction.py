@@ -124,7 +124,7 @@ pred = make_multi_horizon_pred(features, y).skb.with_scoring(neg_mape_scorer)
 cv_predictions, cv_scores = get_cv_results(pred)
 
 # %%
-plot_predictions(cv_predictions)
+plot_predictions(cv_predictions, horizon=12)
 
 # %% [markdown]
 #

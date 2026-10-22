@@ -588,8 +588,24 @@ def add_features(
     return df
 
 
+# %% [markdown]
+#
+# Small addition wrt the above: we add an option to truncate the training set.
+# Can be useful to avoid training on very old data and to limit time & memory
+# usage.
+
 # %%
-def feature_engineering_outputs(horizons, cv_splitter=None):
+def limit_train_size(
+    df,
+    size,
+    mode=skrub.eval_mode(),
+):
+    if mode in ("fit", "fit_transform", "preview"):
+        return df.tail(size)
+    return df
+
+
+def feature_engineering_outputs(horizons, cv_splitter=None, max_train_rows=None):
     range_start = skrub.var("start", "2021-03-23")
     range_end = skrub.var("end", "2025-05-31")
 
@@ -602,6 +618,9 @@ def feature_engineering_outputs(horizons, cv_splitter=None):
     X_y = prediction_time.skb.apply_func(get_X_y, demand_history, horizons)
     X = X_y["X"].skb.mark_as_X(cv=cv_splitter)
     y = X_y["y"].skb.mark_as_y()
+    if max_train_rows is not None:
+        X = X.skb.apply_func(limit_train_size, size=max_train_rows)
+        y = y.skb.apply_func(limit_train_size, size=max_train_rows)
     temperature_only = skrub.choose_bool(name="temperature_only", default=True)
     cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
     weather_fetcher = skrub.var("weather_fetcher", fetch_weather, becomes_default=True)

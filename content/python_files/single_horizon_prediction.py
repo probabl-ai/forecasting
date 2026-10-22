@@ -183,6 +183,13 @@ pred.skb.cross_validate()
 
 # %%
 def get_cv_results(pred, return_train_score=False):
+    """Collect cross-validated predictions and scores.
+
+    The predictions can be a numpy array (one column per target in ``y_test``)
+    or a polars dataframe (e.g. several quantiles per horizon, indicated by the
+    column names). In both cases they are returned as ``pred_<column>`` columns
+    next to ``X_test`` and ``y_test``.
+    """
     predictions = []
     scores = []
     for i, split in enumerate(pred.skb.iter_cv_splits()):
@@ -193,18 +200,18 @@ def get_cv_results(pred, return_train_score=False):
             split_scores.update({f"train_{k}": v for k, v in learner.score(split["train"]).items()})
         scores.append(split_scores | {"split": i})
         y_test = pl.DataFrame(split["y_test"])
-        pred_values = np.asarray(split_predictions["predict"])
-        if pred_values.ndim == 1:
-            pred_values = pred_values[:, None]
-        pred_columns = pl.DataFrame(
-            {f"pred_{column}": pred_values[:, idx] for idx, column in enumerate(y_test.columns)}
-        )
+        pred_values = split_predictions["predict"]
+        if not isinstance(pred_values, pl.DataFrame):
+            pred_values = np.asarray(pred_values)
+            if pred_values.ndim == 1:
+                pred_values = pred_values[:, None]
+            pred_values = pl.DataFrame(pred_values, schema=y_test.columns)
         predictions.append(
             pl.concat(
                 [
                     split["X_test"],
                     y_test,
-                    pred_columns,
+                    pred_values.rename("pred_{}".format),
                 ],
                 how="horizontal",
             ).with_columns(split=pl.lit(i))

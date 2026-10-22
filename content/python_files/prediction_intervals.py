@@ -14,9 +14,7 @@
 # %%
 import functools
 import importlib
-import re
 import warnings
-from datetime import datetime
 
 import altair
 import numpy as np
@@ -28,12 +26,13 @@ import tutorial_helpers
 importlib.reload(tutorial_helpers)
 
 from feature_engineering_lib import feature_engineering_outputs, time_range
-from single_horizon_prediction_lib import TimeSeriesSplitter, get_hgb_params
+from single_horizon_prediction_lib import TimeSeriesSplitter, get_cv_results, get_hgb_params
 from multiple_horizons_prediction_lib import neg_mape
 from tutorial_helpers import (
     binned_coverage,
     collect_cv_predictions,
     plot_lorenz_curve,
+    plot_predictions,
     plot_reliability_diagram,
     plot_residuals_vs_predicted,
 )
@@ -181,93 +180,13 @@ pred
 
 
 # %%
-def concat_X_y_predictions(X_test, y_test, prediction):
-    return pl.concat(
-        [
-            X_test,
-            y_test,
-            prediction.rename("pred_{}".format),
-        ],
-        how="horizontal",
-    )
-
-
-def cross_val_predict(data_op, environment=None):
-    """
-    Get cross-validated predictions for different horizons.
-    """
-    all_predictions, all_scores = [], []
-    for i, split in enumerate(data_op.skb.iter_cv_splits(environment=environment)):
-        learner = data_op.skb.make_learner().fit(split["train"])
-        score, predictions = learner.score(split["test"], return_predictions=True)
-        all_predictions.append(
-            concat_X_y_predictions(
-                split["X_test"], split["y_test"], predictions["predict"]
-            ).with_columns(split=pl.lit(i)),
-        )
-        print(split["X_test"]["prediction_time"].min().isoformat())
-        print(score)
-        all_scores.append(score | {"split": i})
-    all_predictions = pl.concat(all_predictions, how="vertical")
-    all_scores = pl.DataFrame(all_scores)
-    return all_predictions, all_scores
-
-
-cv_predictions_hgbr = cross_val_predict(
-    pred, environment={"start": "2023-01-01", "end": "2025-05-31"}
-)
+cv_predictions_hgbr = get_cv_results(pred)
 
 # %% [markdown]
 # Now, we can inspect the cross-validated predictions and plot them for the different quantiles.
 
 # %%
-from datetime import UTC, timedelta
-
-import plotly.graph_objects as go
-
-
-def plot_predictions(results, horizons=None, start="2025-03-01"):
-    if start is not None:
-        results = results.filter(
-            pl.col("prediction_time") > datetime.fromisoformat(start).replace(tzinfo=UTC)
-        )
-    if horizons is None:
-        horizons = sorted(
-            {
-                int(m.group(1))
-                for c in results.columns
-                if (m := re.match(r"^pred_(\d+)h.*$", c)) is not None
-            }
-        )
-    fig = go.Figure()
-    for i, h in enumerate(horizons):
-        target_time = (results["prediction_time"] + timedelta(hours=h)).to_list()
-        if not i:
-            fig.add_trace(
-                go.Scatter(
-                    x=target_time,
-                    y=results[f"{h}h"].to_list(),
-                    mode="lines+markers",
-                    line={"dash": "dash"},
-                    name="true_load_mw",
-                    hovertemplate="%{x|%Y-%m-%d} (%{x|%A}): %{y}<extra></extra>",
-                )
-            )
-        for col in filter(lambda c: f"pred_{h}h" in c, results.columns):
-            fig.add_trace(
-                go.Scatter(
-                    x=target_time,
-                    y=results[col].to_list(),
-                    mode="lines+markers",
-                    name=col,
-                    hovertemplate="%{x|%Y-%m-%d} (%{x|%A}): %{y}<extra></extra>",
-                )
-            )
-    fig.update_layout(height=600, title="CV predicted load mw")
-    return fig
-
-
-plot_predictions(cv_predictions_hgbr[0], horizons=(12,), start="2023-01-01").show()
+plot_predictions(cv_predictions_hgbr[0], horizon=12, start="2023-01-01").show()
 
 # %% [markdown]
 # Now, let's collect the cross-validated predictions and plot the residual vs predicted
