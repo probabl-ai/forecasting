@@ -29,6 +29,7 @@ importlib.reload(tutorial_helpers)
 
 from feature_engineering_lib import feature_engineering_outputs, time_range
 from single_horizon_prediction_lib import TimeSeriesSplitter, get_hgb_params
+from multiple_horizons_prediction_lib import neg_mape
 from tutorial_helpers import (
     binned_coverage,
     collect_cv_predictions,
@@ -67,27 +68,13 @@ def split_by_quantile(pred):
     }
 
 
-def neg_mape(y_true, y_pred, quantile_regression=False):
-    if quantile_regression:
-        quantile_predictions = split_by_quantile(y_pred)
-        scores = {}
-        for q, q_pred in quantile_predictions.items():
-            q_neg_mape = neg_mape(y_true, q_pred, quantile_regression=False)
-            scores.update({f"{k}__{q}": v for k, v in q_neg_mape.items()})
-            if q == "q_0.5":
-                # Pick the median if available for comparison with non-quantile
-                # models
-                scores.update(q_neg_mape)
-        return scores
-    average = mean_absolute_percentage_error(y_true, y_pred)
-    detail = mean_absolute_percentage_error(y_true, y_pred, multioutput="raw_values")
-    return {"neg_mape__average": -average} | {
-        f"neg_mape__{c}": -float(s) for c, s in zip(y_true.columns, detail)
-    }
+def neg_mape_median(y_true, y_pred):
+    "return the negative MAPE for the prediction for the quantile 0.5"
+    return neg_mape(y_true, split_by_quantile(y_pred)["q_0.5"])
 
 
-def neg_mape_scorer(estimator, X, y, quantile_regression=False):
-    return neg_mape(y, estimator.predict(X), quantile_regression=quantile_regression)
+def neg_mape_median_scorer(estimator, X, y):
+    return neg_mape_median(y, estimator.predict(X))
 
 
 def pinball(y_true, y_pred):
@@ -169,7 +156,7 @@ def concat_horizons(all_pred, mode=skrub.eval_mode()):
 
 def make_multi_horizon_pred(features, y, regressor):
     """
-    Create a full DataOp for predicting the specified horizons.
+    Create a full DataOp for predicting the specified horizons and quantiles.
     """
     predictions = {
         h: feat.skb.drop(["prediction_time", "target_time"])
@@ -182,9 +169,12 @@ def make_multi_horizon_pred(features, y, regressor):
 
 pred = (
     make_multi_horizon_pred(features, y, regressor=hgb_q_regressor)
-    .skb.with_scoring(functools.partial(neg_mape_scorer, quantile_regression=True))
+    .skb.with_scoring(neg_mape_median_scorer)
     .skb.with_scoring(pinball_scorer)
 )
+
+pred
+
 # %% [markdown]
 #
 # Let's first collect all the cross-validated predictions to make further inspection.
