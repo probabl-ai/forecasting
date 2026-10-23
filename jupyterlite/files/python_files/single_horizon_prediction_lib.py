@@ -89,18 +89,32 @@ class TimeSeriesSplitter:
         return len(list(self.split(X, y)))
 
 
-def get_regressor():
-    loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
-
-    return HistGradientBoostingRegressor(
+def get_hgb_params(max_iter=100):
+    return dict(
         random_state=0,
-        loss=loss,
-        learning_rate=skrub.choose_float(0.01, 0.7, default=0.1, log=True, name="learning_rate"),
-        max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
+        loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
+        early_stopping=True,
+        n_iter_no_change=50,
+        max_depth=None,
+        learning_rate=skrub.choose_float(0.01, 0.5, default=0.1, log=True, name="learning_rate"),
+        max_leaf_nodes=skrub.choose_int(2, 128, default=31, log=True, name="max_leaf_nodes"),
+        min_samples_leaf=skrub.choose_int(2, 128, default=20, log=True, name="min_samples_leaf"),
     )
 
 
+def get_regressor(max_iter=100):
+    # max_iter = 100 for fast notebook but should set to 1000 or more for best results
+    return HistGradientBoostingRegressor(**get_hgb_params(max_iter=max_iter))
+
+
 def get_cv_results(pred, return_train_score=False):
+    """Collect cross-validated predictions and scores.
+
+    The predictions can be a numpy array (one column per target in ``y_test``)
+    or a polars dataframe (e.g. several quantiles per horizon, indicated by the
+    column names). In both cases they are returned as ``pred_<column>`` columns
+    next to ``X_test`` and ``y_test``.
+    """
     predictions = []
     scores = []
     for i, split in enumerate(pred.skb.iter_cv_splits()):
@@ -111,18 +125,18 @@ def get_cv_results(pred, return_train_score=False):
             split_scores.update({f"train_{k}": v for k, v in learner.score(split["train"]).items()})
         scores.append(split_scores | {"split": i})
         y_test = pl.DataFrame(split["y_test"])
-        pred_values = np.asarray(split_predictions["predict"])
-        if pred_values.ndim == 1:
-            pred_values = pred_values[:, None]
-        pred_columns = pl.DataFrame(
-            {f"pred_{column}": pred_values[:, idx] for idx, column in enumerate(y_test.columns)}
-        )
+        pred_values = split_predictions["predict"]
+        if not isinstance(pred_values, pl.DataFrame):
+            pred_values = np.asarray(pred_values)
+            if pred_values.ndim == 1:
+                pred_values = pred_values[:, None]
+            pred_values = pl.DataFrame(pred_values, schema=y_test.columns)
         predictions.append(
             pl.concat(
                 [
                     split["X_test"],
                     y_test,
-                    pred_columns,
+                    pred_values.rename("pred_{}".format),
                 ],
                 how="horizontal",
             ).with_columns(split=pl.lit(i))
@@ -131,3 +145,22 @@ def get_cv_results(pred, return_train_score=False):
         print(split_scores)
 
     return pl.concat(predictions, how="vertical"), pl.DataFrame(scores)
+
+
+def make_ridge_predictions(features, y):
+    return features.skb.apply(
+        make_pipeline(
+            SimpleImputer(add_indicator=True),
+            SplineTransformer(sparse_output=True),
+            VarianceThreshold(threshold=1e-6),
+            SelectKBest(
+                score_func=partial(f_regression, force_finite=True),
+                k=skrub.choose_int(100, 400, log=True, name="n_selected_splines"),
+            ),
+            Nystroem(
+                n_components=skrub.choose_int(10, 200, log=True, name="n_components", default=150)
+            ),
+            Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
+        ),
+        y=y,
+    ).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])

@@ -3,8 +3,10 @@ import datetime
 import numpy as np
 import os
 import pandas as pd
+import plotly.graph_objects as go
 import polars as pl
 import polars.selectors as cs
+import re
 import skrub
 
 
@@ -492,82 +494,93 @@ def plot_binned_residuals(cv_predictions, horizon, by="hour"):
     return (combined_iqr + combined_lines + perfect_line).resolve_scale(color="independent")
 
 
-@skrub.deferred
-def plot_horizon_forecast(
-    horizon,
-    targets,
-    named_predictions,
-    plot_at_time,
-    target_column_name_pattern,
-    past_hours=7 * 24,
-):
-    """Plot the true target and the forecast values for different horizons.
+def plot_line(x, y):
+    return go.Scatter(
+        x=x,
+        y=y,
+        mode="lines+markers",
+        name=y.name,
+        hovertemplate="%{x|%Y-%m-%dT%H} (%{x|%A}): %{y}<extra></extra>",
+    )
 
-    Parameters
-    ----------
-    targets : polars.DataFrame
-        A DataFrame containing the true target values.
-    named_predictions : polars.DataFrame
-        A DataFrame containing the predicted values.
-    plot_at_time : datetime.datetime
-        The time at which to plot the forecast.
-    target_column_name_pattern : str
-        The pattern to use for the target column names.
-    past_hours : int, default=7 * 24
-        The number of past hours to include in the plot.
 
-    Returns
-    -------
-    altair.Chart
-        A chart with the true target and the forecast values for different horizons.
+def plot_predictions(cv_predictions, horizon, start="2025-03-01"):
+    """Plot observed values and cross-validated predictions for a single horizon.
+
+    The observed values are in column `{horizon}h`. The predictions are either a
+    single column `pred_{horizon}h` or one column per quantile
+    `pred_{horizon}h__q_{quantile}` (the `pred_` prefix is optional). In the latter case, the median (quantile
+    0.5) is drawn as a line and the area between the lowest and highest
+    quantiles is shaded.
     """
-    merged_data = pl.concat(
-        [
-            targets.select(pl.col("prediction_time"), pl.col(f"{horizon}h")),
-            named_predictions,
-        ],
-        how="horizontal",
-    )
-    start_time = plot_at_time - datetime.timedelta(hours=past_hours)
-    end_time = plot_at_time + datetime.timedelta(hours=named_predictions.shape[1])
-    true_values_past = merged_data.filter(
-        pl.col("prediction_time").is_between(start_time, plot_at_time, closed="both")
-    ).rename({f"{horizon}h": "Past true load"})
-    true_values_future = merged_data.filter(
-        pl.col("prediction_time").is_between(plot_at_time, end_time, closed="right")
-    ).rename({f"{horizon}h": "Future true load"})
-    predicted_record = merged_data.select(cs.starts_with("predict")).row(
-        by_predicate=pl.col("prediction_time") == plot_at_time, named=True
-    )
-    forecast_values = pl.DataFrame(
-        {
-            "prediction_time": predicted_record["prediction_time"]
-            + datetime.timedelta(hours=horizon),
-            "Forecast load": predicted_record[
-                "predicted_" + target_column_name_pattern.format(horizon=horizon)
-            ],
-        }
-        for horizon in range(1, len(predicted_record))
-    )
-    true_values_past_chart = (
-        altair.Chart(true_values_past)
-        .transform_fold(["Past true load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Past true load:Q", color="key:N")
-    )
-    true_values_future_chart = (
-        altair.Chart(true_values_future)
-        .transform_fold(["Future true load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Future true load:Q", color="key:N")
-    )
-    forecast_values_chart = (
-        altair.Chart(forecast_values)
-        .transform_fold(["Forecast load"])
-        .mark_line(tooltip=True)
-        .encode(x="prediction_time:T", y="Forecast load:Q", color="key:N")
-    )
-    return (true_values_past_chart + true_values_future_chart + forecast_values_chart).interactive()
+    if start is not None:
+        cv_predictions = cv_predictions.filter(
+            pl.col("prediction_time")
+            > datetime.datetime.fromisoformat(start).replace(tzinfo=datetime.UTC)
+        )
+
+    target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=horizon)
+    fig = go.Figure()
+    fig.add_trace(plot_line(target_time, cv_predictions[f"{horizon}h"].rename("true_load")))
+
+    prediction_color = "#EF553B"
+    quantile_cols = {}
+    for col in cv_predictions.columns:
+        m = re.match(rf"^(?:pred_)?{horizon}h__q_(\d*\.?\d+)$", col)
+        if m is not None:
+            quantile_cols[float(m.group(1))] = col
+    if not quantile_cols:
+        fig.add_trace(
+            plot_line(target_time, cv_predictions[f"pred_{horizon}h"]).update(
+                line={"color": prediction_color}
+            )
+        )
+    else:
+        quantiles = sorted(quantile_cols)
+        low, high = quantiles[0], quantiles[-1]
+        if low != high:
+            # The upper bound is drawn first so that the lower bound can fill up to it.
+            for q, name in [(high, "upper"), (low, "lower")]:
+                fig.add_trace(
+                    go.Scatter(
+                        x=target_time,
+                        y=cv_predictions[quantile_cols[q]],
+                        mode="lines",
+                        line={"width": 0},
+                        fill=None if name == "upper" else "tonexty",
+                        fillcolor="rgba(239, 85, 59, 0.25)",
+                        name=f"pred_{horizon}h: quantiles {low} - {high}",
+                        showlegend=name == "lower",
+                        hovertemplate=f"q{q}: " + "%{y}<extra></extra>",
+                    )
+                )
+        if 0.5 in quantile_cols:
+            fig.add_trace(
+                plot_line(target_time, cv_predictions[quantile_cols[0.5]]).update(
+                    line={"color": prediction_color}, name=f"pred_{horizon}h: median"
+                )
+            )
+    fig.update_layout(height=700)
+    return fig
+
+
+def transpose_pred(prediction_date, prediction):
+    date = [
+        prediction_date + datetime.timedelta(hours=int(c.removesuffix("h")))
+        for c in prediction.columns
+    ]
+    load = prediction.row(0)
+    return pl.DataFrame({"time": date, "load_mw": load})
+
+
+def plot_multi_horizon_prediction(history, prediction_date, prediction):
+    history_tail = history.filter(pl.col("time") > prediction_date - datetime.timedelta(days=8))
+    prediction_tall = transpose_pred(prediction_date, prediction)
+    fig = go.Figure()
+    fig.add_trace(plot_line(history_tail["time"], history_tail["load_mw"]))
+    fig.add_trace(plot_line(prediction_tall["time"], prediction_tall["load_mw"]))
+    fig.update_layout(height=700)
+    return fig
 
 
 def coverage(y_true, y_quantile_low, y_quantile_high):

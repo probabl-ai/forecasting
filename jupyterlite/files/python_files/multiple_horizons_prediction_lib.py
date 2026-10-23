@@ -1,6 +1,6 @@
 from feature_engineering_lib import (
     feature_engineering_outputs,
-    load_electricity_history_data,
+    fetch_demand_history,
 )
 from matplotlib import pyplot as plt
 from pathlib import Path
@@ -11,12 +11,11 @@ from single_horizon_prediction_lib import (
 )
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_percentage_error
-from tutorial_helpers import plot_horizon_forecast
+from tutorial_helpers import plot_multi_horizon_prediction, plot_predictions
 import altair
 import cloudpickle
 import datetime
 import numpy as np
-import plotly.graph_objects as go
 import polars as pl
 import pyarrow  # noqa: F401
 import re
@@ -32,11 +31,13 @@ def concat_horizons(predictions):
     return pl.DataFrame({f"{h}h": v for h, v in predictions.items()})
 
 
-def make_multi_horizon_pred(features, y):
+def make_multi_horizon_pred(features, y, max_iter=100):
     """
     Create a full DataOp for predicting the specified horizons.
+
+    increase max_iter for better predictions
     """
-    regressor = get_regressor()
+    regressor = get_regressor(max_iter=max_iter)
     predictions = {
         h: feat.skb.drop(["prediction_time", "target_time"])
         .skb.apply(regressor, y=y[f"{h}h"])
@@ -56,45 +57,3 @@ def neg_mape(y_true, y_pred):
 
 def neg_mape_scorer(estimator, X, y):
     return neg_mape(y, estimator.predict(X))
-
-
-def plot_line(x, y):
-    return go.Scatter(
-        x=x,
-        y=y,
-        mode="lines+markers",
-        name=y.name,
-        hovertemplate="%{x|%Y-%m-%dT%H} (%{x|%A}): %{y}<extra></extra>",
-    )
-
-
-def transpose_pred(prediction_date, prediction):
-    date = [
-        prediction_date + datetime.timedelta(hours=int(c.removesuffix("h")))
-        for c in prediction.columns
-    ]
-    load = prediction.row(0)
-    return pl.DataFrame({"time": date, "load_mw": load})
-
-
-def plot_predictions(cv_predictions, horizons=None, start="2025-03-01"):
-    if start is not None:
-        cv_predictions = cv_predictions.filter(
-            pl.col("prediction_time")
-            > datetime.datetime.fromisoformat(start).astimezone(datetime.UTC)
-        )
-
-    if horizons is None:
-        horizons = [
-            int(m.group(1))
-            for c in cv_predictions.columns
-            if (m := re.match(r"^pred_(\d+)h$", c)) is not None
-        ]
-    fig = go.Figure()
-    for i, h in enumerate(horizons):
-        target_time = cv_predictions["prediction_time"] + datetime.timedelta(hours=h)
-        if i == 0:
-            fig.add_trace(plot_line(target_time, cv_predictions[f"{h}h"].rename("true_load")))
-        fig.add_trace(plot_line(target_time, cv_predictions[f"pred_{h}h"]))
-    fig.update_layout(height=700)
-    return fig
