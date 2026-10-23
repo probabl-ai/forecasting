@@ -10,6 +10,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 create-notebooks-dir = { cmd = "mkdir -p ./content/notebooks" }
 scrape-function-definitions = { cmd = "python utils/extract_defs.py" }
 copy-tutorial-helpers = { cmd = "cp ./content/python_files/tutorial_helpers.py ./content/notebooks/tutorial_helpers.py && cp ./content/python_files/*_lib.py ./content/notebooks/", depends-on = ["create-notebooks-dir", "scrape-function-definitions"] }
+regenerate-optuna-dbs = { cmd = "python utils/regenerate_optuna_dbs.py", depends-on = ["scrape-function-definitions"] }
 copy-optuna-db = { cmd = "cp ./content/optuna/* ./content/notebooks/", depends-on = ["create-notebooks-dir"] }
 convert-to-notebooks = { cmd = "python utils/convert_to_notebooks.py", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-optuna-db"] }
 convert-to-executed-notebooks = { cmd = "python utils/convert_to_notebooks.py --execute", depends-on = ["create-notebooks-dir", "copy-tutorial-helpers", "scrape-function-definitions", "copy-optuna-db"] }

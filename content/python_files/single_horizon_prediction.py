@@ -1,6 +1,6 @@
 # %% [markdown]
 #
-# # Next horizon predictive modeling
+# # Single horizon predictive modeling
 #
 # ## Environment setup
 #
@@ -38,21 +38,24 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 
 # %% [markdown]
 #
-# For now, let's focus on the last horizon (1 hour) to train a model
-# predicting the electricity load at the next 1 hour.
+# In this notebook we focus on predicting the electricity demand at a single,
+# fixed horizon (12 hours). In the next one we will alter our pipeline to
+# predict multiple horizons.
 
 # %% [markdown]
 #
 # ## Cross-validation splitter
 #
-# The first thing we need to do in our pipeline, now that we have X and y, is
-# to define how they are split into training and testing sets. For this we
-# define a custom time-based cross-validation splitter.
+# In the previous notebook we built predictive features. Here we will complete
+# the pipeline and we will evaluate it with cross-validation.
+# Therefore, we need to define a cross-validation splitter that will divide our
+# data into train and test sets.
 #
-# We do not use scikit-learn's TimeSeriesSplit because it is based on
-# positional indices, while here we can have an irregular grid after dropping
-# rows with missing ground truth. It is also easier to inspect and debug splits
-# based on actual dates and a datetime column than on row positions.
+# We define a custom time-based cross-validation splitter. We do not use
+# scikit-learn's TimeSeriesSplit because it is based on positional indices,
+# while here we can have an irregular grid after dropping rows with missing
+# ground truth. It is also easier to inspect and debug splits based on actual
+# dates and a datetime column than on row positions.
 #
 # In this implementation, each fold starts after an initial training period of
 # two years, keeps a 7-day gap between the end of training and the start of the
@@ -62,13 +65,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 # constraints in deployment.
 #
 # ![Backtesting with intermittent refit](https://skforecast.org/latest/img/time-series-backtesting-forecasting-with-gap.gif)
-#
-# When we want an actual value to inspect, experiment with, or debug, we can
-# call .skb.preview(). It gives us the output of the pipeline for the preview
-# example data we set on the variables. Getting it is cheap because it is
-# precomputed eagerly when we define the dataop so it is readily available.
-# Here, for example, we grab the value of X (a dataframe) and use it to test
-# and debug our splitter.
+
 
 # %%
 import datetime
@@ -137,35 +134,35 @@ class TimeSeriesSplitter:
 
 
 # %%
-TIME_HORIZON = 1  # Focus on next step prediction
+TIME_HORIZON = 12  # Focus on 12-hour horizon
 features, y = feature_engineering_outputs(horizons=TIME_HORIZON, cv_splitter=TimeSeriesSplitter())
 
 # %% [markdown]
 #
-# ## Assessing the model performance via cross-validation
+# ## Adding a supervised regressor
 #
-# Being able to fit the training data is not enough. We need to assess the
-# ability of the training pipeline to learn a predictive model that can
-# generalize to unseen data.
-#
-# Furthermore, we want to assess the uncertainty of this estimate of the
-# generalization performance via time-based cross-validation, also known as
-# backtesting.
-#
-# Let's check those statistics by iterating over the different folds provided by the
-# splitter..
+# To complete our pipeline, we add a HistGradientBoostingRegressor that will
+# use the features defined in the previous notebook to predict the electricity
+# demand.
 
 
 # %%
-def get_regressor():
-    loss = skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss")
-
-    return HistGradientBoostingRegressor(
+def get_hgb_params(max_iter=100):
+    return dict(
         random_state=0,
-        loss=loss,
-        learning_rate=skrub.choose_float(0.01, 0.7, default=0.1, log=True, name="learning_rate"),
-        max_leaf_nodes=skrub.choose_int(3, 300, default=30, log=True, name="max_leaf_nodes"),
+        loss=skrub.choose_from(["squared_error", "poisson", "gamma"], name="loss"),
+        early_stopping=True,
+        n_iter_no_change=50,
+        max_depth=None,
+        learning_rate=skrub.choose_float(0.01, 0.5, default=0.1, log=True, name="learning_rate"),
+        max_leaf_nodes=skrub.choose_int(2, 128, default=31, log=True, name="max_leaf_nodes"),
+        min_samples_leaf=skrub.choose_int(2, 128, default=20, log=True, name="min_samples_leaf"),
     )
+
+
+def get_regressor(max_iter=100):
+    # max_iter = 100 for fast notebook but should set to 1000 or more for best results
+    return HistGradientBoostingRegressor(**get_hgb_params(max_iter=max_iter))
 
 
 pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(
@@ -173,34 +170,30 @@ pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(
 )
 pred
 
-# %%
 
+# %% [markdown]
+#
+# ## Assessing the model performance via cross-validation
+
+
+# %%
 pred.skb.cross_validate()
 
 # %% [markdown]
 #
 # For further inspection of predictions, we will collect the cross-validated
-# prediction into a dataframe. To easily inspect the output of the pipeline and
-# debug our cross-validation loop, we perform one train/test split to have an
-# example to work with.
-
-# %%
-split = pred.skb.train_test_split()
-split["X_test"]
-
-# %%
-split["y_test"]
-
-# %%
-pred.skb.make_learner().fit(split["train"]).predict(split["test"])
-
-# %% [markdown]
-#
-# Now we can collect predictions for all splits and plot them.
+# prediction into a dataframe.
 
 
 # %%
 def get_cv_results(pred, return_train_score=False):
+    """Collect cross-validated predictions and scores.
+
+    The predictions can be a numpy array (one column per target in ``y_test``)
+    or a polars dataframe (e.g. several quantiles per horizon, indicated by the
+    column names). In both cases they are returned as ``pred_<column>`` columns
+    next to ``X_test`` and ``y_test``.
+    """
     predictions = []
     scores = []
     for i, split in enumerate(pred.skb.iter_cv_splits()):
@@ -211,18 +204,18 @@ def get_cv_results(pred, return_train_score=False):
             split_scores.update({f"train_{k}": v for k, v in learner.score(split["train"]).items()})
         scores.append(split_scores | {"split": i})
         y_test = pl.DataFrame(split["y_test"])
-        pred_values = np.asarray(split_predictions["predict"])
-        if pred_values.ndim == 1:
-            pred_values = pred_values[:, None]
-        pred_columns = pl.DataFrame(
-            {f"pred_{column}": pred_values[:, idx] for idx, column in enumerate(y_test.columns)}
-        )
+        pred_values = split_predictions["predict"]
+        if not isinstance(pred_values, pl.DataFrame):
+            pred_values = np.asarray(pred_values)
+            if pred_values.ndim == 1:
+                pred_values = pred_values[:, None]
+            pred_values = pl.DataFrame(pred_values, schema=y_test.columns)
         predictions.append(
             pl.concat(
                 [
                     split["X_test"],
                     y_test,
-                    pred_columns,
+                    pred_values.rename("pred_{}".format),
                 ],
                 how="horizontal",
             ).with_columns(split=pl.lit(i))
@@ -244,10 +237,11 @@ cv_predictions, cv_scores = get_cv_results(pred)
 
 # %%
 altair.Chart(cv_predictions.tail(100)).transform_fold(
-    ["1h", "pred_1h"],
+    ["12h", "pred_12h"],
 ).mark_line(
     tooltip=True
 ).encode(x="prediction_time:T", y="value:Q", color="key:N").interactive()
+
 
 # %% [markdown]
 #
@@ -377,23 +371,28 @@ from sklearn.preprocessing import SplineTransformer
 #
 #
 
+
 # %%
-predictions_ridge = features.skb.apply(
-    make_pipeline(
-        SimpleImputer(add_indicator=True),
-        SplineTransformer(sparse_output=True),
-        VarianceThreshold(threshold=1e-6),
-        SelectKBest(
-            score_func=partial(f_regression, force_finite=True),
-            k=skrub.choose_int(100, 400, log=True, name="n_selected_splines"),
+def make_ridge_predictions(features, y):
+    return features.skb.apply(
+        make_pipeline(
+            SimpleImputer(add_indicator=True),
+            SplineTransformer(sparse_output=True),
+            VarianceThreshold(threshold=1e-6),
+            SelectKBest(
+                score_func=partial(f_regression, force_finite=True),
+                k=skrub.choose_int(100, 400, log=True, name="n_selected_splines"),
+            ),
+            Nystroem(
+                n_components=skrub.choose_int(10, 200, log=True, name="n_components", default=150)
+            ),
+            Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
         ),
-        Nystroem(
-            n_components=skrub.choose_int(10, 200, log=True, name="n_components", default=150)
-        ),
-        Ridge(alpha=skrub.choose_float(1e-6, 1e3, log=True, name="alpha", default=1e-2)),
-    ),
-    y=y,
-).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
+        y=y,
+    ).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
+
+
+predictions_ridge = make_ridge_predictions(features, y)
 predictions_ridge
 
 # %% [markdown]
@@ -450,7 +449,7 @@ cv_scores_ridge
 
 # %%
 altair.Chart(cv_predictions_ridge.tail(24 * 7)).transform_fold(
-    ["1h", "pred_1h"],
+    ["12h", "pred_12h"],
 ).mark_line(
     tooltip=True
 ).encode(x="prediction_time:T", y="value:Q", color="key:N").interactive()
@@ -480,6 +479,10 @@ plot_lorenz_curve(cv_predictions_ridge, TIME_HORIZON).interactive()
 plot_reliability_diagram(cv_predictions_ridge, TIME_HORIZON).interactive().properties(
     title="Reliability diagram from cross-validation predictions"
 )
+
+# %% [markdown]
+#
+# ## Hyperparameter search
 
 # %% [markdown]
 # To keep the notebook fast we reload an existing search that has 100
