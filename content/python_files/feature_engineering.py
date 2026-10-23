@@ -606,7 +606,7 @@ def limit_train_size(
     return df
 
 
-def feature_engineering_outputs(horizons, cv_splitter=None, max_train_rows=None):
+def feature_engineering_outputs(horizons, cv_splitter=None, max_train_size=None):
     range_start = skrub.var("start", "2021-03-23")
     range_end = skrub.var("end", "2025-05-31")
 
@@ -619,9 +619,9 @@ def feature_engineering_outputs(horizons, cv_splitter=None, max_train_rows=None)
     X_y = prediction_time.skb.apply_func(get_X_y, demand_history, horizons)
     X = X_y["X"].skb.mark_as_X(cv=cv_splitter)
     y = X_y["y"].skb.mark_as_y()
-    if max_train_rows is not None:
-        X = X.skb.apply_func(limit_train_size, size=max_train_rows)
-        y = y.skb.apply_func(limit_train_size, size=max_train_rows)
+    if max_train_size is not None:
+        X = X.skb.apply_func(limit_train_size, size=max_train_size)
+        y = y.skb.apply_func(limit_train_size, size=max_train_size)
     temperature_only = skrub.choose_bool(name="temperature_only", default=True)
     cities = skrub.choose_from(["all", ["paris", "lyon", "marseille"]], name="cities")
     weather_fetcher = skrub.var("weather_fetcher", fetch_weather, becomes_default=True)
