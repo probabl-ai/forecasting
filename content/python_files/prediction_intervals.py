@@ -26,8 +26,8 @@ import tutorial_helpers
 importlib.reload(tutorial_helpers)
 
 from feature_engineering_lib import feature_engineering_outputs, time_range
-from single_horizon_prediction_lib import TimeSeriesSplitter, get_cv_results, get_hgb_params
 from multiple_horizons_prediction_lib import neg_mape
+from single_horizon_prediction_lib import TimeSeriesSplitter, get_cv_results, get_hgb_params
 from tutorial_helpers import (
     binned_coverage,
     collect_cv_predictions,

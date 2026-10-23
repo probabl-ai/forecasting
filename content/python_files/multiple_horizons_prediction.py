@@ -34,7 +34,7 @@ from single_horizon_prediction_lib import (
     get_cv_results,
     get_regressor,
 )
-from tutorial_helpers import plot_predictions, plot_multi_horizon_prediction
+from tutorial_helpers import plot_multi_horizon_prediction, plot_predictions
 
 # Ignore warnings from pkg_resources triggered by Python 3.13's multiprocessing.
 warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
@@ -98,6 +98,7 @@ pred
 
 # %%
 from sklearn.metrics import mean_absolute_percentage_error
+
 
 def neg_mape(y_true, y_pred):
     average = mean_absolute_percentage_error(y_true, y_pred)

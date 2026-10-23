@@ -5,10 +5,10 @@ import re
 import altair
 import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
 import polars as pl
 import polars.selectors as cs
 import skrub
-import plotly.graph_objects as go
 
 TABICL_TRAIN_SIZE = int(os.environ.get("TABICL_TRAIN_SIZE", "9000"))
 
@@ -577,9 +577,7 @@ def transpose_pred(prediction_date, prediction):
 
 
 def plot_multi_horizon_prediction(history, prediction_date, prediction):
-    history_tail = history.filter(
-        pl.col("time") > prediction_date - datetime.timedelta(days=8)
-    )
+    history_tail = history.filter(pl.col("time") > prediction_date - datetime.timedelta(days=8))
     prediction_tall = transpose_pred(prediction_date, prediction)
     fig = go.Figure()
     fig.add_trace(plot_line(history_tail["time"], history_tail["load_mw"]))

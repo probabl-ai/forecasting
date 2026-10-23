@@ -145,6 +145,7 @@ features, y = feature_engineering_outputs(horizons=TIME_HORIZON, cv_splitter=Tim
 # use the features defined in the previous notebook to predict the electricity
 # demand.
 
+
 # %%
 def get_hgb_params(max_iter=100):
     return dict(
@@ -155,7 +156,7 @@ def get_hgb_params(max_iter=100):
         max_depth=None,
         learning_rate=skrub.choose_float(0.01, 0.5, default=0.1, log=True, name="learning_rate"),
         max_leaf_nodes=skrub.choose_int(2, 128, default=31, log=True, name="max_leaf_nodes"),
-        min_samples_leaf = skrub.choose_int(2, 128, default=20, log=True, name="min_samples_leaf")
+        min_samples_leaf=skrub.choose_int(2, 128, default=20, log=True, name="min_samples_leaf"),
     )
 
 
@@ -164,7 +165,9 @@ def get_regressor(max_iter=100):
     return HistGradientBoostingRegressor(**get_hgb_params(max_iter=max_iter))
 
 
-pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(["neg_mean_absolute_percentage_error", "r2"])
+pred = features.skb.apply(get_regressor(), y=y).skb.with_scoring(
+    ["neg_mean_absolute_percentage_error", "r2"]
+)
 pred
 
 
@@ -180,6 +183,7 @@ pred.skb.cross_validate()
 #
 # For further inspection of predictions, we will collect the cross-validated
 # prediction into a dataframe.
+
 
 # %%
 def get_cv_results(pred, return_train_score=False):
@@ -366,6 +370,7 @@ from sklearn.preprocessing import SplineTransformer
 #
 #
 #
+
 
 # %%
 def make_ridge_predictions(features, y):
