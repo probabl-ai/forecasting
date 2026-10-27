@@ -2,11 +2,11 @@
   "content": [
     {
       "content": null,
-      "created": "2026-10-23T10:14:34.245267Z",
+      "created": "2026-10-27T13:25:06.535836Z",
       "format": null,
       "hash": null,
       "hash_algorithm": null,
-      "last_modified": "2026-10-23T09:59:20.794280Z",
+      "last_modified": "2026-10-27T13:12:07.317637Z",
       "mimetype": null,
       "name": "single_horizon_prediction_ridge.optuna",
       "path": "optuna/single_horizon_prediction_ridge.optuna",
@@ -16,11 +16,11 @@
     },
     {
       "content": null,
-      "created": "2026-10-23T10:14:34.243438Z",
+      "created": "2026-10-27T13:25:06.534343Z",
       "format": null,
       "hash": null,
       "hash_algorithm": null,
-      "last_modified": "2026-10-23T09:59:20.791280Z",
+      "last_modified": "2026-10-27T13:12:07.314637Z",
       "mimetype": null,
       "name": "multiple_horizons_prediction.optuna",
       "path": "optuna/multiple_horizons_prediction.optuna",
@@ -29,11 +29,11 @@
       "writable": true
     }
   ],
-  "created": "2026-10-23T10:14:34.244811Z",
+  "created": "2026-10-27T13:25:06.534526Z",
   "format": "json",
   "hash": null,
   "hash_algorithm": null,
-  "last_modified": "2026-10-23T10:14:34.244811Z",
+  "last_modified": "2026-10-27T13:25:06.534526Z",
   "mimetype": null,
   "name": "optuna",
   "path": "optuna",
