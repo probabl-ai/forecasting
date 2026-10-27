@@ -1,0 +1,22 @@
+version: 2.1
+
+jobs:
+  build-book:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Install pixi
+          command: curl -fsSL https://pixi.sh/install.sh | bash
+      - run:
+          name: Build the book
+          command: ~/.pixi/bin/pixi run build-book
+      - store_artifacts:
+          path: book/_build/html
+          destination: book
+
+workflows:
+  build:
+    jobs:
+      - build-book
