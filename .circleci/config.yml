@@ -4,6 +4,8 @@ jobs:
   build-book:
     docker:
       - image: cimg/base:stable
+    environment:
+      TABICL_TRAIN_SIZE: "1000"
     steps:
       - checkout
       - run:
