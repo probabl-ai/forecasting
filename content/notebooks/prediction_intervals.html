@@ -590,8 +590,8 @@ models per quantile as follows:</p>
 <strong><samp>&lt;Scoring &lt;Call &#x27;concat_horizons&#x27;&gt; (2 scorers)&gt;</samp></strong><br />
 <pre>
     This DataOp will be scored with:
-      - &lt;function neg_mape_median_scorer at 0x7534e83c9080&gt;
-      - &lt;function pinball_scorer at 0x7534e83c9300&gt;
+      - &lt;function neg_mape_median_scorer at 0x7a007c175080&gt;
+      - &lt;function pinball_scorer at 0x7a007c175300&gt;
     Use .skb.cross_validate(…) or .skb.make_learner(…).score(…) to compute scores.
 </pre>
 <details >
@@ -890,7 +890,7 @@ models per quantile as follows:</p>
 <!-- node_13 -->
 <g id="node_13" class="node">
 
-<g id="a_node_13"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 17, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;h: feat.skb.drop([&quot;prediction_time&quot;, &quot;target_time&quot;])">
+<g id="a_node_13"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 17, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;h: feat.skb.drop([&quot;prediction_time&quot;, &quot;target_time&quot;])">
 <polygon fill="none" stroke="black" points="523.27,-172.56 436.75,-172.56 436.75,-151.17 523.27,-151.17 523.27,-172.56"/>
 <text xml:space="preserve" text-anchor="middle" x="480.01" y="-158.74" font-family="sans-serif" font-size="10.00">Apply DropCols</text>
 </a>
@@ -905,7 +905,7 @@ models per quantile as follows:</p>
 <!-- node_16 -->
 <g id="node_16" class="node">
 
-<g id="a_node_16"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
+<g id="a_node_16"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
 <polygon fill="none" stroke="black" points="654.02,-122.17 452,-122.17 452,-100.78 654.02,-100.78 654.02,-122.17"/>
 <text xml:space="preserve" text-anchor="middle" x="553.01" y="-108.35" font-family="sans-serif" font-size="10.00">pred_1h | Apply HGBQuantileRegressor</text>
 </a>
@@ -920,7 +920,7 @@ models per quantile as follows:</p>
 <!-- node_15 -->
 <g id="node_15" class="node">
 
-<g id="a_node_15"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
+<g id="a_node_15"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
 <polygon fill="none" stroke="black" points="613.14,-172.56 540.88,-172.56 540.88,-151.17 613.14,-151.17 613.14,-172.56"/>
 <text xml:space="preserve" text-anchor="middle" x="577.01" y="-158.74" font-family="sans-serif" font-size="10.00">GetItem &#39;1h&#39;</text>
 </a>
@@ -935,7 +935,7 @@ models per quantile as follows:</p>
 <!-- node_19 -->
 <g id="node_19" class="node">
 
-<g id="a_node_19"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
+<g id="a_node_19"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
 <polygon fill="none" stroke="black" points="419.14,-172.56 340.88,-172.56 340.88,-151.17 419.14,-151.17 419.14,-172.56"/>
 <text xml:space="preserve" text-anchor="middle" x="380.01" y="-158.74" font-family="sans-serif" font-size="10.00">GetItem &#39;12h&#39;</text>
 </a>
@@ -950,7 +950,7 @@ models per quantile as follows:</p>
 <!-- node_23 -->
 <g id="node_23" class="node">
 
-<g id="a_node_23"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
+<g id="a_node_23"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
 <polygon fill="none" stroke="black" points="219.14,-172.56 140.88,-172.56 140.88,-151.17 219.14,-151.17 219.14,-172.56"/>
 <text xml:space="preserve" text-anchor="middle" x="180.01" y="-158.74" font-family="sans-serif" font-size="10.00">GetItem &#39;24h&#39;</text>
 </a>
@@ -971,7 +971,7 @@ models per quantile as follows:</p>
 <!-- node_26 -->
 <g id="node_26" class="node">
 
-<g id="a_node_26"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 22, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;return skrub.deferred(concat_horizons)(predictions)">
+<g id="a_node_26"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 22, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;return skrub.deferred(concat_horizons)(predictions)">
 <polygon fill="none" stroke="black" points="500.02,-71.78 382,-71.78 382,-50.39 500.02,-50.39 500.02,-71.78"/>
 <text xml:space="preserve" text-anchor="middle" x="441.01" y="-57.96" font-family="sans-serif" font-size="10.00">Call &#39;concat_horizons&#39;</text>
 </a>
@@ -986,7 +986,7 @@ models per quantile as follows:</p>
 <!-- node_18 -->
 <g id="node_18" class="node">
 
-<g id="a_node_18"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 17, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;h: feat.skb.drop([&quot;prediction_time&quot;, &quot;target_time&quot;])">
+<g id="a_node_18"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 17, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;h: feat.skb.drop([&quot;prediction_time&quot;, &quot;target_time&quot;])">
 <polygon fill="none" stroke="black" points="323.27,-172.56 236.75,-172.56 236.75,-151.17 323.27,-151.17 323.27,-172.56"/>
 <text xml:space="preserve" text-anchor="middle" x="280.01" y="-158.74" font-family="sans-serif" font-size="10.00">Apply DropCols</text>
 </a>
@@ -1001,7 +1001,7 @@ models per quantile as follows:</p>
 <!-- node_20 -->
 <g id="node_20" class="node">
 
-<g id="a_node_20"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
+<g id="a_node_20"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
 <polygon fill="none" stroke="black" points="434.02,-122.17 226,-122.17 226,-100.78 434.02,-100.78 434.02,-122.17"/>
 <text xml:space="preserve" text-anchor="middle" x="330.01" y="-108.35" font-family="sans-serif" font-size="10.00">pred_12h | Apply HGBQuantileRegressor</text>
 </a>
@@ -1028,7 +1028,7 @@ models per quantile as follows:</p>
 <!-- node_22 -->
 <g id="node_22" class="node">
 
-<g id="a_node_22"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 17, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;h: feat.skb.drop([&quot;prediction_time&quot;, &quot;target_time&quot;])">
+<g id="a_node_22"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 17, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;h: feat.skb.drop([&quot;prediction_time&quot;, &quot;target_time&quot;])">
 <polygon fill="none" stroke="black" points="123.27,-172.56 36.75,-172.56 36.75,-151.17 123.27,-151.17 123.27,-172.56"/>
 <text xml:space="preserve" text-anchor="middle" x="80.01" y="-158.74" font-family="sans-serif" font-size="10.00">Apply DropCols</text>
 </a>
@@ -1043,7 +1043,7 @@ models per quantile as follows:</p>
 <!-- node_24 -->
 <g id="node_24" class="node">
 
-<g id="a_node_24"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
+<g id="a_node_24"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 18, in make_multi_horizon_pred&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.apply(regressor, y=y[f&quot;{h}h&quot;])">
 <polygon fill="none" stroke="black" points="208.02,-122.17 0,-122.17 0,-100.78 208.02,-100.78 208.02,-122.17"/>
 <text xml:space="preserve" text-anchor="middle" x="104.01" y="-108.35" font-family="sans-serif" font-size="10.00">pred_24h | Apply HGBQuantileRegressor</text>
 </a>
@@ -1070,7 +1070,7 @@ models per quantile as follows:</p>
 <!-- node_25 -->
 <g id="node_25" class="node">
 
-<g id="a_node_25"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 1, in &lt;module&gt;&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;def concat_horizons(all_pred, mode=skrub.eval_mode()):">
+<g id="a_node_25"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 1, in &lt;module&gt;&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;def concat_horizons(all_pred, mode=skrub.eval_mode()):">
 <polygon fill="none" stroke="black" points="731.77,-122.17 672.25,-122.17 672.25,-100.78 731.77,-100.78 731.77,-122.17"/>
 <text xml:space="preserve" text-anchor="middle" x="702.01" y="-108.35" font-family="sans-serif" font-size="10.00">EvalMode</text>
 </a>
@@ -1085,7 +1085,7 @@ models per quantile as follows:</p>
 <!-- node_27 -->
 <g id="node_27" class="node">
 
-<g id="a_node_27"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966753/3391720253.py&quot;, line 27, in &lt;module&gt;&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.with_scoring(neg_mape_median_scorer)">
+<g id="a_node_27"><a xlink:title=" &#160;&#160;&#160;&#160;&#160;File &quot;/tmp/ipykernel_1966742/3391720253.py&quot;, line 27, in &lt;module&gt;&#10; &#160;&#160;&#160;&#160;&#160;&#160;&#160;.skb.with_scoring(neg_mape_median_scorer)">
 <polygon fill="none" stroke="black" points="555.14,-21.39 326.88,-21.39 326.88,0 555.14,0 555.14,-21.39"/>
 <text xml:space="preserve" text-anchor="middle" x="441.01" y="-7.57" font-family="sans-serif" font-size="10.00">Scoring &lt;Call &#39;concat_horizons&#39;&gt; (2 scorers)</text>
 </a>
@@ -1103,8 +1103,8 @@ models per quantile as follows:</p>
 </details>
 <strong><samp>Result (preview of the learner's output, not the scores):</samp></strong>
 
-<div id="report_87a4d1b7-wrapper" hidden>
-    <template id="report_87a4d1b7-template">
+<div id="report_0dcad57c-wrapper" hidden>
+    <template id="report_0dcad57c-template">
         <style>
          /*!
 Pure v3.0.0
@@ -2529,7 +2529,7 @@ button.tab[data-has-warning]:not(:hover):not([data-is-selected]) {
                 
                 
                 <th
-                id="f6eb62a3"
+                id="bf8c42fc"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2559,7 +2559,7 @@ data-spans__-1__0
                 
                 
                 <th
-                id="d1fe23ae"
+                id="9aaafb9f"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2589,7 +2589,7 @@ data-spans__-1__1
                 
                 
                 <th
-                id="1fdb0b47"
+                id="7835b940"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2619,7 +2619,7 @@ data-spans__-1__2
                 
                 
                 <th
-                id="5f01bcbf"
+                id="2ebdff4f"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2649,7 +2649,7 @@ data-spans__-1__3
                 
                 
                 <th
-                id="6cecccd7"
+                id="bdb46051"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2679,7 +2679,7 @@ data-spans__-1__4
                 
                 
                 <th
-                id="b0161898"
+                id="eef325ea"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2709,7 +2709,7 @@ data-spans__-1__5
                 
                 
                 <th
-                id="ab88d8c1"
+                id="150c5297"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2739,7 +2739,7 @@ data-spans__-1__6
                 
                 
                 <th
-                id="1bf09801"
+                id="f6360d94"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2769,7 +2769,7 @@ data-spans__-1__7
                 
                 
                 <th
-                id="9cd28c60"
+                id="36afbab9"
                 class="table-cell elided-short clickable"
                 
                 data-role="column-name"
@@ -2809,7 +2809,7 @@ data-spans__-1__8
                 
                 
                 <td
-                id="23c9c6c4"
+                id="4041f2bd"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -2839,7 +2839,7 @@ data-spans__0__0
                 
                 
                 <td
-                id="facbb7be"
+                id="0aa52462"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -2869,7 +2869,7 @@ data-spans__0__1
                 
                 
                 <td
-                id="df18b339"
+                id="3eb5861e"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -2899,7 +2899,7 @@ data-spans__0__2
                 
                 
                 <td
-                id="5c0a4b44"
+                id="9f4a6fec"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -2929,7 +2929,7 @@ data-spans__0__3
                 
                 
                 <td
-                id="09353a26"
+                id="13ecaec7"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -2959,7 +2959,7 @@ data-spans__0__4
                 
                 
                 <td
-                id="208b2df4"
+                id="58f199e0"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -2989,7 +2989,7 @@ data-spans__0__5
                 
                 
                 <td
-                id="1c6ac7e9"
+                id="11e53cf4"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3019,7 +3019,7 @@ data-spans__0__6
                 
                 
                 <td
-                id="8f1a9da9"
+                id="620778e8"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3049,7 +3049,7 @@ data-spans__0__7
                 
                 
                 <td
-                id="d595c64e"
+                id="9774caf1"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3083,7 +3083,7 @@ data-spans__0__8
                 
                 
                 <td
-                id="3af40f7a"
+                id="14fcea87"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3113,7 +3113,7 @@ data-spans__1__0
                 
                 
                 <td
-                id="36c33862"
+                id="7d6eefea"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3143,7 +3143,7 @@ data-spans__1__1
                 
                 
                 <td
-                id="1c390896"
+                id="1780a2bb"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3173,7 +3173,7 @@ data-spans__1__2
                 
                 
                 <td
-                id="13f7c0a8"
+                id="66d366a3"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3203,7 +3203,7 @@ data-spans__1__3
                 
                 
                 <td
-                id="050dfc0c"
+                id="0c674bbb"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3233,7 +3233,7 @@ data-spans__1__4
                 
                 
                 <td
-                id="55a30d35"
+                id="3eb96d08"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3263,7 +3263,7 @@ data-spans__1__5
                 
                 
                 <td
-                id="44d44b15"
+                id="e830271a"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3293,7 +3293,7 @@ data-spans__1__6
                 
                 
                 <td
-                id="667a34a5"
+                id="0debe6a6"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3323,7 +3323,7 @@ data-spans__1__7
                 
                 
                 <td
-                id="a0b16c25"
+                id="ce15161b"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3357,7 +3357,7 @@ data-spans__1__8
                 
                 
                 <td
-                id="82f11715"
+                id="0aba302d"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3387,7 +3387,7 @@ data-spans__2__0
                 
                 
                 <td
-                id="823798a3"
+                id="5673c3b0"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3417,7 +3417,7 @@ data-spans__2__1
                 
                 
                 <td
-                id="00cd2085"
+                id="c8fe5a75"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3447,7 +3447,7 @@ data-spans__2__2
                 
                 
                 <td
-                id="54883cf0"
+                id="c94f78b1"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3477,7 +3477,7 @@ data-spans__2__3
                 
                 
                 <td
-                id="c04b9c05"
+                id="2dbae153"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3507,7 +3507,7 @@ data-spans__2__4
                 
                 
                 <td
-                id="0363774b"
+                id="39bf42e3"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3537,7 +3537,7 @@ data-spans__2__5
                 
                 
                 <td
-                id="5a9d6c6c"
+                id="5e4686c4"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3567,7 +3567,7 @@ data-spans__2__6
                 
                 
                 <td
-                id="a669674e"
+                id="4f976798"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3597,7 +3597,7 @@ data-spans__2__7
                 
                 
                 <td
-                id="41978f5b"
+                id="54d6e7a8"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3631,7 +3631,7 @@ data-spans__2__8
                 
                 
                 <td
-                id="c4916500"
+                id="e0416c4b"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3661,7 +3661,7 @@ data-spans__3__0
                 
                 
                 <td
-                id="c7a96ff8"
+                id="4e51a8b8"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3691,7 +3691,7 @@ data-spans__3__1
                 
                 
                 <td
-                id="b3fcae28"
+                id="4692d245"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3721,7 +3721,7 @@ data-spans__3__2
                 
                 
                 <td
-                id="7b6c6323"
+                id="03becca3"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3751,7 +3751,7 @@ data-spans__3__3
                 
                 
                 <td
-                id="e0e1adec"
+                id="fd06ba97"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3781,7 +3781,7 @@ data-spans__3__4
                 
                 
                 <td
-                id="36b99b30"
+                id="cf395d94"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3811,7 +3811,7 @@ data-spans__3__5
                 
                 
                 <td
-                id="896c4e2b"
+                id="dc9f67dc"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3841,7 +3841,7 @@ data-spans__3__6
                 
                 
                 <td
-                id="81e07412"
+                id="05182bae"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3871,7 +3871,7 @@ data-spans__3__7
                 
                 
                 <td
-                id="c75a86c5"
+                id="84f807ad"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3905,7 +3905,7 @@ data-spans__3__8
                 
                 
                 <td
-                id="88f0df87"
+                id="bf9d998f"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3935,7 +3935,7 @@ data-spans__4__0
                 
                 
                 <td
-                id="3be97246"
+                id="beb0d6b5"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3965,7 +3965,7 @@ data-spans__4__1
                 
                 
                 <td
-                id="dbe01548"
+                id="46b5b4fd"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -3995,7 +3995,7 @@ data-spans__4__2
                 
                 
                 <td
-                id="40a725e6"
+                id="bb45d291"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4025,7 +4025,7 @@ data-spans__4__3
                 
                 
                 <td
-                id="957a796e"
+                id="96a7a768"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4055,7 +4055,7 @@ data-spans__4__4
                 
                 
                 <td
-                id="a57b4327"
+                id="1e1cff78"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4085,7 +4085,7 @@ data-spans__4__5
                 
                 
                 <td
-                id="f6523cd5"
+                id="9182435e"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4115,7 +4115,7 @@ data-spans__4__6
                 
                 
                 <td
-                id="1ca11459"
+                id="5d7a7d57"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4145,7 +4145,7 @@ data-spans__4__7
                 
                 
                 <td
-                id="7a989ddf"
+                id="c849231b"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4283,7 +4283,7 @@ data-spans__4__8
                 
                 
                 <td
-                id="843e52ec"
+                id="506c14fd"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4313,7 +4313,7 @@ data-spans__5__0
                 
                 
                 <td
-                id="458e25db"
+                id="fdb0f06f"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4343,7 +4343,7 @@ data-spans__5__1
                 
                 
                 <td
-                id="0dbf9136"
+                id="3bbd2977"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4373,7 +4373,7 @@ data-spans__5__2
                 
                 
                 <td
-                id="964905a4"
+                id="4aa17aa7"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4403,7 +4403,7 @@ data-spans__5__3
                 
                 
                 <td
-                id="654aa808"
+                id="18aa2d9c"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4433,7 +4433,7 @@ data-spans__5__4
                 
                 
                 <td
-                id="eca16015"
+                id="ad95700e"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4463,7 +4463,7 @@ data-spans__5__5
                 
                 
                 <td
-                id="c26e6959"
+                id="8a89b761"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4493,7 +4493,7 @@ data-spans__5__6
                 
                 
                 <td
-                id="a818fdb2"
+                id="5ec8d610"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4523,7 +4523,7 @@ data-spans__5__7
                 
                 
                 <td
-                id="fd700a42"
+                id="dada35f2"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4557,7 +4557,7 @@ data-spans__5__8
                 
                 
                 <td
-                id="a06a92b0"
+                id="439bbe22"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4587,7 +4587,7 @@ data-spans__6__0
                 
                 
                 <td
-                id="3089e936"
+                id="bd5209d7"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4617,7 +4617,7 @@ data-spans__6__1
                 
                 
                 <td
-                id="7af055e0"
+                id="d5e337f5"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4647,7 +4647,7 @@ data-spans__6__2
                 
                 
                 <td
-                id="bd1a5dce"
+                id="e30e52e9"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4677,7 +4677,7 @@ data-spans__6__3
                 
                 
                 <td
-                id="c7983fed"
+                id="4c5b6f39"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4707,7 +4707,7 @@ data-spans__6__4
                 
                 
                 <td
-                id="fdf759e4"
+                id="82b7c1e1"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4737,7 +4737,7 @@ data-spans__6__5
                 
                 
                 <td
-                id="9155f9ea"
+                id="7a0d3e20"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4767,7 +4767,7 @@ data-spans__6__6
                 
                 
                 <td
-                id="acb4f4a6"
+                id="17942b8c"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4797,7 +4797,7 @@ data-spans__6__7
                 
                 
                 <td
-                id="d12a0f44"
+                id="f90f717b"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4831,7 +4831,7 @@ data-spans__6__8
                 
                 
                 <td
-                id="3df57f55"
+                id="bf447672"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4861,7 +4861,7 @@ data-spans__7__0
                 
                 
                 <td
-                id="0729d50f"
+                id="90b48abd"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4891,7 +4891,7 @@ data-spans__7__1
                 
                 
                 <td
-                id="6da9c6c6"
+                id="11e6a841"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4921,7 +4921,7 @@ data-spans__7__2
                 
                 
                 <td
-                id="00a0625b"
+                id="8c3ca2c5"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4951,7 +4951,7 @@ data-spans__7__3
                 
                 
                 <td
-                id="ca52cfd3"
+                id="a114df77"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -4981,7 +4981,7 @@ data-spans__7__4
                 
                 
                 <td
-                id="ce5efa4e"
+                id="bce73424"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5011,7 +5011,7 @@ data-spans__7__5
                 
                 
                 <td
-                id="3390f24b"
+                id="27d926d5"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5041,7 +5041,7 @@ data-spans__7__6
                 
                 
                 <td
-                id="32db7f2c"
+                id="de9bce13"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5071,7 +5071,7 @@ data-spans__7__7
                 
                 
                 <td
-                id="50736aea"
+                id="2876b48b"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5105,7 +5105,7 @@ data-spans__7__8
                 
                 
                 <td
-                id="3bcb4fc6"
+                id="e077d8f7"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5135,7 +5135,7 @@ data-spans__8__0
                 
                 
                 <td
-                id="93379047"
+                id="d18ef618"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5165,7 +5165,7 @@ data-spans__8__1
                 
                 
                 <td
-                id="58f506fc"
+                id="b896e3cb"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5195,7 +5195,7 @@ data-spans__8__2
                 
                 
                 <td
-                id="f82cbef4"
+                id="f6f484af"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5225,7 +5225,7 @@ data-spans__8__3
                 
                 
                 <td
-                id="bad4b656"
+                id="3493be74"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5255,7 +5255,7 @@ data-spans__8__4
                 
                 
                 <td
-                id="b17a809f"
+                id="e370232e"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5285,7 +5285,7 @@ data-spans__8__5
                 
                 
                 <td
-                id="6e3cad58"
+                id="c7c9db44"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5315,7 +5315,7 @@ data-spans__8__6
                 
                 
                 <td
-                id="4363cb96"
+                id="acf7ea7f"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5345,7 +5345,7 @@ data-spans__8__7
                 
                 
                 <td
-                id="bda3e026"
+                id="07446fe9"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5379,7 +5379,7 @@ data-spans__8__8
                 
                 
                 <td
-                id="96c119eb"
+                id="d4b90c97"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5409,7 +5409,7 @@ data-spans__9__0
                 
                 
                 <td
-                id="30d34865"
+                id="bc7ed530"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5439,7 +5439,7 @@ data-spans__9__1
                 
                 
                 <td
-                id="8fa38caf"
+                id="fccf1125"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5469,7 +5469,7 @@ data-spans__9__2
                 
                 
                 <td
-                id="3ee91899"
+                id="443c47b3"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5499,7 +5499,7 @@ data-spans__9__3
                 
                 
                 <td
-                id="db935ffa"
+                id="774eb19a"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5529,7 +5529,7 @@ data-spans__9__4
                 
                 
                 <td
-                id="ac635a4d"
+                id="76aa5b13"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5559,7 +5559,7 @@ data-spans__9__5
                 
                 
                 <td
-                id="33fa15a0"
+                id="a0dd46e0"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5589,7 +5589,7 @@ data-spans__9__6
                 
                 
                 <td
-                id="1970eda5"
+                id="7e38c163"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -5619,7 +5619,7 @@ data-spans__9__7
                 
                 
                 <td
-                id="478a3ed9"
+                id="245f848c"
                 class="table-cell elided-short clickable"
                 
                 data-role="dataframe-data"
@@ -7154,7 +7154,7 @@ No columns match the selected filter: <strong data-manager="ColumnFilterName"></
         </div>
     </template>
 
-    <skrub-table-report class="report" id="report_87a4d1b7">
+    <skrub-table-report class="report" id="report_0dcad57c">
     </skrub-table-report>
 
     <script type="module">
@@ -8258,7 +8258,7 @@ No columns match the selected filter: <strong data-manager="ColumnFilterName"></
     </script>
 </div>
 
-<div id="report_87a4d1b7-wrapper-fallback">
+<div id="report_0dcad57c-wrapper-fallback">
     <h2>Please enable javascript</h2>
     <p>
         The skrub table reports need javascript to display correctly. If you are
@@ -8269,8 +8269,8 @@ No columns match the selected filter: <strong data-manager="ColumnFilterName"></
 </div>
 
 <script>
- document.getElementById("report_87a4d1b7-wrapper").removeAttribute("hidden");
- document.getElementById("report_87a4d1b7-wrapper-fallback").setAttribute("hidden", "");
+ document.getElementById("report_0dcad57c-wrapper").removeAttribute("hidden");
+ document.getElementById("report_0dcad57c-wrapper-fallback").setAttribute("hidden", "");
 </script>
 </div></div></div>
 </div>
@@ -8365,23 +8365,23 @@ values for the different models.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-3d3b1900f85f4d28b493a9b124f654b5.vega-embed {
+  #altair-viz-2e2d1d771e1e4ee5b6d8fe9f1e370227.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-3d3b1900f85f4d28b493a9b124f654b5.vega-embed details,
-  #altair-viz-3d3b1900f85f4d28b493a9b124f654b5.vega-embed details summary {
+  #altair-viz-2e2d1d771e1e4ee5b6d8fe9f1e370227.vega-embed details,
+  #altair-viz-2e2d1d771e1e4ee5b6d8fe9f1e370227.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-3d3b1900f85f4d28b493a9b124f654b5"></div>
+<div id="altair-viz-2e2d1d771e1e4ee5b6d8fe9f1e370227"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-3d3b1900f85f4d28b493a9b124f654b5") {
-      outputDiv = document.getElementById("altair-viz-3d3b1900f85f4d28b493a9b124f654b5");
+    if (outputDiv.id !== "altair-viz-2e2d1d771e1e4ee5b6d8fe9f1e370227") {
+      outputDiv = document.getElementById("altair-viz-2e2d1d771e1e4ee5b6d8fe9f1e370227");
     }
 
     const paths = {
@@ -8443,23 +8443,23 @@ values for the different models.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-873e26bc1e3c4ccbb7eb7a5a80879e1f.vega-embed {
+  #altair-viz-bc7995ec141f4a8ca4b0c07787ef9d06.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-873e26bc1e3c4ccbb7eb7a5a80879e1f.vega-embed details,
-  #altair-viz-873e26bc1e3c4ccbb7eb7a5a80879e1f.vega-embed details summary {
+  #altair-viz-bc7995ec141f4a8ca4b0c07787ef9d06.vega-embed details,
+  #altair-viz-bc7995ec141f4a8ca4b0c07787ef9d06.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-873e26bc1e3c4ccbb7eb7a5a80879e1f"></div>
+<div id="altair-viz-bc7995ec141f4a8ca4b0c07787ef9d06"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-873e26bc1e3c4ccbb7eb7a5a80879e1f") {
-      outputDiv = document.getElementById("altair-viz-873e26bc1e3c4ccbb7eb7a5a80879e1f");
+    if (outputDiv.id !== "altair-viz-bc7995ec141f4a8ca4b0c07787ef9d06") {
+      outputDiv = document.getElementById("altair-viz-bc7995ec141f4a8ca4b0c07787ef9d06");
     }
 
     const paths = {
@@ -8521,23 +8521,23 @@ values for the different models.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-5db5846180684ebeb779356420162f15.vega-embed {
+  #altair-viz-27c6e06dd1e6435c9b3baa8ceead67da.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-5db5846180684ebeb779356420162f15.vega-embed details,
-  #altair-viz-5db5846180684ebeb779356420162f15.vega-embed details summary {
+  #altair-viz-27c6e06dd1e6435c9b3baa8ceead67da.vega-embed details,
+  #altair-viz-27c6e06dd1e6435c9b3baa8ceead67da.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-5db5846180684ebeb779356420162f15"></div>
+<div id="altair-viz-27c6e06dd1e6435c9b3baa8ceead67da"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-5db5846180684ebeb779356420162f15") {
-      outputDiv = document.getElementById("altair-viz-5db5846180684ebeb779356420162f15");
+    if (outputDiv.id !== "altair-viz-27c6e06dd1e6435c9b3baa8ceead67da") {
+      outputDiv = document.getElementById("altair-viz-27c6e06dd1e6435c9b3baa8ceead67da");
     }
 
     const paths = {
@@ -8641,23 +8641,23 @@ Split 8: 87.6% coverage (90% interval)
 </div>
 <div class="output text_html">
 <style>
-  #altair-viz-68db24f4cd9e4e5495cadff33f82ffdb.vega-embed {
+  #altair-viz-c2e27a908671403981c4d2dabe1f0a64.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-68db24f4cd9e4e5495cadff33f82ffdb.vega-embed details,
-  #altair-viz-68db24f4cd9e4e5495cadff33f82ffdb.vega-embed details summary {
+  #altair-viz-c2e27a908671403981c4d2dabe1f0a64.vega-embed details,
+  #altair-viz-c2e27a908671403981c4d2dabe1f0a64.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-68db24f4cd9e4e5495cadff33f82ffdb"></div>
+<div id="altair-viz-c2e27a908671403981c4d2dabe1f0a64"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-68db24f4cd9e4e5495cadff33f82ffdb") {
-      outputDiv = document.getElementById("altair-viz-68db24f4cd9e4e5495cadff33f82ffdb");
+    if (outputDiv.id !== "altair-viz-c2e27a908671403981c4d2dabe1f0a64") {
+      outputDiv = document.getElementById("altair-viz-c2e27a908671403981c4d2dabe1f0a64");
     }
 
     const paths = {
@@ -8726,23 +8726,23 @@ coverage with a high variability.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-7e909ce0681e4291b246a6269a2dcb80.vega-embed {
+  #altair-viz-6e798db6c7cf4dd6b4ca0915e19a53d0.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-7e909ce0681e4291b246a6269a2dcb80.vega-embed details,
-  #altair-viz-7e909ce0681e4291b246a6269a2dcb80.vega-embed details summary {
+  #altair-viz-6e798db6c7cf4dd6b4ca0915e19a53d0.vega-embed details,
+  #altair-viz-6e798db6c7cf4dd6b4ca0915e19a53d0.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-7e909ce0681e4291b246a6269a2dcb80"></div>
+<div id="altair-viz-6e798db6c7cf4dd6b4ca0915e19a53d0"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-7e909ce0681e4291b246a6269a2dcb80") {
-      outputDiv = document.getElementById("altair-viz-7e909ce0681e4291b246a6269a2dcb80");
+    if (outputDiv.id !== "altair-viz-6e798db6c7cf4dd6b4ca0915e19a53d0") {
+      outputDiv = document.getElementById("altair-viz-6e798db6c7cf4dd6b4ca0915e19a53d0");
     }
 
     const paths = {
@@ -8806,23 +8806,23 @@ coverage with a high variability.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-95f50ed7a97f4a9ab42f34a6444462b4.vega-embed {
+  #altair-viz-b2584374f59542a3af42ba1f091af7dd.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-95f50ed7a97f4a9ab42f34a6444462b4.vega-embed details,
-  #altair-viz-95f50ed7a97f4a9ab42f34a6444462b4.vega-embed details summary {
+  #altair-viz-b2584374f59542a3af42ba1f091af7dd.vega-embed details,
+  #altair-viz-b2584374f59542a3af42ba1f091af7dd.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-95f50ed7a97f4a9ab42f34a6444462b4"></div>
+<div id="altair-viz-b2584374f59542a3af42ba1f091af7dd"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-95f50ed7a97f4a9ab42f34a6444462b4") {
-      outputDiv = document.getElementById("altair-viz-95f50ed7a97f4a9ab42f34a6444462b4");
+    if (outputDiv.id !== "altair-viz-b2584374f59542a3af42ba1f091af7dd") {
+      outputDiv = document.getElementById("altair-viz-b2584374f59542a3af42ba1f091af7dd");
     }
 
     const paths = {
@@ -8886,23 +8886,23 @@ coverage with a high variability.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-0a9f75fe668e42559b7ca74b6b5aad0e.vega-embed {
+  #altair-viz-a6594ac6aa614e59a02b795303f835ee.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-0a9f75fe668e42559b7ca74b6b5aad0e.vega-embed details,
-  #altair-viz-0a9f75fe668e42559b7ca74b6b5aad0e.vega-embed details summary {
+  #altair-viz-a6594ac6aa614e59a02b795303f835ee.vega-embed details,
+  #altair-viz-a6594ac6aa614e59a02b795303f835ee.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-0a9f75fe668e42559b7ca74b6b5aad0e"></div>
+<div id="altair-viz-a6594ac6aa614e59a02b795303f835ee"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-0a9f75fe668e42559b7ca74b6b5aad0e") {
-      outputDiv = document.getElementById("altair-viz-0a9f75fe668e42559b7ca74b6b5aad0e");
+    if (outputDiv.id !== "altair-viz-a6594ac6aa614e59a02b795303f835ee") {
+      outputDiv = document.getElementById("altair-viz-a6594ac6aa614e59a02b795303f835ee");
     }
 
     const paths = {
@@ -8964,23 +8964,23 @@ coverage with a high variability.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-1ee6291c873b4eca8c1064ac92d8abf4.vega-embed {
+  #altair-viz-e9cc2ad861c34893b590cf988e5d5e44.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-1ee6291c873b4eca8c1064ac92d8abf4.vega-embed details,
-  #altair-viz-1ee6291c873b4eca8c1064ac92d8abf4.vega-embed details summary {
+  #altair-viz-e9cc2ad861c34893b590cf988e5d5e44.vega-embed details,
+  #altair-viz-e9cc2ad861c34893b590cf988e5d5e44.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-1ee6291c873b4eca8c1064ac92d8abf4"></div>
+<div id="altair-viz-e9cc2ad861c34893b590cf988e5d5e44"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-1ee6291c873b4eca8c1064ac92d8abf4") {
-      outputDiv = document.getElementById("altair-viz-1ee6291c873b4eca8c1064ac92d8abf4");
+    if (outputDiv.id !== "altair-viz-e9cc2ad861c34893b590cf988e5d5e44") {
+      outputDiv = document.getElementById("altair-viz-e9cc2ad861c34893b590cf988e5d5e44");
     }
 
     const paths = {
@@ -9042,23 +9042,23 @@ coverage with a high variability.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-434b0ca62abb4270bf348b4adf5ef18e.vega-embed {
+  #altair-viz-17371f3eb37f41fca61043b347214b12.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-434b0ca62abb4270bf348b4adf5ef18e.vega-embed details,
-  #altair-viz-434b0ca62abb4270bf348b4adf5ef18e.vega-embed details summary {
+  #altair-viz-17371f3eb37f41fca61043b347214b12.vega-embed details,
+  #altair-viz-17371f3eb37f41fca61043b347214b12.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-434b0ca62abb4270bf348b4adf5ef18e"></div>
+<div id="altair-viz-17371f3eb37f41fca61043b347214b12"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-434b0ca62abb4270bf348b4adf5ef18e") {
-      outputDiv = document.getElementById("altair-viz-434b0ca62abb4270bf348b4adf5ef18e");
+    if (outputDiv.id !== "altair-viz-17371f3eb37f41fca61043b347214b12") {
+      outputDiv = document.getElementById("altair-viz-17371f3eb37f41fca61043b347214b12");
     }
 
     const paths = {
@@ -9120,23 +9120,23 @@ coverage with a high variability.</p>
 <div class="cell_output docutils container">
 <div class="output text_html">
 <style>
-  #altair-viz-b287b62c68ba4d01afcba3f33512a90a.vega-embed {
+  #altair-viz-a3bef59b30e641b5bf9e68b7cd0f01bf.vega-embed {
     width: 100%;
     display: flex;
   }
 
-  #altair-viz-b287b62c68ba4d01afcba3f33512a90a.vega-embed details,
-  #altair-viz-b287b62c68ba4d01afcba3f33512a90a.vega-embed details summary {
+  #altair-viz-a3bef59b30e641b5bf9e68b7cd0f01bf.vega-embed details,
+  #altair-viz-a3bef59b30e641b5bf9e68b7cd0f01bf.vega-embed details summary {
     position: relative;
   }
 </style>
-<div id="altair-viz-b287b62c68ba4d01afcba3f33512a90a"></div>
+<div id="altair-viz-a3bef59b30e641b5bf9e68b7cd0f01bf"></div>
 <script type="text/javascript">
   var VEGA_DEBUG = (typeof VEGA_DEBUG == "undefined") ? {} : VEGA_DEBUG;
   (function(spec, embedOpt){
     let outputDiv = document.currentScript.previousElementSibling;
-    if (outputDiv.id !== "altair-viz-b287b62c68ba4d01afcba3f33512a90a") {
-      outputDiv = document.getElementById("altair-viz-b287b62c68ba4d01afcba3f33512a90a");
+    if (outputDiv.id !== "altair-viz-a3bef59b30e641b5bf9e68b7cd0f01bf") {
+      outputDiv = document.getElementById("altair-viz-a3bef59b30e641b5bf9e68b7cd0f01bf");
     }
 
     const paths = {
