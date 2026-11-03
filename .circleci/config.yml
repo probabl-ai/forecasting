@@ -4,6 +4,8 @@ jobs:
   build-book:
     docker:
       - image: cimg/base:stable
+    # large.gen3 4 vCPUs 16GiB mem
+    resource_class: large.gen3
     environment:
       TABICL_TRAIN_SIZE: "1000"
     steps:
