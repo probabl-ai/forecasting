@@ -2,9 +2,10 @@ version: 2.1
 
 jobs:
   build-book:
-    docker:
-      - image: cimg/base:stable
-    # large.gen3 4 vCPUs 16GiB mem
+    # gen3 resource classes require the Linux VM executor and the current image tag.
+    machine:
+      image: ubuntu-2204:current
+    # large.gen3: 4 vCPUs, 16 GiB memory
     resource_class: large.gen3
     environment:
       TABICL_TRAIN_SIZE: "1000"
