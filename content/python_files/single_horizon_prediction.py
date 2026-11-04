@@ -57,10 +57,12 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pkg_resources")
 # ground truth. It is also easier to inspect and debug splits based on actual
 # dates and a datetime column than on row positions.
 #
-# In this implementation, each fold starts after an initial training period of
-# two years, keeps a 7-day gap between the end of training and the start of the
-# test window, and evaluates on 3-month blocks that move forward by 3 months at
-# each iteration. This is an example of a [Backtesting with intermittent refit including gap](https://skforecast.org/latest/introduction-forecasting/introduction-forecasting#backtesting-with-intermittent-refit)
+# In this implementation, the test windows are 3-month blocks. We start from the
+# end of the historical data and go back in regular 3-month steps, so that the
+# last validation block never has an arbitrary length. We stop when the training
+# set would be shorter than an initial training period of two years. Each fold
+# keeps a 7-day gap between the end of training and the start of the test
+# window. This is an example of a [Backtesting with intermittent refit including gap](https://skforecast.org/latest/introduction-forecasting/introduction-forecasting#backtesting-with-intermittent-refit)
 # setup that is common in forecasting problems, where split boundaries must mimic operational
 # constraints in deployment.
 #
@@ -109,22 +111,19 @@ class TimeSeriesSplitter:
             + datetime.timedelta(days=self.train_test_gap_days)
         )
 
-        # Align to the first day of the first full month available.
-        start_date = first_allowed.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        if start_date < first_allowed:
-            start_date = start_date + relativedelta(months=1)
+        # Start from the end of the data and go back by `blocks` months at a time.
+        current_test_end = max_date.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        ) + relativedelta(months=1)
+        folds = []
+        while True:
+            test_start = current_test_end - relativedelta(months=blocks)
+            if test_start < first_allowed:
+                break
+            folds.append((test_start, current_test_end))
+            current_test_end = test_start
 
-        test_start_dates = []
-        current_test_start = start_date
-
-        while current_test_start < max_date:
-            test_start_dates.append(current_test_start)
-            # advance by 3 months (quarter)
-            # Using relativedelta for correct month arithmetic:
-            current_test_start = current_test_start + relativedelta(months=blocks)
-
-        for test_start in test_start_dates:
-            test_end = test_start + relativedelta(months=blocks)
+        for test_start, test_end in reversed(folds):
             train, test = _split_indices(X, test_start, test_end, gap_days=self.train_test_gap_days)
             if len(train) and len(test):
                 yield train, test
